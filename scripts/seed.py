@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 
-from relaypay.config import get_settings
+from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.identity.models import APIKey, Organisation, User
 from relaypay.identity.security import hash_password, issue_api_key
 from relaypay.ids import new_public_id
 from relaypay.ledger.models import LedgerAccount
+from relaypay.mock_provider.models import ProviderAccount
 from sqlalchemy import select
 
 
@@ -84,7 +86,30 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
             )
             issued_keys.append((demo, issued.plaintext))
     engine.dispose()
+    _seed_provider_account(settings)
     return issued_keys
+
+
+def _seed_provider_account(settings: Settings) -> None:
+    engine = build_engine(
+        settings.PROVIDER_DATABASE_URL.get_secret_value(), application_name="relaypay-provider-seed"
+    )
+    factory = build_session_factory(engine)
+    with factory() as session, session.begin():
+        existing = session.scalar(
+            select(ProviderAccount).where(ProviderAccount.public_id == settings.PROVIDER_ACCOUNT_ID)
+        )
+        if existing is None:
+            session.add(
+                ProviderAccount(
+                    public_id=settings.PROVIDER_ACCOUNT_ID,
+                    name="RelayPay deterministic provider account",
+                    signing_secret_digest=hashlib.sha256(
+                        settings.PROVIDER_SIGNING_SECRET.get_secret_value().encode("utf-8")
+                    ).digest(),
+                )
+            )
+    engine.dispose()
 
 
 def main() -> None:

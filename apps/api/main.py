@@ -19,6 +19,7 @@ from relaypay.identity.security import (
     rotate_csrf,
     verify_csrf,
 )
+from relaypay.provider_operations.service import HTTPProviderTransport, ProviderTransport
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -61,7 +62,10 @@ def _error_response(error: RelayPayError) -> JSONResponse:
     )
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    provider_transport: ProviderTransport | None = None,
+) -> FastAPI:
     resolved = settings or get_settings()
     engine = build_engine(
         resolved.RELAYPAY_DATABASE_URL.get_secret_value(), application_name="relaypay-api"
@@ -78,7 +82,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.login_limiter = FixedWindowRateLimiter(limit=5, window_seconds=60)
-    app.include_router(build_payments_router(settings=resolved, session_factory=session_factory))
+    transport = provider_transport or HTTPProviderTransport(base_url=resolved.PROVIDER_BASE_URL)
+    app.include_router(
+        build_payments_router(
+            settings=resolved,
+            session_factory=session_factory,
+            provider_transport=transport,
+        )
+    )
 
     @app.exception_handler(RelayPayError)
     async def handle_relaypay_error(_: Request, error: RelayPayError) -> JSONResponse:

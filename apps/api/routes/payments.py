@@ -1,3 +1,4 @@
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header
@@ -17,6 +18,7 @@ from relaypay.payments.service import (
     read_operation,
     read_payment,
 )
+from relaypay.provider_operations.service import ProviderTransport, dispatch_operation
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -25,7 +27,10 @@ def _http_response(result: HTTPResult) -> Response:
 
 
 def build_payments_router(
-    *, settings: Settings, session_factory: sessionmaker[Session]
+    *,
+    settings: Settings,
+    session_factory: sessionmaker[Session],
+    provider_transport: ProviderTransport,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["payments"])
 
@@ -64,6 +69,18 @@ def build_payments_router(
 
     PrincipalDep = Annotated[Principal, Depends(merchant_principal)]
     IdempotencyKeyDep = Annotated[str, Depends(required_idempotency_key)]
+
+    def dispatch_after_commit(result: HTTPResult, principal: Principal) -> HTTPResult:
+        if result.status_code == 202:
+            operation_id = str(json.loads(result.body)["operationId"])
+            dispatch_operation(
+                session_factory,
+                organisation_id=principal.organisation_id,
+                operation_public_id=operation_id,
+                provider_account_id=settings.PROVIDER_ACCOUNT_ID,
+                transport=provider_transport,
+            )
+        return result
 
     @router.post("/customers", status_code=201)
     def post_customer(payload: CustomerCreate, principal: PrincipalDep) -> Response:
@@ -130,19 +147,22 @@ def build_payments_router(
     ) -> Response:
         require_scopes(principal, "payments:write")
         return _http_response(
-            initiate_authorization(
-                session_factory,
-                organisation_id=principal.organisation_id,
-                payment_public_id=payment_intent_id,
-                idempotency_key=idempotency_key,
-                fingerprint=build_fingerprint(
-                    api_version="v1",
-                    method="POST",
-                    route_template="/payment_intents/{payment_intent_id}/authorize",
-                    path_params={"payment_intent_id": payment_intent_id},
-                    body=payload,
+            dispatch_after_commit(
+                initiate_authorization(
+                    session_factory,
+                    organisation_id=principal.organisation_id,
+                    payment_public_id=payment_intent_id,
+                    idempotency_key=idempotency_key,
+                    fingerprint=build_fingerprint(
+                        api_version="v1",
+                        method="POST",
+                        route_template="/payment_intents/{payment_intent_id}/authorize",
+                        path_params={"payment_intent_id": payment_intent_id},
+                        body=payload,
+                    ),
+                    key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
                 ),
-                key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
+                principal,
             )
         )
 
@@ -155,19 +175,22 @@ def build_payments_router(
     ) -> Response:
         require_scopes(principal, "payments:write")
         return _http_response(
-            initiate_capture(
-                session_factory,
-                organisation_id=principal.organisation_id,
-                payment_public_id=payment_intent_id,
-                idempotency_key=idempotency_key,
-                fingerprint=build_fingerprint(
-                    api_version="v1",
-                    method="POST",
-                    route_template="/payment_intents/{payment_intent_id}/capture",
-                    path_params={"payment_intent_id": payment_intent_id},
-                    body=payload,
+            dispatch_after_commit(
+                initiate_capture(
+                    session_factory,
+                    organisation_id=principal.organisation_id,
+                    payment_public_id=payment_intent_id,
+                    idempotency_key=idempotency_key,
+                    fingerprint=build_fingerprint(
+                        api_version="v1",
+                        method="POST",
+                        route_template="/payment_intents/{payment_intent_id}/capture",
+                        path_params={"payment_intent_id": payment_intent_id},
+                        body=payload,
+                    ),
+                    key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
                 ),
-                key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
+                principal,
             )
         )
 
@@ -180,20 +203,23 @@ def build_payments_router(
     ) -> Response:
         require_scopes(principal, "payments:write")
         return _http_response(
-            initiate_refund(
-                session_factory,
-                organisation_id=principal.organisation_id,
-                payment_public_id=payment_intent_id,
-                payload=payload,
-                idempotency_key=idempotency_key,
-                fingerprint=build_fingerprint(
-                    api_version="v1",
-                    method="POST",
-                    route_template="/payment_intents/{payment_intent_id}/refunds",
-                    path_params={"payment_intent_id": payment_intent_id},
-                    body=payload,
+            dispatch_after_commit(
+                initiate_refund(
+                    session_factory,
+                    organisation_id=principal.organisation_id,
+                    payment_public_id=payment_intent_id,
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                    fingerprint=build_fingerprint(
+                        api_version="v1",
+                        method="POST",
+                        route_template="/payment_intents/{payment_intent_id}/refunds",
+                        path_params={"payment_intent_id": payment_intent_id},
+                        body=payload,
+                    ),
+                    key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
                 ),
-                key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
+                principal,
             )
         )
 
