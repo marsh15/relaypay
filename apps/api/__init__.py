@@ -1,0 +1,1 @@
+"""RelayPay FastAPI application."""
