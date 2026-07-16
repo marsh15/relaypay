@@ -1,0 +1,37 @@
+name: relaypay
+
+services:
+  postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_dev_only
+      POSTGRES_DB: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:8.2.0-bookworm
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
