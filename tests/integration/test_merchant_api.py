@@ -147,3 +147,17 @@ def test_financial_routes_reject_unknown_fields_without_echoing_values(
     )
     assert response.status_code == 422
     assert marker not in response.text
+
+
+def test_merchant_api_key_cannot_call_administrative_retry_lookup(
+    client: TestClient, merchant_keys: tuple[str, str]
+) -> None:
+    first_key, _ = merchant_keys
+    response = client.post(
+        "/api/v1/operations/op_00000000000000000000000000000000/retry_lookup",
+        headers=_authorization(first_key),
+        json={},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "ADMIN_SESSION_REQUIRED"

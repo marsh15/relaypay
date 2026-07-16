@@ -78,5 +78,29 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command:
+      ["celery", "-A", "apps.worker.celery_app:app", "worker", "--beat", "--loglevel=INFO"]
+    env_file: .env
+    environment:
+      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
+      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
+      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
+      PROVIDER_BASE_URL: http://provider:8001
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      provider:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   postgres_data:

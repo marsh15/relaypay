@@ -134,6 +134,7 @@ def test_sent_commits_before_http_and_recorded_send_is_status_only(
         organisation_id=organisation_id,
         operation_public_id=operation_id,
         provider_account_id="acct_relaypay_demo",
+        provider_signing_secret="provider-signing-secret-for-tests",
         transport=transport,
     )
     dispatch_operation(
@@ -141,6 +142,7 @@ def test_sent_commits_before_http_and_recorded_send_is_status_only(
         organisation_id=organisation_id,
         operation_public_id=operation_id,
         provider_account_id="acct_relaypay_demo",
+        provider_signing_secret="provider-signing-secret-for-tests",
         transport=transport,
     )
 
@@ -159,5 +161,7 @@ def test_sent_commits_before_http_and_recorded_send_is_status_only(
         ).all()
         assert [(attempt.attempt_kind, attempt.state) for attempt in attempts] == [
             ("MUTATION", "RESPONSE_RECEIVED"),
-            ("LOOKUP", "RESPONSE_RECEIVED"),
+            ("LOOKUP", "VALIDATION_REJECTED"),
         ]
+        assert operation.status == "REQUIRES_REVIEW"
+        assert operation.review_reason == "INVALID_EVIDENCE"

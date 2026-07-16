@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from relaypay.config import Settings, get_settings
+from relaypay.contracts import EmptyCommand
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
 from relaypay.identity.rate_limit import FixedWindowRateLimiter
@@ -19,6 +20,8 @@ from relaypay.identity.security import (
     rotate_csrf,
     verify_csrf,
 )
+from relaypay.payments.service import read_operation
+from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import HTTPProviderTransport, ProviderTransport
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
@@ -133,8 +136,15 @@ def create_app(
     def get_principal(
         request: Request,
         token: Annotated[str | None, Cookie(alias=resolved.SESSION_COOKIE_NAME)] = None,
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     ) -> Principal:
         if token is None:
+            if authorization is not None and authorization.startswith("Bearer "):
+                raise RelayPayError(
+                    code="ADMIN_SESSION_REQUIRED",
+                    message="This operation requires an administrator session",
+                    http_status=403,
+                )
             raise RelayPayError(
                 code="UNAUTHENTICATED", message="Authentication required", http_status=401
             )
@@ -229,5 +239,40 @@ def create_app(
             samesite="lax",
         )
         return {"loggedOut": True}
+
+    @app.post("/api/v1/operations/{operation_id}/retry_lookup")
+    def retry_provider_lookup(
+        operation_id: str,
+        _payload: EmptyCommand,
+        principal: Annotated[Principal, Depends(get_principal)],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        with session_factory() as session, session.begin():
+            verify_csrf(
+                session,
+                principal=principal,
+                csrf_token=csrf_token,
+                csrf_secret=resolved.CSRF_SECRET.get_secret_value(),
+            )
+        claim = claim_specific_operation(
+            session_factory,
+            organisation_id=principal.organisation_id,
+            operation_public_id=operation_id,
+            require_review=True,
+        )
+        recover_claim(
+            session_factory,
+            claim=claim,
+            provider_account_id=resolved.PROVIDER_ACCOUNT_ID,
+            provider_signing_secret=resolved.PROVIDER_SIGNING_SECRET.get_secret_value(),
+            transport=transport,
+            actor_type="ADMIN_LOOKUP",
+        )
+        result = read_operation(
+            session_factory,
+            organisation_id=principal.organisation_id,
+            operation_public_id=operation_id,
+        )
+        return Response(content=result.body, status_code=result.status_code, headers=result.headers)
 
     return app

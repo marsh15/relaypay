@@ -2,11 +2,11 @@
 
 from relaypay.provider_operations.service import (
     HTTPProviderTransport,
-    ProviderObservation,
     ProviderTransport,
     dispatch_operation,
     prepare_first_send,
 )
+from relaypay.provider_operations.service_types import ProviderObservation
 
 __all__ = [
     "HTTPProviderTransport",

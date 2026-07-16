@@ -145,3 +145,18 @@ def test_session_token_is_stored_only_as_digest(
         session.execute(delete(SessionRecord).where(SessionRecord.revoked_at.is_not(None)))
     engine.dispose()
     assert response.status_code == 200
+
+
+def test_retry_lookup_contract_rejects_manual_outcome_assertion(
+    client: TestClient, seeded_admin: tuple[str, str]
+) -> None:
+    email, password = seeded_admin
+    login = client.post("/api/session/login", json={"email": email, "password": password})
+    response = client.post(
+        "/api/v1/operations/op_00000000000000000000000000000000/retry_lookup",
+        headers={"X-CSRF-Token": login.json()["csrfToken"]},
+        json={"outcome": "SUCCEEDED"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"

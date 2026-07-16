@@ -78,7 +78,13 @@ def build_payments_router(
                 organisation_id=principal.organisation_id,
                 operation_public_id=operation_id,
                 provider_account_id=settings.PROVIDER_ACCOUNT_ID,
+                provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
                 transport=provider_transport,
+            )
+            return read_operation(
+                session_factory,
+                organisation_id=principal.organisation_id,
+                operation_public_id=operation_id,
             )
         return result
 
