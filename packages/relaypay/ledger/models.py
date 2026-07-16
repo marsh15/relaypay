@@ -36,6 +36,10 @@ class LedgerAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class Journal(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "journals"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "provider_operation_id"],
+            ["provider_operations.organisation_id", "provider_operations.id"],
+        ),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id"),
         UniqueConstraint("organisation_id", "journal_type", "reference_id"),

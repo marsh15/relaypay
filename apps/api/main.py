@@ -22,6 +22,8 @@ from relaypay.identity.security import (
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from apps.api.routes.payments import build_payments_router
+
 
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -76,6 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.login_limiter = FixedWindowRateLimiter(limit=5, window_seconds=60)
+    app.include_router(build_payments_router(settings=resolved, session_factory=session_factory))
 
     @app.exception_handler(RelayPayError)
     async def handle_relaypay_error(_: Request, error: RelayPayError) -> JSONResponse:
