@@ -1,23 +1,32 @@
+import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, select, true
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.event_delivery.models import EventRecipient, WebhookDelivery
 from relaypay.ids import new_public_id
 
 
-def materialize_delivery_batch(session: Session, *, batch_size: int = 50) -> int:
+def materialize_delivery_batch(
+    session: Session,
+    *,
+    batch_size: int = 50,
+    organisation_id: uuid.UUID | None = None,
+) -> int:
     recipients = list(
         session.scalars(
             select(EventRecipient)
             .where(
+                EventRecipient.organisation_id == organisation_id
+                if organisation_id is not None
+                else true(),
                 ~exists(
                     select(WebhookDelivery.id).where(
                         WebhookDelivery.event_recipient_id == EventRecipient.id,
                         WebhookDelivery.replay_of_delivery_id.is_(None),
                     )
-                )
+                ),
             )
             .order_by(EventRecipient.id)
             .limit(batch_size)
@@ -41,6 +50,13 @@ def materialize_delivery_batch(session: Session, *, batch_size: int = 50) -> int
     return len(recipients)
 
 
-def materialize_deliveries(factory: sessionmaker[Session], *, batch_size: int = 50) -> int:
+def materialize_deliveries(
+    factory: sessionmaker[Session],
+    *,
+    batch_size: int = 50,
+    organisation_id: uuid.UUID | None = None,
+) -> int:
     with factory() as session, session.begin():
-        return materialize_delivery_batch(session, batch_size=batch_size)
+        return materialize_delivery_batch(
+            session, batch_size=batch_size, organisation_id=organisation_id
+        )

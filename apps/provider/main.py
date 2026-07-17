@@ -9,12 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
+from relaypay.mock_provider.models import ProviderAccount, ProviderEffect
 from relaypay.mock_provider.service import (
     EffectCommand,
     apply_effect,
     configure_fault,
     lookup_effect,
 )
+from sqlalchemy import func, select
 
 
 class EffectRequest(BaseModel):
@@ -126,5 +128,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             fault_type=payload.fault_type,
         )
         return Response(status_code=204)
+
+    @app.get("/control/effects/{stable_key}/proof")
+    def effect_proof(
+        stable_key: str,
+        account_id: str,
+        control_secret: Annotated[str | None, Header(alias="X-Provider-Control")] = None,
+    ) -> dict[str, int | str]:
+        expected = resolved.PROVIDER_CONTROL_SECRET.get_secret_value()
+        if control_secret is None or not hmac.compare_digest(control_secret, expected):
+            raise RelayPayError(
+                code="UNAUTHENTICATED", message="Authentication required", http_status=401
+            )
+        with factory() as session, session.begin():
+            count = session.scalar(
+                select(func.count())
+                .select_from(ProviderEffect)
+                .join(ProviderAccount, ProviderAccount.id == ProviderEffect.provider_account_id)
+                .where(
+                    ProviderAccount.public_id == account_id,
+                    ProviderEffect.stable_key == stable_key,
+                )
+            )
+        return {"stableKey": stable_key, "effectCount": count or 0}
 
     return app

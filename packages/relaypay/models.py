@@ -1,5 +1,6 @@
 """Import all RelayPay ORM models so Alembic sees one complete metadata graph."""
 
+from relaypay.demo_scenarios.models import ScenarioRun
 from relaypay.event_delivery.models import (
     EventRecipient,
     MerchantEvent,
@@ -35,6 +36,7 @@ __all__ = [
     "ProviderAttempt",
     "ProviderOperation",
     "Refund",
+    "ScenarioRun",
     "SessionRecord",
     "User",
     "WebhookDelivery",

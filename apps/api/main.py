@@ -12,7 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from relaypay.config import Settings, get_settings
 from relaypay.contracts import EmptyCommand
 from relaypay.database import build_engine, build_session_factory
+from relaypay.demo_scenarios.service import HTTPScenarioFaultController, ScenarioFaultController
 from relaypay.errors import RelayPayError
+from relaypay.event_delivery.delivery import HTTPWebhookTransport, WebhookTransport
 from relaypay.evidence.service import payment_evidence
 from relaypay.identity.rate_limit import FixedWindowRateLimiter
 from relaypay.identity.security import (
@@ -29,6 +31,7 @@ from relaypay.provider_operations.service import HTTPProviderTransport, Provider
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from apps.api.routes.admin import build_admin_router
 from apps.api.routes.payments import build_payments_router
 
 logger = logging.getLogger("relaypay.api")
@@ -73,6 +76,8 @@ def _error_response(error: RelayPayError) -> JSONResponse:
 def create_app(
     settings: Settings | None = None,
     provider_transport: ProviderTransport | None = None,
+    scenario_fault_controller: ScenarioFaultController | None = None,
+    webhook_transport: WebhookTransport | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
     engine = build_engine(
@@ -173,6 +178,18 @@ def create_app(
                 token=token,
                 session_secret=resolved.SESSION_SECRET.get_secret_value(),
             )
+
+    receiver_url = f"{resolved.RECEIVER_BASE_URL.rstrip('/')}/webhooks/relaypay"
+    app.include_router(
+        build_admin_router(
+            settings=resolved,
+            session_factory=session_factory,
+            provider_transport=transport,
+            fault_controller=scenario_fault_controller or HTTPScenarioFaultController(resolved),
+            webhook_transport=webhook_transport or HTTPWebhookTransport(allowed_url=receiver_url),
+            principal_dependency=get_principal,
+        )
+    )
 
     @app.get("/health/live")
     def live() -> dict[str, str]:
