@@ -10,8 +10,9 @@ from relaypay.event_delivery.models import (
     MerchantEvent,
     WebhookDelivery,
     WebhookDeliveryAttempt,
+    WebhookEndpointVersion,
 )
-from relaypay.ledger.models import Journal, Posting
+from relaypay.ledger.models import Journal, LedgerAccount, Posting
 from relaypay.payments.models import Authorization, Capture, PaymentIntent, Refund
 from relaypay.provider_operations.models import (
     IdempotencyRecord,
@@ -170,10 +171,15 @@ def payment_evidence(
         else []
     )
     journal_ids = [item.id for item in journals]
-    postings = (
+    posting_rows = (
         list(
-            session.scalars(
-                select(Posting)
+            session.execute(
+                select(Posting, LedgerAccount.code)
+                .join(
+                    LedgerAccount,
+                    (LedgerAccount.id == Posting.account_id)
+                    & (LedgerAccount.organisation_id == Posting.organisation_id),
+                )
                 .where(
                     Posting.organisation_id == organisation_id,
                     Posting.journal_id.in_(journal_ids),
@@ -198,6 +204,33 @@ def payment_evidence(
         if operation_ids
         else []
     )
+    authorizations = [item for item in resources if isinstance(item, Authorization)]
+    captures = [item for item in resources if isinstance(item, Capture)]
+    refunds = [item for item in resources if isinstance(item, Refund)]
+    captured_amount = sum(item.amount for item in captures if item.status == "SUCCEEDED")
+    refunded_amount = sum(item.amount for item in refunds if item.status == "SUCCEEDED")
+    reserved_amount = sum(
+        item.amount for item in refunds if item.status in {"PROCESSING", "REQUIRES_REVIEW"}
+    )
+    lifecycle_status = "CREATED"
+    if any(item.status == "SUCCEEDED" for item in authorizations):
+        lifecycle_status = "AUTHORIZED"
+    if captured_amount:
+        lifecycle_status = "CAPTURED"
+    if captured_amount and refunded_amount == captured_amount:
+        lifecycle_status = "REFUNDED"
+    operation_public_ids = {item.id: item.public_id for item in operations}
+    event_public_ids = {item.id: item.public_id for item in events}
+    delivery_public_ids = {item.id: item.public_id for item in deliveries}
+    endpoint_public_ids: dict[uuid.UUID, str] = {
+        endpoint_id: public_id
+        for endpoint_id, public_id in session.execute(
+            select(WebhookEndpointVersion.id, WebhookEndpointVersion.public_id).where(
+                WebhookEndpointVersion.organisation_id == organisation_id,
+                WebhookEndpointVersion.id.in_([item.endpoint_version_id for item in recipients]),
+            )
+        )
+    }
     return {
         "paymentIntent": {
             "id": payment.public_id,
@@ -205,6 +238,13 @@ def payment_evidence(
             "amount": payment.amount,
             "currency": payment.currency,
             "createdAt": _time(payment.created_at),
+            "status": lifecycle_status,
+            "refundAvailability": {
+                "captured": captured_amount,
+                "succeededRefunds": refunded_amount,
+                "reservedRefunds": reserved_amount,
+                "available": captured_amount - refunded_amount - reserved_amount,
+            },
         },
         "resources": [
             {
@@ -240,7 +280,7 @@ def payment_evidence(
         ],
         "providerAttempts": [
             {
-                "operationId": str(item.provider_operation_id),
+                "operationId": operation_public_ids.get(item.provider_operation_id),
                 "sequence": item.sequence,
                 "kind": item.attempt_kind,
                 "state": item.state,
@@ -254,7 +294,7 @@ def payment_evidence(
         ],
         "operationHistory": [
             {
-                "operationId": str(item.provider_operation_id),
+                "operationId": operation_public_ids.get(item.provider_operation_id),
                 "from": item.from_status,
                 "to": item.to_status,
                 "reason": item.reason_code,
@@ -269,8 +309,14 @@ def payment_evidence(
                 for item in journals
             ],
             "postings": [
-                {"journalId": str(item.journal_id), "side": item.side, "amount": item.amount}
-                for item in postings
+                {
+                    "journalId": str(item.journal_id),
+                    "accountCode": account_code,
+                    "side": item.side,
+                    "amount": item.amount,
+                    "currency": item.currency,
+                }
+                for item, account_code in posting_rows
             ],
         },
         "events": [
@@ -280,8 +326,8 @@ def payment_evidence(
         "recipients": [
             {
                 "id": str(item.id),
-                "eventId": str(item.merchant_event_id),
-                "endpointVersionId": str(item.endpoint_version_id),
+                "eventId": event_public_ids.get(item.merchant_event_id),
+                "endpointVersionId": endpoint_public_ids.get(item.endpoint_version_id),
             }
             for item in recipients
         ],
@@ -297,7 +343,7 @@ def payment_evidence(
         ],
         "deliveryAttempts": [
             {
-                "deliveryId": str(item.webhook_delivery_id),
+                "deliveryId": delivery_public_ids.get(item.webhook_delivery_id),
                 "sequence": item.sequence,
                 "result": item.result,
                 "eventSha256": _digest(item.event_sha256),
