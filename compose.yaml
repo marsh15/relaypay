@@ -44,6 +44,7 @@ services:
       PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
       RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
       PROVIDER_BASE_URL: http://provider:8001
+      RECEIVER_BASE_URL: http://receiver:8002
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
     ports:
@@ -54,6 +55,8 @@ services:
       redis:
         condition: service_healthy
       provider:
+        condition: service_started
+      receiver:
         condition: service_started
     security_opt:
       - no-new-privileges:true
@@ -78,6 +81,47 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["uvicorn", "apps.receiver.asgi:app", "--host", "0.0.0.0", "--port", "8002"]
+    env_file: .env
+    environment:
+      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
+      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
+      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
+      RECEIVER_BASE_URL: http://receiver:8002
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+  poller:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["python", "-m", "apps.worker.poller"]
+    env_file: .env
+    environment:
+      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
+      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
+      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
+      PROVIDER_BASE_URL: http://provider:8001
+      RECEIVER_BASE_URL: http://receiver:8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      provider:
+        condition: service_started
+      receiver:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+
   worker:
     build:
       context: .
@@ -90,6 +134,7 @@ services:
       PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
       RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
       PROVIDER_BASE_URL: http://provider:8001
+      RECEIVER_BASE_URL: http://receiver:8002
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
     depends_on:
@@ -98,6 +143,8 @@ services:
       redis:
         condition: service_healthy
       provider:
+        condition: service_started
+      receiver:
         condition: service_started
     security_opt:
       - no-new-privileges:true

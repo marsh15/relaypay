@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
+from relaypay.event_delivery.crypto import encrypt_webhook_secret
+from relaypay.event_delivery.models import WebhookEndpoint, WebhookEndpointVersion
 from relaypay.identity.models import APIKey, Organisation, User
 from relaypay.identity.security import hash_password, issue_api_key
 from relaypay.ids import new_public_id
@@ -85,6 +88,42 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
                 ]
             )
             issued_keys.append((demo, issued.plaintext))
+        for organisation in session.scalars(select(Organisation).order_by(Organisation.id)):
+            endpoint = session.scalar(
+                select(WebhookEndpoint).where(
+                    WebhookEndpoint.organisation_id == organisation.id,
+                    WebhookEndpoint.name == "Bundled receiver",
+                )
+            )
+            if endpoint is not None:
+                continue
+            endpoint = WebhookEndpoint(
+                public_id=new_public_id("wh"),
+                organisation_id=organisation.id,
+                name="Bundled receiver",
+                status="ACTIVE",
+            )
+            session.add(endpoint)
+            session.flush()
+            session.add(
+                WebhookEndpointVersion(
+                    public_id=new_public_id("whv"),
+                    organisation_id=organisation.id,
+                    webhook_endpoint_id=endpoint.id,
+                    version=1,
+                    url=f"{settings.RECEIVER_BASE_URL.rstrip('/')}/webhooks/relaypay",
+                    encrypted_secret=encrypt_webhook_secret(
+                        settings.RECEIVER_WEBHOOK_SECRET.get_secret_value(),
+                        settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value(),
+                    ),
+                    subscribed_event_types=[
+                        "payment.authorized.v1",
+                        "payment.captured.v1",
+                        "refund.succeeded.v1",
+                    ],
+                    active_from=datetime.now(UTC),
+                )
+            )
     engine.dispose()
     _seed_provider_account(settings)
     return issued_keys

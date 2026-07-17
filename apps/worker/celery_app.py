@@ -23,5 +23,9 @@ app.conf.update(
             "task": "relaypay.materialize_webhook_deliveries",
             "schedule": 1.0,
         },
+        "deliver-webhooks": {
+            "task": "relaypay.deliver_webhooks",
+            "schedule": 1.0,
+        },
     },
 )
