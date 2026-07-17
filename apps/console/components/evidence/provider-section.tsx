@@ -30,7 +30,7 @@ export function ProviderSection({ evidence, csrfToken }: { evidence: Evidence; c
                   <dd>{operation.stableProviderKey}</dd>
                 </div>
                 <div>
-                  <dt>Mutation attempts</dt>
+                  <dt>Total provider observations</dt>
                   <dd>{operation.attemptCount}</dd>
                 </div>
                 <div>

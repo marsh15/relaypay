@@ -40,7 +40,12 @@ export function LoginForm({ destination }: { destination: string }) {
   }
 
   return (
-    <form className="login-form" onSubmit={submit} aria-describedby={error ? "login-error" : undefined}>
+    <form
+      className="login-form"
+      method="post"
+      onSubmit={submit}
+      aria-describedby={error ? "login-error" : undefined}
+    >
       {error ? (
         <div id="login-error" className="form-error" role="alert">
           {error}

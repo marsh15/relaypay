@@ -2,7 +2,10 @@ import type { Evidence } from "@/lib/evidence-types";
 import { EvidenceSection } from "./shared";
 
 export function IdempotencySection({ evidence }: { evidence: Evidence }) {
-  const digests = new Set(evidence.idempotency.map((item) => item.responseSha256));
+  const captureRecords = evidence.idempotency.filter(
+    (item) => item.fingerprintSummary.route_template === "/payment_intents/{payment_intent_id}/capture",
+  );
+  const digests = new Set(captureRecords.map((item) => item.responseSha256));
   return (
     <EvidenceSection
       id="idempotency"
@@ -11,7 +14,9 @@ export function IdempotencySection({ evidence }: { evidence: Evidence }) {
     >
       <div className="invariant-banner">
         <span aria-hidden="true">✓</span>
-        <strong>Terminal response digests are {digests.size === 1 ? "byte-identical" : "different"}.</strong>
+        <strong>
+          Capture terminal response digests are {digests.size === 1 ? "byte-identical" : "different"}.
+        </strong>
         <code>{[...digests][0] ?? "Pending terminal evidence"}</code>
       </div>
       <div className="table-scroll" tabIndex={0} aria-label="Scrollable idempotency evidence table">

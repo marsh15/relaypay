@@ -69,6 +69,7 @@ def claim_delivery(
     *,
     lease_seconds: int = 30,
     organisation_id: uuid.UUID | None = None,
+    delivery_id: uuid.UUID | None = None,
 ) -> DeliveryClaim | None:
     now = datetime.now(UTC)
     with factory() as session, session.begin():
@@ -78,6 +79,7 @@ def claim_delivery(
                 WebhookDelivery.organisation_id == organisation_id
                 if organisation_id is not None
                 else true(),
+                WebhookDelivery.id == delivery_id if delivery_id is not None else true(),
                 or_(
                     and_(
                         WebhookDelivery.status.in_(("PENDING", "RETRY_WAIT")),

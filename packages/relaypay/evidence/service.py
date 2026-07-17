@@ -221,6 +221,9 @@ def payment_evidence(
         lifecycle_status = "REFUNDED"
     operation_public_ids = {item.id: item.public_id for item in operations}
     event_public_ids = {item.id: item.public_id for item in events}
+    recipient_event_public_ids = {
+        item.id: event_public_ids.get(item.merchant_event_id) for item in recipients
+    }
     delivery_public_ids = {item.id: item.public_id for item in deliveries}
     endpoint_public_ids: dict[uuid.UUID, str] = {
         endpoint_id: public_id
@@ -334,6 +337,7 @@ def payment_evidence(
         "deliveries": [
             {
                 "id": item.public_id,
+                "eventId": recipient_event_public_ids.get(item.event_recipient_id),
                 "status": item.status,
                 "attemptCount": item.attempt_count,
                 "deliveredAt": _time(item.delivered_at),

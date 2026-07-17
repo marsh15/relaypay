@@ -3,7 +3,14 @@ import { Money, StateBadge } from "./shared";
 
 export function ProofSummary({ evidence }: { evidence: Evidence }) {
   const capture = evidence.providerOperations.find((item) => item.kind === "CAPTURE");
-  const delivered = evidence.deliveries.filter((item) => item.status === "DELIVERED").length;
+  const captureEvents = evidence.events.filter((item) => item.type === "payment.captured.v1");
+  const captureEventIds = new Set(captureEvents.map((item) => item.id));
+  const delivered = evidence.deliveries.filter(
+    (item) => captureEventIds.has(item.eventId) && item.status === "DELIVERED",
+  ).length;
+  const captureKeys = evidence.idempotency.filter(
+    (item) => item.fingerprintSummary.route_template === "/payment_intents/{payment_intent_id}/capture",
+  ).length;
   return (
     <section className="proof-summary" aria-labelledby="proof-summary-title">
       <div className="proof-summary-lead">
@@ -26,16 +33,16 @@ export function ProofSummary({ evidence }: { evidence: Evidence }) {
           <span>balanced journal</span>
         </li>
         <li>
-          <strong>{evidence.events.length}</strong>
-          <span>immutable event</span>
+          <strong>{captureEvents.length}</strong>
+          <span>capture event</span>
         </li>
         <li>
           <strong>{delivered}</strong>
           <span>delivered webhook</span>
         </li>
         <li>
-          <strong>{evidence.idempotency.length}</strong>
-          <span>attached keys</span>
+          <strong>{captureKeys}</strong>
+          <span>capture keys</span>
         </li>
       </ul>
     </section>

@@ -512,6 +512,15 @@ a {
   font-weight: 800;
 }
 
+.assertion-mismatch {
+  color: var(--danger);
+  background: #fff5f3;
+}
+
+.assertion-mismatch .assertion-icon {
+  color: var(--danger);
+}
+
 .assertion-row code,
 .correlation-strip dd {
   font-family: ui-monospace, SFMono-Regular, monospace;

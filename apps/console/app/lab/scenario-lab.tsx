@@ -140,16 +140,21 @@ function ScenarioProof({ result }: { result: ScenarioResult }) {
         ))}
       </ol>
       <div className="assertion-list" aria-label="Verified invariants">
-        {expectedAssertions.map(([key, label, expected]) => (
-          <div className="assertion-row" key={key}>
-            <span className="assertion-icon" aria-hidden="true">
-              ✓
-            </span>
-            <span>{label}</span>
-            <code>{String(result.assertions[key])}</code>
-            <span className="sr-only">Expected {expected}</span>
-          </div>
-        ))}
+        {expectedAssertions.map(([key, label, expected]) => {
+          const matches = result.assertions[key] === expected;
+          return (
+            <div className={`assertion-row ${matches ? "" : "assertion-mismatch"}`} key={key}>
+              <span className="assertion-icon" aria-hidden="true">
+                {matches ? "✓" : "!"}
+              </span>
+              <span>{label}</span>
+              <code>{String(result.assertions[key])}</code>
+              <span className="sr-only">
+                Observed {String(result.assertions[key])}; expected {expected}
+              </span>
+            </div>
+          );
+        })}
       </div>
       <dl className="correlation-strip">
         <div>

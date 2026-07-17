@@ -89,6 +89,7 @@ export type OperationHistoryEvidence = {
 
 export type DeliveryEvidence = {
   id: string;
+  eventId: string;
   status: string;
   attemptCount: number;
   deliveredAt: string | null;

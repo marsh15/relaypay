@@ -259,7 +259,18 @@ def test_admin_runs_lost_response_scenario_and_reads_durable_proof(
 
     evidence = client.get(f"/api/v1/payment_intents/{proof['payment_intent_id']}/evidence")
     assert evidence.status_code == 200
-    delivery_id = evidence.json()["deliveries"][0]["id"]
+    evidence_body = evidence.json()
+    capture_event = next(
+        event for event in evidence_body["events"] if event["type"] == "payment.captured.v1"
+    )
+    capture_delivery = next(
+        delivery
+        for delivery in evidence_body["deliveries"]
+        if delivery["eventId"] == capture_event["id"]
+    )
+    assert capture_delivery["status"] == "DELIVERED"
+    assert capture_delivery["attemptCount"] == 1
+    delivery_id = capture_delivery["id"]
     delivery = client.get(f"/api/v1/webhook_deliveries/{delivery_id}")
     assert delivery.status_code == 200
     assert delivery.json()["event"]["sha256"] == proof["assertions"]["eventSha256"]

@@ -288,7 +288,25 @@ def _execute_lost_capture(
         transport=provider_transport,
     )
     materialize_deliveries(factory, organisation_id=organisation_id)
-    delivery_claim = claim_delivery(factory, organisation_id=organisation_id)
+    with factory() as session, session.begin():
+        scenario_delivery_id = session.scalar(
+            select(WebhookDelivery.id)
+            .join(EventRecipient, EventRecipient.id == WebhookDelivery.event_recipient_id)
+            .join(MerchantEvent, MerchantEvent.id == EventRecipient.merchant_event_id)
+            .join(ProviderOperation, ProviderOperation.id == MerchantEvent.provider_operation_id)
+            .where(
+                WebhookDelivery.organisation_id == organisation_id,
+                ProviderOperation.public_id == capture_operation_ids[0],
+                WebhookDelivery.replay_of_delivery_id.is_(None),
+            )
+        )
+    if scenario_delivery_id is None:
+        raise RuntimeError("scenario delivery was not materialized")
+    delivery_claim = claim_delivery(
+        factory,
+        organisation_id=organisation_id,
+        delivery_id=scenario_delivery_id,
+    )
     if delivery_claim is None:
         raise RuntimeError("scenario delivery was not materialized")
     if not deliver_claim(
@@ -347,7 +365,14 @@ def _execute_lost_capture(
             "deliveries": session.scalar(
                 select(func.count())
                 .select_from(WebhookDelivery)
-                .where(WebhookDelivery.organisation_id == organisation_id)
+                .join(EventRecipient, EventRecipient.id == WebhookDelivery.event_recipient_id)
+                .where(
+                    WebhookDelivery.organisation_id == organisation_id,
+                    EventRecipient.merchant_event_id == event.id,
+                    WebhookDelivery.replay_of_delivery_id.is_(None),
+                    WebhookDelivery.status == "DELIVERED",
+                    WebhookDelivery.attempt_count == 1,
+                )
             ),
             "attachedKeys": session.scalar(
                 select(func.count())
@@ -360,7 +385,7 @@ def _execute_lost_capture(
             if operation.terminal_response_sha256
             else None,
         }
-    expected_counts = (1, 1, 1, 1, 1, 2)
+    expected_counts = (1, 1, 1, 1, 1, 1, 2)
     observed_counts = tuple(
         assertions[key]
         for key in (
@@ -369,6 +394,7 @@ def _execute_lost_capture(
             "journals",
             "events",
             "recipients",
+            "deliveries",
             "attachedKeys",
         )
     )
