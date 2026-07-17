@@ -1,0 +1,265 @@
+:root {
+  --canvas: #f4f1ea;
+  --surface: #ffffff;
+  --surface-muted: #e9e5dc;
+  --ink: #171a1f;
+  --ink-muted: #5b616b;
+  --border: #c8c3b8;
+  --brand: #174a3a;
+  --action: #0b63ce;
+  --action-hover: #074d9f;
+  --success: #176b45;
+  --processing: #8a5a00;
+  --danger: #a52a2a;
+  --review: #6842a0;
+  --code-bg: #12161c;
+  --code-ink: #e7edf5;
+  --focus: #006bd6;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  color-scheme: light;
+  font-family: Geist, Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  line-height: 1.5;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+a {
+  color: var(--action);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 0.75rem;
+  left: 0.75rem;
+  transform: translateY(-180%);
+  background: var(--ink);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-control);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);
+  align-items: center;
+  gap: clamp(2rem, 8vw, 8rem);
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+.login-intro {
+  max-width: 38rem;
+}
+
+.eyebrow,
+.section-kicker {
+  margin: 0 0 0.75rem;
+  color: var(--brand);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wordmark {
+  margin: 0;
+  font-size: clamp(3.5rem, 9vw, 7.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.065em;
+}
+
+.claim {
+  max-width: 34rem;
+  margin: 2rem 0;
+  font-size: clamp(1.25rem, 2vw, 1.75rem);
+  line-height: 1.35;
+}
+
+.synthetic-notice {
+  max-width: 34rem;
+  padding: 1rem;
+  border-left: 4px solid var(--processing);
+  background: var(--surface-muted);
+}
+
+.login-panel {
+  width: 100%;
+  max-width: 26.25rem;
+  justify-self: end;
+  display: grid;
+  gap: 1.5rem;
+  padding: 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.login-panel h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.25;
+}
+
+.supporting-copy,
+.login-footnote {
+  color: var(--ink-muted);
+}
+
+.supporting-copy {
+  margin: 0.5rem 0 0;
+}
+
+.login-footnote {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.login-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.login-form label {
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.login-form input {
+  min-height: 2.75rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #8b8e93;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.login-form input:focus {
+  border-color: var(--focus);
+}
+
+.button {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-primary {
+  color: white;
+  background: var(--action);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--action-hover);
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.form-error {
+  padding: 0.75rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-control);
+  color: #7c1f1f;
+  background: #fff5f3;
+}
+
+.centered-state {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: start;
+  gap: 1rem;
+  max-width: 36rem;
+  margin: auto;
+  padding: 2rem;
+}
+
+.centered-state h1,
+.centered-state p {
+  margin: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 48rem) {
+  .login-shell {
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: 2rem;
+    padding: 2rem 1rem;
+  }
+
+  .wordmark {
+    font-size: clamp(3.25rem, 20vw, 5rem);
+  }
+
+  .claim {
+    margin: 1rem 0;
+    font-size: 1.125rem;
+  }
+
+  .login-panel {
+    max-width: none;
+    justify-self: stretch;
+    padding: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skip-link,
+  .button {
+    transition: transform 150ms ease, background-color 150ms ease;
+  }
+}
