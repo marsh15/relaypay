@@ -4,11 +4,29 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from relaypay.database import build_engine, build_session_factory
-from relaypay.event_delivery.models import WebhookEndpoint, WebhookEndpointVersion
+from relaypay.event_delivery.materializer import (
+    materialize_deliveries,
+    materialize_delivery_batch,
+)
+from relaypay.event_delivery.models import (
+    EventRecipient,
+    MerchantEvent,
+    WebhookDelivery,
+    WebhookEndpoint,
+    WebhookEndpointVersion,
+)
 from relaypay.identity.models import Organisation
 from relaypay.ids import new_public_id
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
+
+from tests.integration.test_week3_provider_recovery import (
+    DeterministicTransport,
+    _authorize,
+    _dispatch,
+    _new_payment,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -110,3 +128,82 @@ def test_endpoint_version_rejects_cross_tenant_binding(
                 active_from=active_from,
             )
         )
+
+
+def _active_version(factory: sessionmaker[Session], organisation_id: uuid.UUID) -> uuid.UUID:
+    with factory() as session, session.begin():
+        endpoint = WebhookEndpoint(
+            public_id=new_public_id("wh"),
+            organisation_id=organisation_id,
+            name="Bundled receiver",
+            status="ACTIVE",
+        )
+        session.add(endpoint)
+        session.flush()
+        version = WebhookEndpointVersion(
+            public_id=new_public_id("whv"),
+            organisation_id=organisation_id,
+            webhook_endpoint_id=endpoint.id,
+            version=1,
+            url="http://receiver:8002/webhooks/relaypay",
+            encrypted_secret=b"encrypted-test-secret",
+            subscribed_event_types=["payment.authorized.v1"],
+            active_from=datetime.now(UTC) - timedelta(minutes=1),
+        )
+        session.add(version)
+        session.flush()
+        return version.id
+
+
+def test_finalizer_snapshots_recipient_and_materializer_is_crash_safe(
+    factory: sessionmaker[Session],
+) -> None:
+    organisation_id, payment_id = _new_payment(factory)
+    endpoint_version_id = _active_version(factory, organisation_id)
+    operation_id = _authorize(factory, organisation_id, payment_id)
+    _dispatch(factory, organisation_id, operation_id, DeterministicTransport())
+
+    with factory() as session, session.begin():
+        operation_event = session.scalar(
+            select(MerchantEvent).where(MerchantEvent.organisation_id == organisation_id)
+        )
+        assert operation_event is not None
+        recipient = session.scalar(
+            select(EventRecipient).where(EventRecipient.merchant_event_id == operation_event.id)
+        )
+        assert recipient is not None
+        assert recipient.endpoint_version_id == endpoint_version_id
+        recipient_id = recipient.id
+
+    _active_version(factory, organisation_id)
+    with factory() as session, session.begin():
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(EventRecipient)
+                .where(EventRecipient.merchant_event_id == operation_event.id)
+            )
+            == 1
+        )
+
+    with pytest.raises(RuntimeError), factory() as session, session.begin():
+        assert materialize_delivery_batch(session) == 1
+        raise RuntimeError("simulated crash before materializer commit")
+
+    with factory() as session, session.begin():
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WebhookDelivery)
+                .where(WebhookDelivery.event_recipient_id == recipient_id)
+            )
+            == 0
+        )
+
+    assert materialize_deliveries(factory) == 1
+    assert materialize_deliveries(factory) == 0
+
+    with pytest.raises(DBAPIError), factory() as session, session.begin():
+        recipient = session.get(EventRecipient, recipient_id)
+        assert recipient is not None
+        session.delete(recipient)

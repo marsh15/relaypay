@@ -18,6 +18,10 @@ app.conf.update(
         "poll-provider-recovery": {
             "task": "relaypay.recover_provider_operations",
             "schedule": 1.0,
-        }
+        },
+        "materialize-webhook-deliveries": {
+            "task": "relaypay.materialize_webhook_deliveries",
+            "schedule": 1.0,
+        },
     },
 )

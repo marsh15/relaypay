@@ -1,9 +1,15 @@
 import hashlib
 from datetime import UTC, datetime
 
+from sqlalchemy import literal, or_, select
 from sqlalchemy.orm import Session
 
-from relaypay.event_delivery.models import MerchantEvent
+from relaypay.event_delivery.models import (
+    EventRecipient,
+    MerchantEvent,
+    WebhookEndpoint,
+    WebhookEndpointVersion,
+)
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.payments.models import PaymentIntent
@@ -51,4 +57,33 @@ def append_merchant_event(
         occurred_at=timestamp,
     )
     session.add(event)
+    session.flush([event])
+    endpoint_version_ids = session.scalars(
+        select(WebhookEndpointVersion.id)
+        .join(
+            WebhookEndpoint,
+            WebhookEndpoint.id == WebhookEndpointVersion.webhook_endpoint_id,
+        )
+        .where(
+            WebhookEndpointVersion.organisation_id == operation.organisation_id,
+            WebhookEndpoint.status == "ACTIVE",
+            WebhookEndpointVersion.active_from <= timestamp,
+            or_(
+                WebhookEndpointVersion.active_until.is_(None),
+                WebhookEndpointVersion.active_until > timestamp,
+            ),
+            WebhookEndpointVersion.subscribed_event_types.any(literal(event_type)),
+        )
+        .order_by(WebhookEndpointVersion.id)
+    ).all()
+    session.add_all(
+        [
+            EventRecipient(
+                organisation_id=operation.organisation_id,
+                merchant_event_id=event.id,
+                endpoint_version_id=endpoint_version_id,
+            )
+            for endpoint_version_id in endpoint_version_ids
+        ]
+    )
     return event
