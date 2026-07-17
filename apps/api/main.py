@@ -1,3 +1,5 @@
+import json
+import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -11,6 +13,7 @@ from relaypay.config import Settings, get_settings
 from relaypay.contracts import EmptyCommand
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
+from relaypay.evidence.service import payment_evidence
 from relaypay.identity.rate_limit import FixedWindowRateLimiter
 from relaypay.identity.security import (
     Principal,
@@ -27,6 +30,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.routes.payments import build_payments_router
+
+logger = logging.getLogger("relaypay.api")
 
 
 class LoginRequest(BaseModel):
@@ -128,6 +133,19 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
         response.headers["Server-Timing"] = f"app;dur={(time.monotonic() - started) * 1000:.1f}"
+        logger.info(
+            json.dumps(
+                {
+                    "event": "http_request",
+                    "requestId": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": response.status_code,
+                    "durationMs": round((time.monotonic() - started) * 1000, 1),
+                },
+                separators=(",", ":"),
+            )
+        )
         return response
 
     def get_session_factory(request: Request) -> sessionmaker[Session]:
@@ -166,7 +184,7 @@ def create_app(
     ) -> dict[str, str]:
         try:
             with factory() as session, session.begin():
-                session.execute(text("SELECT 1"))
+                session.execute(text("SELECT 1 FROM webhook_deliveries LIMIT 1"))
         except Exception as exc:
             raise RelayPayError(
                 code="DEPENDENCY_UNAVAILABLE",
@@ -175,6 +193,23 @@ def create_app(
                 retry_after=5,
             ) from exc
         return {"status": "ready", "database": "available"}
+
+    @app.get("/api/v1/payment_intents/{payment_id}/evidence")
+    def get_payment_evidence(
+        payment_id: str,
+        principal: Annotated[Principal, Depends(get_principal)],
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            evidence = payment_evidence(
+                session,
+                organisation_id=principal.organisation_id,
+                payment_public_id=payment_id,
+            )
+        if evidence is None:
+            raise RelayPayError(
+                code="NOT_FOUND", message="Payment intent not found", http_status=404
+            )
+        return evidence
 
     @app.post("/api/session/login", response_model=SessionResponse)
     def login(payload: LoginRequest, request: Request, response: Response) -> SessionResponse:

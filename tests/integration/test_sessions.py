@@ -7,6 +7,7 @@ from relaypay.database import build_engine, build_session_factory
 from relaypay.identity.models import Organisation, SessionRecord, User
 from relaypay.identity.security import hash_password
 from relaypay.ids import new_public_id
+from relaypay.payments.models import Customer, PaymentIntent
 from sqlalchemy import delete, select
 
 from apps.api.main import create_app
@@ -160,3 +161,51 @@ def test_retry_lookup_contract_rejects_manual_outcome_assertion(
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_evidence_is_admin_only_tenant_scoped_bounded_and_redacted(
+    client: TestClient, settings: Settings, seeded_admin: tuple[str, str]
+) -> None:
+    email, password = seeded_admin
+    engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(), application_name="evidence-api-test"
+    )
+    factory = build_session_factory(engine)
+    with factory() as session, session.begin():
+        user = session.scalar(select(User).where(User.email_normalized == email.casefold()))
+        assert user is not None
+        customer = Customer(
+            public_id=new_public_id("cus"),
+            organisation_id=user.organisation_id,
+            merchant_customer_reference=new_public_id("cus"),
+            display_name="Evidence customer",
+        )
+        session.add(customer)
+        session.flush()
+        payment = PaymentIntent(
+            public_id=new_public_id("pay"),
+            organisation_id=user.organisation_id,
+            customer_id=customer.id,
+            merchant_reference=new_public_id("pay"),
+            amount=12_500,
+            currency="INR",
+        )
+        session.add(payment)
+        session.flush()
+        payment_id = payment.public_id
+    login = client.post("/api/session/login", json={"email": email, "password": password})
+    assert login.status_code == 200
+    response = client.get(f"/api/v1/payment_intents/{payment_id}/evidence")
+    assert response.status_code == 200
+    assert response.json()["limits"] == {"perCollection": 100}
+    assert "encrypted_secret" not in response.text
+    assert "response_bytes" not in response.text
+
+    client.cookies.clear()
+    denied = client.get(
+        f"/api/v1/payment_intents/{payment_id}/evidence",
+        headers={"Authorization": "Bearer synthetic-merchant-key"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "ADMIN_SESSION_REQUIRED"
+    engine.dispose()
