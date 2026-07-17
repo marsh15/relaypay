@@ -1,12 +1,51 @@
 name: relaypay
 
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-development}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
+  RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:${RELAYPAY_APP_DB_PASSWORD:-relaypay_app_dev}@postgres:5432/relaypay
+  RELAYPAY_MIGRATION_DATABASE_URL: postgresql+psycopg://relaypay_migrator:${RELAYPAY_MIGRATOR_DB_PASSWORD:-relaypay_migrator_dev}@postgres:5432/relaypay
+  PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:${PROVIDER_APP_DB_PASSWORD:-provider_app_dev}@postgres:5432/provider
+  PROVIDER_MIGRATION_DATABASE_URL: postgresql+psycopg://provider_migrator:${PROVIDER_MIGRATOR_DB_PASSWORD:-provider_migrator_dev}@postgres:5432/provider
+  RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}@postgres:5432/relaypay
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me-32-bytes}
+  CSRF_SECRET: ${CSRF_SECRET:-dev-csrf-secret-change-me-32-bytes}
+  API_KEY_PEPPER: ${API_KEY_PEPPER:-dev-api-key-pepper-change-me-32-bytes}
+  IDEMPOTENCY_KEY_PEPPER: ${IDEMPOTENCY_KEY_PEPPER:-dev-idempotency-pepper-change-me}
+  WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:-dev-only-generate-a-fernet-key}
+  PROVIDER_BASE_URL: http://provider:8001
+  PROVIDER_ACCOUNT_ID: ${PROVIDER_ACCOUNT_ID:-acct_relaypay_demo}
+  PROVIDER_SIGNING_SECRET: ${PROVIDER_SIGNING_SECRET:-dev-provider-signing-secret-change-me}
+  PROVIDER_CONTROL_SECRET: ${PROVIDER_CONTROL_SECRET:-dev-provider-control-secret-change-me}
+  RECEIVER_BASE_URL: http://receiver:8002
+  RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:-dev-receiver-secret-change-me}
+
+x-service-defaults: &service-defaults
+  init: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  deploy:
+    resources:
+      limits:
+        cpus: "1.0"
+        memory: 512M
+
 services:
   postgres:
+    <<: *service-defaults
     image: postgres:17.6-bookworm
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_dev_only
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_only}
       POSTGRES_DB: postgres
+      RELAYPAY_MIGRATOR_DB_PASSWORD: ${RELAYPAY_MIGRATOR_DB_PASSWORD:-relaypay_migrator_dev}
+      RELAYPAY_APP_DB_PASSWORD: ${RELAYPAY_APP_DB_PASSWORD:-relaypay_app_dev}
+      PROVIDER_MIGRATOR_DB_PASSWORD: ${PROVIDER_MIGRATOR_DB_PASSWORD:-provider_migrator_dev}
+      PROVIDER_APP_DB_PASSWORD: ${PROVIDER_APP_DB_PASSWORD:-provider_app_dev}
+      RECEIVER_APP_DB_PASSWORD: ${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}
     ports:
       - "55432:5432"
     volumes:
@@ -17,10 +56,9 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
-    security_opt:
-      - no-new-privileges:true
 
   redis:
+    <<: *service-defaults
     image: redis:8.2.0-bookworm
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
@@ -30,124 +68,159 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
-    security_opt:
-      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
-  api:
+  migrate:
+    <<: *service-defaults
     build:
       context: .
       dockerfile: Dockerfile.python
-    command: ["uvicorn", "apps.api.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
-    env_file: .env
-    environment:
-      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
-      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
-      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
-      PROVIDER_BASE_URL: http://provider:8001
-      RECEIVER_BASE_URL: http://receiver:8002
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
-    ports:
-      - "8000:8000"
+    restart: "no"
+    environment: *app-environment
+    command:
+      - sh
+      - -ec
+      - |
+        alembic -c migrations/relaypay/alembic.ini upgrade head
+        alembic -c migrations/provider/alembic.ini upgrade head
+        alembic -c migrations/receiver/alembic.ini upgrade head
+        python -m scripts.seed
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      provider:
-        condition: service_started
-      receiver:
-        condition: service_started
-    security_opt:
-      - no-new-privileges:true
 
-  provider:
+  api:
+    <<: *service-defaults
     build:
       context: .
       dockerfile: Dockerfile.python
-    command: ["uvicorn", "apps.provider.asgi:app", "--host", "0.0.0.0", "--port", "8001"]
-    env_file: .env
-    environment:
-      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
-      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
-      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
+    command: ["uvicorn", "apps.api.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    environment: *app-environment
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      provider:
+        condition: service_healthy
+      receiver:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
+  provider:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["uvicorn", "apps.provider.asgi:app", "--host", "0.0.0.0", "--port", "8001", "--no-access-log"]
+    environment: *app-environment
     ports:
       - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
-    security_opt:
-      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/live')"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   receiver:
+    <<: *service-defaults
     build:
       context: .
       dockerfile: Dockerfile.python
-    command: ["uvicorn", "apps.receiver.asgi:app", "--host", "0.0.0.0", "--port", "8002"]
-    env_file: .env
-    environment:
-      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
-      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
-      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
-      RECEIVER_BASE_URL: http://receiver:8002
+    command: ["uvicorn", "apps.receiver.asgi:app", "--host", "0.0.0.0", "--port", "8002", "--no-access-log"]
+    environment: *app-environment
     ports:
       - "8002:8002"
     depends_on:
       postgres:
         condition: service_healthy
-    security_opt:
-      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health/ready')"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
   poller:
+    <<: *service-defaults
     build:
       context: .
       dockerfile: Dockerfile.python
     command: ["python", "-m", "apps.worker.poller"]
-    env_file: .env
-    environment:
-      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
-      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
-      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
-      PROVIDER_BASE_URL: http://provider:8001
-      RECEIVER_BASE_URL: http://receiver:8002
+    environment: *app-environment
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       provider:
-        condition: service_started
+        condition: service_healthy
       receiver:
-        condition: service_started
-    security_opt:
-      - no-new-privileges:true
+        condition: service_healthy
 
   worker:
+    <<: *service-defaults
     build:
       context: .
       dockerfile: Dockerfile.python
-    command:
-      ["celery", "-A", "apps.worker.celery_app:app", "worker", "--beat", "--loglevel=INFO"]
-    env_file: .env
-    environment:
-      RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:relaypay_app_dev@postgres:5432/relaypay
-      PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:provider_app_dev@postgres:5432/provider
-      RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:receiver_app_dev@postgres:5432/relaypay
-      PROVIDER_BASE_URL: http://provider:8001
-      RECEIVER_BASE_URL: http://receiver:8002
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
+    command: ["celery", "-A", "apps.worker.celery_app:app", "worker", "--beat", "--loglevel=INFO"]
+    environment: *app-environment
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       provider:
-        condition: service_started
+        condition: service_healthy
       receiver:
+        condition: service_healthy
+
+  console:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile.console
+    environment:
+      INTERNAL_API_BASE_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  caddy:
+    <<: *service-defaults
+    image: caddy:2.10.2-alpine
+    profiles: ["edge"]
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-localhost}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-admin@example.test}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      console:
         condition: service_started
-    security_opt:
-      - no-new-privileges:true
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

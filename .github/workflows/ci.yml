@@ -1,0 +1,75 @@
+name: relaypay-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.4"
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: npm
+          cache-dependency-path: apps/console/package-lock.json
+
+      - name: Install locked dependencies
+        run: |
+          cp .env.example .env
+          uv sync --frozen
+          npm ci --prefix apps/console
+          npx --prefix apps/console playwright install --with-deps chromium
+
+      - name: Start clean dependencies
+        run: docker compose up -d --wait postgres redis
+
+      - name: Migrate empty databases and seed synthetic tenants
+        run: |
+          make migrate
+          make seed
+          uv run alembic -c migrations/relaypay/alembic.ini check
+          uv run alembic -c migrations/provider/alembic.ini check
+          uv run alembic -c migrations/receiver/alembic.ini check
+
+      - name: Backend correctness gate
+        run: |
+          make lint
+          make typecheck
+          make test
+
+      - name: Console quality and dependency gate
+        working-directory: apps/console
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run build
+          npm audit --omit=dev --audit-level=high
+
+      - name: Start release surface
+        run: docker compose up -d --build --wait provider receiver api console
+
+      - name: One primary browser journey
+        working-directory: apps/console
+        run: npm run test:e2e
+
+      - name: Container diagnostics
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color --tail=200
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down --volumes

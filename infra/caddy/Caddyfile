@@ -1,0 +1,20 @@
+{
+	email {$CADDY_ACME_EMAIL}
+}
+
+{$CADDY_DOMAIN} {
+	encode zstd gzip
+
+	@api path /api/* /health/*
+	reverse_proxy @api api:8000
+
+	@receiver path /webhooks/relaypay
+	reverse_proxy @receiver receiver:8002
+
+	reverse_proxy console:3000
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}

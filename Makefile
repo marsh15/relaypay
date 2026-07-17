@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck unit test infra-up infra-down migrate seed demo
+.PHONY: install lint format typecheck unit test infra-up infra-down migrate seed reset demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -32,5 +32,19 @@ migrate:
 seed:
 	uv run python -m scripts.seed
 
+reset:
+	uv run python -m scripts.reset_sandbox
+
 demo:
 	uv run python -m scripts.lost_response_demo
+
+console-install:
+	cd apps/console && npm ci
+
+console-check:
+	cd apps/console && npm run lint && npm run typecheck && npm run build && npm audit --omit=dev
+
+console-e2e:
+	cd apps/console && npm run test:e2e
+
+check: lint typecheck test console-check

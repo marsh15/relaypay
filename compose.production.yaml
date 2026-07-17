@@ -1,0 +1,57 @@
+x-production-environment: &production-environment
+  APP_ENV: production
+  PUBLIC_BASE_URL: https://${CADDY_DOMAIN:?set CADDY_DOMAIN}
+  RELAYPAY_DATABASE_URL: postgresql+psycopg://relaypay_app:${RELAYPAY_APP_DB_PASSWORD:?set RELAYPAY_APP_DB_PASSWORD}@postgres:5432/relaypay
+  RELAYPAY_MIGRATION_DATABASE_URL: postgresql+psycopg://relaypay_migrator:${RELAYPAY_MIGRATOR_DB_PASSWORD:?set RELAYPAY_MIGRATOR_DB_PASSWORD}@postgres:5432/relaypay
+  PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:${PROVIDER_APP_DB_PASSWORD:?set PROVIDER_APP_DB_PASSWORD}@postgres:5432/provider
+  PROVIDER_MIGRATION_DATABASE_URL: postgresql+psycopg://provider_migrator:${PROVIDER_MIGRATOR_DB_PASSWORD:?set PROVIDER_MIGRATOR_DB_PASSWORD}@postgres:5432/provider
+  RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:?set RECEIVER_APP_DB_PASSWORD}@postgres:5432/relaypay
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+  CSRF_SECRET: ${CSRF_SECRET:?set CSRF_SECRET}
+  API_KEY_PEPPER: ${API_KEY_PEPPER:?set API_KEY_PEPPER}
+  IDEMPOTENCY_KEY_PEPPER: ${IDEMPOTENCY_KEY_PEPPER:?set IDEMPOTENCY_KEY_PEPPER}
+  WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?set WEBHOOK_SECRET_ENCRYPTION_KEY}
+  PROVIDER_BASE_URL: http://provider:8001
+  PROVIDER_ACCOUNT_ID: ${PROVIDER_ACCOUNT_ID:?set PROVIDER_ACCOUNT_ID}
+  PROVIDER_SIGNING_SECRET: ${PROVIDER_SIGNING_SECRET:?set PROVIDER_SIGNING_SECRET}
+  PROVIDER_CONTROL_SECRET: ${PROVIDER_CONTROL_SECRET:?set PROVIDER_CONTROL_SECRET}
+  RECEIVER_BASE_URL: http://receiver:8002
+  RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:?set RECEIVER_WEBHOOK_SECRET}
+
+services:
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      RELAYPAY_MIGRATOR_DB_PASSWORD: ${RELAYPAY_MIGRATOR_DB_PASSWORD:?set RELAYPAY_MIGRATOR_DB_PASSWORD}
+      RELAYPAY_APP_DB_PASSWORD: ${RELAYPAY_APP_DB_PASSWORD:?set RELAYPAY_APP_DB_PASSWORD}
+      PROVIDER_MIGRATOR_DB_PASSWORD: ${PROVIDER_MIGRATOR_DB_PASSWORD:?set PROVIDER_MIGRATOR_DB_PASSWORD}
+      PROVIDER_APP_DB_PASSWORD: ${PROVIDER_APP_DB_PASSWORD:?set PROVIDER_APP_DB_PASSWORD}
+      RECEIVER_APP_DB_PASSWORD: ${RECEIVER_APP_DB_PASSWORD:?set RECEIVER_APP_DB_PASSWORD}
+  redis:
+    ports: !reset []
+  migrate:
+    environment: *production-environment
+  api:
+    ports: !reset []
+    environment: *production-environment
+  provider:
+    ports: !reset []
+    environment: *production-environment
+  receiver:
+    ports: !reset []
+    environment: *production-environment
+  poller:
+    environment: *production-environment
+  worker:
+    environment: *production-environment
+  console:
+    ports: !reset []
+  caddy:
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN:?set CADDY_DOMAIN}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:?set CADDY_ACME_EMAIL}

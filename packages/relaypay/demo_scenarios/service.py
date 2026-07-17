@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -27,6 +29,9 @@ from relaypay.payments.service import (
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
 from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import ProviderTransport, dispatch_operation
+
+
+logger = logging.getLogger(__name__)
 
 
 class ScenarioFaultController(Protocol):
@@ -175,6 +180,7 @@ def run_lost_capture_scenario(
             factory, organisation_id=organisation_id, scenario_run_id=run_public_id
         )
     except Exception as exc:
+        logger.exception("Lost-response scenario %s requires inspection", run_public_id)
         with factory() as session, session.begin():
             current_run = session.scalar(
                 select(ScenarioRun).where(ScenarioRun.public_id == run_public_id).with_for_update()
@@ -185,7 +191,11 @@ def run_lost_capture_scenario(
                     exc.code if isinstance(exc, RelayPayError) else "SCENARIO_EXECUTION_ERROR"
                 )
                 current_run.completed_at = datetime.now(UTC)
-        raise
+        return read_scenario_run(
+            factory,
+            organisation_id=organisation_id,
+            scenario_run_id=run_public_id,
+        )
 
 
 def _execute_lost_capture(
@@ -302,20 +312,36 @@ def _execute_lost_capture(
         )
     if scenario_delivery_id is None:
         raise RuntimeError("scenario delivery was not materialized")
-    delivery_claim = claim_delivery(
-        factory,
-        organisation_id=organisation_id,
-        delivery_id=scenario_delivery_id,
-    )
-    if delivery_claim is None:
-        raise RuntimeError("scenario delivery was not materialized")
-    if not deliver_claim(
-        factory,
-        delivery_claim,
-        encryption_key=settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value(),
-        transport=webhook_transport,
-    ):
-        raise RuntimeError("scenario delivery lease was lost")
+    for delivery_attempt in range(3):
+        delivery_claim = claim_delivery(
+            factory,
+            organisation_id=organisation_id,
+            delivery_id=scenario_delivery_id,
+        )
+        if delivery_claim is None:
+            if delivery_attempt < 2:
+                time.sleep(2**delivery_attempt)
+                continue
+            raise RuntimeError("scenario delivery was not claimable")
+        if not deliver_claim(
+            factory,
+            delivery_claim,
+            encryption_key=settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value(),
+            transport=webhook_transport,
+        ):
+            raise RuntimeError("scenario delivery lease was lost")
+        with factory() as session, session.begin():
+            delivery_status = session.scalar(
+                select(WebhookDelivery.status).where(WebhookDelivery.id == scenario_delivery_id)
+            )
+        if delivery_status == "DELIVERED":
+            break
+        if delivery_status == "DEAD_LETTER":
+            raise RuntimeError("scenario delivery was dead-lettered")
+        if delivery_attempt < 2:
+            time.sleep(2**delivery_attempt)
+    else:
+        raise RuntimeError("scenario delivery was not acknowledged within the retry bound")
     with factory() as session, session.begin():
         operation = session.scalar(
             select(ProviderOperation).where(
@@ -371,7 +397,6 @@ def _execute_lost_capture(
                     EventRecipient.merchant_event_id == event.id,
                     WebhookDelivery.replay_of_delivery_id.is_(None),
                     WebhookDelivery.status == "DELIVERED",
-                    WebhookDelivery.attempt_count == 1,
                 )
             ),
             "attachedKeys": session.scalar(

@@ -96,6 +96,10 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.login_limiter = FixedWindowRateLimiter(limit=5, window_seconds=60)
     transport = provider_transport or HTTPProviderTransport(base_url=resolved.PROVIDER_BASE_URL)
+    scenario_transport = provider_transport or HTTPProviderTransport(
+        base_url=resolved.PROVIDER_BASE_URL,
+        timeout_seconds=10.0,
+    )
     app.include_router(
         build_payments_router(
             settings=resolved,
@@ -184,9 +188,11 @@ def create_app(
         build_admin_router(
             settings=resolved,
             session_factory=session_factory,
-            provider_transport=transport,
-            fault_controller=scenario_fault_controller or HTTPScenarioFaultController(resolved),
-            webhook_transport=webhook_transport or HTTPWebhookTransport(allowed_url=receiver_url),
+            provider_transport=scenario_transport,
+            fault_controller=scenario_fault_controller
+            or HTTPScenarioFaultController(resolved, timeout_seconds=10.0),
+            webhook_transport=webhook_transport
+            or HTTPWebhookTransport(allowed_url=receiver_url, timeout_seconds=30.0),
             principal_dependency=get_principal,
         )
     )

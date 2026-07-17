@@ -25,7 +25,8 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     const value = response.headers.get(name);
     if (value) responseHeaders.set(name, value);
   }
-  return new Response(response.body, { status: response.status, headers: responseHeaders });
+  const responseBody = await response.arrayBuffer();
+  return new Response(responseBody, { status: response.status, headers: responseHeaders });
 }
 
 export const GET = proxy;
