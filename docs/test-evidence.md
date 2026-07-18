@@ -57,7 +57,26 @@ contains this record does not change the tested runtime.
 Tooling: Python test runtime `3.12.12`, uv `0.10.4`, Node.js `25.6.1`, npm `11.9.0`, Docker
 `29.5.2`, Docker Compose `5.1.3`, and ffmpeg `8.0.1`.
 
-## Blocked rerun (not passing evidence)
+## Final publication evidence
+
+M0 was published at `2026-07-18T12:36:54Z` after the corrected clean-environment proof passed
+on both the release-fix branch and merged `main`:
+
+- Fix PR: [#1](https://github.com/marsh15/relaypay/pull/1), with release gate
+  [29644434857](https://github.com/marsh15/relaypay/actions/runs/29644434857) passing in
+  `2m36s`.
+- Canonical `main` gate:
+  [29644539940](https://github.com/marsh15/relaypay/actions/runs/29644539940) passed in `3m01s`
+  on commit `d99bfee3bbe4a829a5d59bada70f7ca152123c6a`.
+- Annotated tag `v0.1.0` has tag-object SHA
+  `283b406be9f3f4890472e00da429055c5e9c6362` and resolves to that green `main` commit.
+- Public release: [RelayPay v0.1.0 — Proven baseline](https://github.com/marsh15/relaypay/releases/tag/v0.1.0).
+- Release asset: `relaypay-v0.1.0-proof.mp4`, `518163` bytes, SHA-256
+  `42a6d2d66fa77f7f6b5789d6322d87f2d9913dc55f9f18d3734e7ea1fdbc6166`.
+- GitHub reports the repository as public with the MIT license. The release is final, not a draft
+  or prerelease, and retains the synthetic-data warning in its notes.
+
+## Historical blocked rerun (not passing evidence)
 
 The full application image rebuild contacted Docker Hub and GHCR twice. Both attempts timed out
 while loading base-image metadata for `ghcr.io/astral-sh/uv:0.10.4`; no compile or application
@@ -65,3 +84,6 @@ step failed. The service graph was therefore run directly from the same checkout
 clean Compose PostgreSQL/Redis state for the CLI, browser, axe, and video results above. CI remains
 the canonical clean image-build gate, and publication must not proceed unless that remote gate is
 green.
+
+The later canonical GitHub runs listed above resolved this publication gate. The local timeout
+remains documented as historical evidence and is not represented as a successful local image run.
