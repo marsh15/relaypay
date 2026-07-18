@@ -5,7 +5,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from relaypay.errors import RelayPayError, not_found
-from relaypay.identity.models import APIKey, APIKeyVersion, AuditRecord, Environment
+from relaypay.identity.models import (
+    APIKey,
+    APIKeyVersion,
+    AuditRecord,
+    Environment,
+    Organisation,
+    OrganisationMembership,
+)
 from relaypay.identity.security import IssuedAPIKey, Principal, issue_api_key
 from relaypay.ids import new_public_id
 
@@ -17,6 +24,33 @@ def require_organisation_admin(principal: Principal) -> None:
             message="Organisation administrator permission required",
             http_status=403,
         )
+
+
+def provision_organisation(session: Session, *, principal: Principal, name: str) -> Organisation:
+    if principal.kind != "SESSION" or principal.platform_role != "PLATFORM_ADMIN":
+        raise RelayPayError(
+            code="FORBIDDEN", message="Platform administrator permission required", http_status=403
+        )
+    organisation = Organisation(public_id=new_public_id("org"), name=name, status="ACTIVE")
+    session.add(organisation)
+    session.flush()
+    if principal.user_id is not None:
+        session.add(
+            OrganisationMembership(
+                organisation_id=organisation.id,
+                user_id=principal.user_id,
+                role="ORGANISATION_ADMIN",
+                status="ACTIVE",
+            )
+        )
+    append_audit(
+        session,
+        principal=principal,
+        action="ORGANISATION_PROVISIONED",
+        target_type="ORGANISATION",
+        target_id=organisation.public_id,
+    )
+    return organisation
 
 
 def append_audit(

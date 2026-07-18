@@ -17,6 +17,7 @@ from relaypay.identity.service import (
     activate_api_key_version,
     create_api_key,
     list_environments,
+    provision_organisation,
     revoke_api_key,
     rotate_api_key,
 )
@@ -34,6 +35,11 @@ class APIKeyCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     name: str = Field(min_length=1, max_length=128)
     scopes: list[str] = Field(min_length=1, max_length=32)
+
+
+class OrganisationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    name: str = Field(min_length=1, max_length=128)
 
 
 def build_admin_router(
@@ -69,6 +75,17 @@ def build_admin_router(
                 }
                 for item in list_environments(session, principal)
             ]
+
+    @router.post("/admin/v1/organisations", status_code=201)
+    def post_organisation(
+        payload: OrganisationCreate,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, str]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation = provision_organisation(session, principal=principal, name=payload.name)
+            return {"id": organisation.public_id, "name": organisation.name}
 
     @router.post("/admin/v1/environments/{environment_id}/api-keys", status_code=201)
     def post_api_key(
