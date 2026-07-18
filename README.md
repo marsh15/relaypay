@@ -100,11 +100,14 @@ ledger history, immutable event bytes, and delivery progress.
 - [Release test evidence](docs/test-evidence.md)
 - [Architecture decisions](docs/adr/README.md)
 - [PRD, TRD, flows, UI brief, schema, and frozen six-week plan](docs/vibe-coding/README.md)
+- [Phase 2 product contract](docs/phase-2/product-contract.md)
+- [Phase 2 implementation roadmap](docs/phase-2/implementation-roadmap.md)
+- [v0.1.0 release notes](docs/releases/v0.1.0.md)
 
 ## Technology
 
 Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Psycopg 3, Alembic, PostgreSQL 17,
 Redis/Celery, Next.js 16 App Router, React 19, TypeScript, Playwright, Caddy, and Docker Compose.
 
-License and repository publication are intentionally left to the repository owner; no deployment
-or external publication is performed automatically.
+RelayPay is available under the [MIT License](LICENSE). Release publication does not deploy or
+host the sandbox.

@@ -1,0 +1,27 @@
+1
+00:00:00,000 --> 00:00:03,800
+RelayPay v0.1.0 — evidence-first payment recovery
+
+2
+00:00:03,800 --> 00:00:10,000
+A synthetic administrator starts the deterministic lost-response proof.
+
+3
+00:00:10,000 --> 00:00:18,000
+The provider commits one capture effect, but the mutation response is lost.
+
+4
+00:00:18,000 --> 00:00:27,000
+RelayPay recovers by signed status lookup and never repeats the mutation.
+
+5
+00:00:27,000 --> 00:00:38,000
+Evidence confirms one immutable balanced journal and byte-stable terminal responses.
+
+6
+00:00:38,000 --> 00:00:50,000
+One immutable event reaches the signed, deduplicating webhook receiver.
+
+7
+00:00:50,000 --> 00:01:00,000
+Synthetic INR data only — not a payment processor and not for real data.
