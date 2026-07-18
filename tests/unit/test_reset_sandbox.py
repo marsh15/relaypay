@@ -7,7 +7,9 @@ from scripts.reset_sandbox import CONFIRMATION, assert_reset_allowed
 def _settings(app_env: str = "test") -> Settings:
     return Settings(
         APP_ENV=app_env,
-        PUBLIC_BASE_URL="https://sandbox.example.test" if app_env == "production" else "http://test",
+        PUBLIC_BASE_URL="https://sandbox.example.test"
+        if app_env == "production"
+        else "http://test",
         RELAYPAY_DATABASE_URL="postgresql+psycopg://unused",
         PROVIDER_DATABASE_URL="postgresql+psycopg://unused",
         RECEIVER_DATABASE_URL="postgresql+psycopg://unused",
