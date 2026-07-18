@@ -59,8 +59,10 @@ jobs:
           npm run build
           npm audit --omit=dev --audit-level=high
 
-      - name: Start release surface
-        run: docker compose up -d --build --wait provider receiver api console
+      - name: Recreate clean release surface
+        run: |
+          docker compose down --volumes
+          docker compose up -d --build --wait provider receiver api console
 
       - name: One primary browser journey
         working-directory: apps/console
