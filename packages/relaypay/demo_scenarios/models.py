@@ -20,6 +20,10 @@ class ScenarioRun(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "scenario_runs"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
@@ -37,6 +41,7 @@ class ScenarioRun(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     payment_intent_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     scenario_type: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="RUNNING")

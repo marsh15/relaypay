@@ -21,6 +21,12 @@ from relaypay.model_mixins import CreatedAtMixin, UpdatedAtMixin, UUIDPrimaryKey
 class Customer(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "customers"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
+        UniqueConstraint("organisation_id", "environment_id", "merchant_customer_reference"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("organisation_id", "merchant_customer_reference"),
     )
@@ -29,6 +35,7 @@ class Customer(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     organisation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organisations.id"), nullable=False
     )
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     merchant_customer_reference: Mapped[str] = mapped_column(String(128), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(128))
 
@@ -37,8 +44,14 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     __tablename__ = "payment_intents"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "customer_id"], ["customers.organisation_id", "customers.id"]
         ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
+        UniqueConstraint("organisation_id", "environment_id", "merchant_reference"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("organisation_id", "merchant_reference"),
         CheckConstraint("amount > 0"),
@@ -48,6 +61,7 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     merchant_reference: Mapped[str] = mapped_column(String(128), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -57,6 +71,10 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     __tablename__ = "authorizations"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
@@ -82,6 +100,7 @@ class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -94,6 +113,10 @@ class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     __tablename__ = "captures"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
@@ -130,6 +153,7 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     authorization_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
@@ -144,6 +168,10 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 class Refund(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     __tablename__ = "refunds"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
@@ -186,6 +214,7 @@ class Refund(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     capture_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)

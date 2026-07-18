@@ -11,7 +11,7 @@ from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.crypto import encrypt_webhook_secret
 from relaypay.event_delivery.delivery import DeliveryResponse
 from relaypay.event_delivery.models import WebhookEndpoint, WebhookEndpointVersion
-from relaypay.identity.models import Organisation, User
+from relaypay.identity.models import Organisation, OrganisationMembership, User
 from relaypay.identity.security import hash_password
 from relaypay.ids import new_public_id
 from relaypay.ledger.models import LedgerAccount
@@ -134,13 +134,20 @@ def scenario_client() -> Iterator[tuple[TestClient, str, str]]:
         )
         session.add(organisation)
         session.flush()
+        user = User(
+            email_normalized=email,
+            display_name="Scenario administrator",
+            password_hash=hash_password(password),
+            platform_role="STANDARD",
+            status="ACTIVE",
+        )
+        session.add(user)
+        session.flush()
         session.add(
-            User(
+            OrganisationMembership(
                 organisation_id=organisation.id,
-                email_normalized=email,
-                display_name="Scenario administrator",
-                password_hash=hash_password(password),
-                role="ADMIN",
+                user_id=user.id,
+                role="ORGANISATION_ADMIN",
                 status="ACTIVE",
             )
         )

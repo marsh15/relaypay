@@ -3,6 +3,9 @@ from typing import Final, Literal
 
 PublicIdPrefix = Literal[
     "org",
+    "env",
+    "key",
+    "aud",
     "usr",
     "cus",
     "pay",

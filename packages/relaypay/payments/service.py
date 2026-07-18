@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from relaypay.contracts import CustomerCreate, PaymentIntentCreate, RefundCreate
 from relaypay.errors import RelayPayError, not_found
 from relaypay.idempotency import Fingerprint, canonical_json_bytes, digest_secret, key_hint
+from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
@@ -56,11 +57,13 @@ def _existing_key(
     session: Session,
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
     key_digest: bytes,
 ) -> IdempotencyRecord | None:
     return session.scalar(
         select(IdempotencyRecord).where(
             IdempotencyRecord.organisation_id == organisation_id,
+            IdempotencyRecord.environment_id == environment_id,
             IdempotencyRecord.key_digest == key_digest,
         )
     )
@@ -70,14 +73,19 @@ def create_customer(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     payload: CustomerCreate,
 ) -> CreatedCustomer:
     try:
         with factory() as session, session.begin():
+            resolved_environment_id = resolve_environment_id(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
             customer = Customer(
                 id=new_uuid(),
                 public_id=new_public_id("cus"),
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 merchant_customer_reference=payload.merchant_customer_reference,
                 display_name=payload.display_name,
             )
@@ -97,6 +105,7 @@ def create_payment_intent(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     payload: PaymentIntentCreate,
     idempotency_key: str,
     fingerprint: Fingerprint,
@@ -109,9 +118,13 @@ def create_payment_intent(
 
     try:
         with factory() as session, session.begin():
+            resolved_environment_id = resolve_environment_id(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
             existing = _existing_key(
                 session,
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 key_digest=presented_key_digest,
             )
             if existing is not None:
@@ -121,6 +134,7 @@ def create_payment_intent(
             customer = session.scalar(
                 select(Customer).where(
                     Customer.organisation_id == organisation_id,
+                    Customer.environment_id == resolved_environment_id,
                     Customer.public_id == payload.customer_id,
                 )
             )
@@ -131,6 +145,7 @@ def create_payment_intent(
                 id=payment_id,
                 public_id=payment_public_id,
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 customer_id=customer.id,
                 merchant_reference=payload.merchant_reference,
                 amount=payload.amount,
@@ -150,6 +165,7 @@ def create_payment_intent(
             session.add(
                 IdempotencyRecord(
                     organisation_id=organisation_id,
+                    environment_id=resolved_environment_id,
                     key_digest=presented_key_digest,
                     key_hint=key_hint(idempotency_key),
                     fingerprint_sha256=fingerprint.sha256,
@@ -170,9 +186,13 @@ def create_payment_intent(
         raise
     except IntegrityError as error:
         with factory() as session, session.begin():
+            resolved_environment_id = resolve_environment_id(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
             winner = _existing_key(
                 session,
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 key_digest=presented_key_digest,
             )
             if winner is not None:
@@ -181,6 +201,7 @@ def create_payment_intent(
             conflicting_payment = session.scalar(
                 select(PaymentIntent).where(
                     PaymentIntent.organisation_id == organisation_id,
+                    PaymentIntent.environment_id == resolved_environment_id,
                     PaymentIntent.merchant_reference == payload.merchant_reference,
                 )
             )
@@ -224,6 +245,7 @@ def _attach_key(
     session: Session,
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
     operation: ProviderOperation,
     resource_public_id: str,
     idempotency_key: str,
@@ -234,6 +256,7 @@ def _attach_key(
     session.add(
         IdempotencyRecord(
             organisation_id=organisation_id,
+            environment_id=environment_id,
             key_digest=key_digest,
             key_hint=key_hint(idempotency_key),
             fingerprint_sha256=fingerprint.sha256,
@@ -288,6 +311,7 @@ def _resource_public_id(session: Session, operation: ProviderOperation) -> str:
 def _new_operation(
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
     payment: PaymentIntent,
     resource_id: uuid.UUID,
     resource_type: str,
@@ -298,6 +322,7 @@ def _new_operation(
         id=new_uuid(),
         public_id=new_public_id("op"),
         organisation_id=organisation_id,
+        environment_id=environment_id,
         payment_intent_id=payment.id,
         resource_type=resource_type,
         resource_id=resource_id,
@@ -313,6 +338,7 @@ def initiate_authorization(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     payment_public_id: str,
     idempotency_key: str,
     fingerprint: Fingerprint,
@@ -321,9 +347,17 @@ def initiate_authorization(
     key_digest = digest_secret(idempotency_key, key_pepper)
     try:
         with factory() as session, session.begin():
-            payment = _locked_payment(session, organisation_id, payment_public_id)
+            resolved_environment_id = resolve_environment_id(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
+            payment = _locked_payment(
+                session, organisation_id, resolved_environment_id, payment_public_id
+            )
             existing_key = _existing_key(
-                session, organisation_id=organisation_id, key_digest=key_digest
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                key_digest=key_digest,
             )
             if existing_key is not None:
                 return _existing_operation_result(
@@ -333,6 +367,7 @@ def initiate_authorization(
             existing_resource = session.scalar(
                 select(Authorization).where(
                     Authorization.organisation_id == organisation_id,
+                    Authorization.environment_id == resolved_environment_id,
                     Authorization.payment_intent_id == payment.id,
                 )
             )
@@ -343,6 +378,7 @@ def initiate_authorization(
                 return _attach_key(
                     session,
                     organisation_id=organisation_id,
+                    environment_id=resolved_environment_id,
                     operation=operation,
                     resource_public_id=existing_resource.public_id,
                     idempotency_key=idempotency_key,
@@ -353,6 +389,7 @@ def initiate_authorization(
             resource_id = new_uuid()
             operation = _new_operation(
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 payment=payment,
                 resource_id=resource_id,
                 resource_type="AUTHORIZATION",
@@ -363,6 +400,7 @@ def initiate_authorization(
                 id=resource_id,
                 public_id=new_public_id("auth"),
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 payment_intent_id=payment.id,
                 provider_operation_id=operation.id,
                 amount=payment.amount,
@@ -374,6 +412,7 @@ def initiate_authorization(
             return _attach_key(
                 session,
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 operation=operation,
                 resource_public_id=authorization.public_id,
                 idempotency_key=idempotency_key,
@@ -386,6 +425,7 @@ def initiate_authorization(
         return _recover_operation_race(
             factory,
             organisation_id=organisation_id,
+            environment_id=environment_id,
             key_digest=key_digest,
             fingerprint=fingerprint,
             error=error,
@@ -396,6 +436,7 @@ def initiate_capture(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     payment_public_id: str,
     idempotency_key: str,
     fingerprint: Fingerprint,
@@ -404,9 +445,17 @@ def initiate_capture(
     key_digest = digest_secret(idempotency_key, key_pepper)
     try:
         with factory() as session, session.begin():
-            payment = _locked_payment(session, organisation_id, payment_public_id)
+            resolved_environment_id = resolve_environment_id(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
+            payment = _locked_payment(
+                session, organisation_id, resolved_environment_id, payment_public_id
+            )
             existing_key = _existing_key(
-                session, organisation_id=organisation_id, key_digest=key_digest
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                key_digest=key_digest,
             )
             if existing_key is not None:
                 return _existing_operation_result(
@@ -415,6 +464,7 @@ def initiate_capture(
             authorization = session.scalar(
                 select(Authorization).where(
                     Authorization.organisation_id == organisation_id,
+                    Authorization.environment_id == resolved_environment_id,
                     Authorization.payment_intent_id == payment.id,
                 )
             )
@@ -427,6 +477,7 @@ def initiate_capture(
             existing_resource = session.scalar(
                 select(Capture).where(
                     Capture.organisation_id == organisation_id,
+                    Capture.environment_id == resolved_environment_id,
                     Capture.payment_intent_id == payment.id,
                 )
             )
@@ -437,6 +488,7 @@ def initiate_capture(
                 return _attach_key(
                     session,
                     organisation_id=organisation_id,
+                    environment_id=resolved_environment_id,
                     operation=operation,
                     resource_public_id=existing_resource.public_id,
                     idempotency_key=idempotency_key,
@@ -446,6 +498,7 @@ def initiate_capture(
             resource_id = new_uuid()
             operation = _new_operation(
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 payment=payment,
                 resource_id=resource_id,
                 resource_type="CAPTURE",
@@ -456,6 +509,7 @@ def initiate_capture(
                 id=resource_id,
                 public_id=new_public_id("cap"),
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 payment_intent_id=payment.id,
                 authorization_id=authorization.id,
                 provider_operation_id=operation.id,
@@ -468,6 +522,7 @@ def initiate_capture(
             return _attach_key(
                 session,
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 operation=operation,
                 resource_public_id=capture.public_id,
                 idempotency_key=idempotency_key,
@@ -480,6 +535,7 @@ def initiate_capture(
         return _recover_operation_race(
             factory,
             organisation_id=organisation_id,
+            environment_id=environment_id,
             key_digest=key_digest,
             fingerprint=fingerprint,
             error=error,
@@ -490,6 +546,7 @@ def initiate_refund(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     payment_public_id: str,
     payload: RefundCreate,
     idempotency_key: str,
@@ -499,9 +556,17 @@ def initiate_refund(
     key_digest = digest_secret(idempotency_key, key_pepper)
     try:
         with factory() as session, session.begin():
-            payment = _locked_payment(session, organisation_id, payment_public_id)
+            resolved_environment_id = resolve_environment_id(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
+            payment = _locked_payment(
+                session, organisation_id, resolved_environment_id, payment_public_id
+            )
             existing_key = _existing_key(
-                session, organisation_id=organisation_id, key_digest=key_digest
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                key_digest=key_digest,
             )
             if existing_key is not None:
                 return _existing_operation_result(
@@ -510,6 +575,7 @@ def initiate_refund(
             capture = session.scalar(
                 select(Capture).where(
                     Capture.organisation_id == organisation_id,
+                    Capture.environment_id == resolved_environment_id,
                     Capture.payment_intent_id == payment.id,
                     Capture.status == "SUCCEEDED",
                 )
@@ -523,6 +589,7 @@ def initiate_refund(
             reserved = session.scalar(
                 select(func.coalesce(func.sum(Refund.amount), 0)).where(
                     Refund.organisation_id == organisation_id,
+                    Refund.environment_id == resolved_environment_id,
                     Refund.payment_intent_id == payment.id,
                     Refund.status.in_(("PROCESSING", "REQUIRES_REVIEW", "SUCCEEDED")),
                 )
@@ -538,6 +605,7 @@ def initiate_refund(
             resource_id = new_uuid()
             operation = _new_operation(
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 payment=payment,
                 resource_id=resource_id,
                 resource_type="REFUND",
@@ -548,6 +616,7 @@ def initiate_refund(
                 id=resource_id,
                 public_id=f"ref_{resource_id.hex}",
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 payment_intent_id=payment.id,
                 capture_id=capture.id,
                 provider_operation_id=operation.id,
@@ -561,6 +630,7 @@ def initiate_refund(
             return _attach_key(
                 session,
                 organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
                 operation=operation,
                 resource_public_id=refund.public_id,
                 idempotency_key=idempotency_key,
@@ -573,6 +643,7 @@ def initiate_refund(
         return _recover_operation_race(
             factory,
             organisation_id=organisation_id,
+            environment_id=environment_id,
             key_digest=key_digest,
             fingerprint=fingerprint,
             error=error,
@@ -580,12 +651,16 @@ def initiate_refund(
 
 
 def _locked_payment(
-    session: Session, organisation_id: uuid.UUID, payment_public_id: str
+    session: Session,
+    organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    payment_public_id: str,
 ) -> PaymentIntent:
     payment = session.scalar(
         select(PaymentIntent)
         .where(
             PaymentIntent.organisation_id == organisation_id,
+            PaymentIntent.environment_id == environment_id,
             PaymentIntent.public_id == payment_public_id,
         )
         .with_for_update()
@@ -615,12 +690,21 @@ def _recover_operation_race(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None,
     key_digest: bytes,
     fingerprint: Fingerprint,
     error: IntegrityError,
 ) -> HTTPResult:
     with factory() as session, session.begin():
-        winner = _existing_key(session, organisation_id=organisation_id, key_digest=key_digest)
+        resolved_environment_id = resolve_environment_id(
+            session, organisation_id=organisation_id, environment_id=environment_id
+        )
+        winner = _existing_key(
+            session,
+            organisation_id=organisation_id,
+            environment_id=resolved_environment_id,
+            key_digest=key_digest,
+        )
         if winner is not None:
             return _existing_operation_result(session, record=winner, fingerprint=fingerprint)
     raise RelayPayError(
@@ -634,12 +718,17 @@ def read_payment(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     payment_public_id: str,
 ) -> HTTPResult:
     with factory() as session, session.begin():
+        resolved_environment_id = resolve_environment_id(
+            session, organisation_id=organisation_id, environment_id=environment_id
+        )
         payment = session.scalar(
             select(PaymentIntent).where(
                 PaymentIntent.organisation_id == organisation_id,
+                PaymentIntent.environment_id == resolved_environment_id,
                 PaymentIntent.public_id == payment_public_id,
             )
         )
@@ -648,18 +737,21 @@ def read_payment(
         authorization = session.scalar(
             select(Authorization).where(
                 Authorization.organisation_id == organisation_id,
+                Authorization.environment_id == resolved_environment_id,
                 Authorization.payment_intent_id == payment.id,
             )
         )
         capture = session.scalar(
             select(Capture).where(
                 Capture.organisation_id == organisation_id,
+                Capture.environment_id == resolved_environment_id,
                 Capture.payment_intent_id == payment.id,
             )
         )
         refunds = session.scalars(
             select(Refund).where(
                 Refund.organisation_id == organisation_id,
+                Refund.environment_id == resolved_environment_id,
                 Refund.payment_intent_id == payment.id,
             )
         ).all()
@@ -689,12 +781,17 @@ def read_operation(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     operation_public_id: str,
 ) -> HTTPResult:
     with factory() as session, session.begin():
+        resolved_environment_id = resolve_environment_id(
+            session, organisation_id=organisation_id, environment_id=environment_id
+        )
         operation = session.scalar(
             select(ProviderOperation).where(
                 ProviderOperation.organisation_id == organisation_id,
+                ProviderOperation.environment_id == resolved_environment_id,
                 ProviderOperation.public_id == operation_public_id,
             )
         )

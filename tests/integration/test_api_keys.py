@@ -1,9 +1,10 @@
 import pytest
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
-from relaypay.identity.models import APIKey, Organisation
+from relaypay.identity.models import APIKey, APIKeyVersion, Environment, Organisation
 from relaypay.identity.security import authenticate_api_key, issue_api_key, require_scopes
 from relaypay.ids import new_public_id
+from sqlalchemy import select
 
 pytestmark = pytest.mark.integration
 
@@ -22,13 +23,31 @@ def test_api_key_is_prefix_plus_peppered_digest_and_scoped() -> None:
         )
         session.add(organisation)
         session.flush()
+        environment = session.scalar(
+            select(Environment).where(
+                Environment.organisation_id == organisation.id,
+                Environment.environment_type == "TEST",
+            )
+        )
+        assert environment is not None
+        key = APIKey(
+            public_id=new_public_id("key"),
+            organisation_id=organisation.id,
+            environment_id=environment.id,
+            name="Merchant API key",
+            scopes=["payments:read", "payments:write"],
+            status="ACTIVE",
+        )
+        session.add(key)
+        session.flush()
         session.add(
-            APIKey(
+            APIKeyVersion(
                 organisation_id=organisation.id,
-                name="Merchant API key",
+                environment_id=environment.id,
+                api_key_id=key.id,
+                version=1,
                 public_prefix=issued.public_prefix,
                 secret_digest=digest,
-                scopes=["payments:read", "payments:write"],
                 status="ACTIVE",
             )
         )

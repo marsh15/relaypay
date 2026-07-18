@@ -24,6 +24,10 @@ class ProviderOperation(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     __tablename__ = "provider_operations"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
@@ -53,6 +57,7 @@ class ProviderOperation(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     resource_type: Mapped[str] = mapped_column(String(24), nullable=False)
     resource_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
@@ -79,6 +84,10 @@ class ProviderAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "provider_attempts"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
         ),
@@ -98,6 +107,7 @@ class ProviderAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     sequence: Mapped[int] = mapped_column(nullable=False)
     attempt_kind: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -117,6 +127,10 @@ class OperationHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "operation_history"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
         ),
@@ -131,6 +145,7 @@ class OperationHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     from_status: Mapped[str | None] = mapped_column(String(24))
     to_status: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -143,6 +158,10 @@ class OperationHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class IdempotencyRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "idempotency_records"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
@@ -161,6 +180,7 @@ class IdempotencyRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     organisation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organisations.id"), nullable=False
     )
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     key_digest: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     key_hint: Mapped[str | None] = mapped_column(String(32))
     fingerprint_sha256: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)

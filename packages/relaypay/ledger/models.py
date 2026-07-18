@@ -20,6 +20,12 @@ from relaypay.model_mixins import CreatedAtMixin, UUIDPrimaryKeyMixin
 class LedgerAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "ledger_accounts"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
+        UniqueConstraint("organisation_id", "environment_id", "code", "currency"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("organisation_id", "code", "currency"),
         CheckConstraint("account_type IN ('ASSET', 'LIABILITY')"),
@@ -27,6 +33,7 @@ class LedgerAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     account_type: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -36,6 +43,10 @@ class LedgerAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class Journal(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "journals"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
@@ -49,6 +60,7 @@ class Journal(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     journal_type: Mapped[str] = mapped_column(String(16), nullable=False)
     reference_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -63,6 +75,10 @@ class Posting(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "postings"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "journal_id"], ["journals.organisation_id", "journals.id"]
         ),
         ForeignKeyConstraint(
@@ -76,6 +92,7 @@ class Posting(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     journal_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     account_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     side: Mapped[str] = mapped_column(String(8), nullable=False)

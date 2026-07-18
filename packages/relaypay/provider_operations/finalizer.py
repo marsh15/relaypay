@@ -138,6 +138,7 @@ def finalize_verified_attempt(
                 journal = post_capture_journal(
                     session,
                     organisation_id=operation.organisation_id,
+                    environment_id=operation.environment_id,
                     provider_operation_id=operation.id,
                     capture_id=resource.id,
                     amount=resource.amount,
@@ -152,6 +153,7 @@ def finalize_verified_attempt(
                 journal = post_refund_journal(
                     session,
                     organisation_id=operation.organisation_id,
+                    environment_id=operation.environment_id,
                     provider_operation_id=operation.id,
                     refund_id=resource.id,
                     amount=resource.amount,
@@ -208,6 +210,7 @@ def finalize_verified_attempt(
         session.add(
             OperationHistory(
                 organisation_id=operation.organisation_id,
+                environment_id=operation.environment_id,
                 provider_operation_id=operation.id,
                 from_status=prior_status,
                 to_status=terminal_status,
@@ -243,6 +246,7 @@ def mark_operation_for_review(
         session.add(
             OperationHistory(
                 organisation_id=operation.organisation_id,
+                environment_id=operation.environment_id,
                 provider_operation_id=operation.id,
                 from_status=prior_status,
                 to_status="REQUIRES_REVIEW",
@@ -277,6 +281,7 @@ def record_apply_failure(
             session.add(
                 OperationHistory(
                     organisation_id=operation.organisation_id,
+                    environment_id=operation.environment_id,
                     provider_operation_id=operation.id,
                     from_status=prior_status,
                     to_status="REQUIRES_REVIEW",

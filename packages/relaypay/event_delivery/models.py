@@ -30,6 +30,11 @@ EVENT_TYPES = (
 class WebhookEndpoint(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "webhook_endpoints"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         CheckConstraint("status IN ('ACTIVE', 'DISABLED')"),
     )
@@ -38,6 +43,7 @@ class WebhookEndpoint(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     organisation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organisations.id"), nullable=False
     )
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE")
 
@@ -45,6 +51,10 @@ class WebhookEndpoint(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class WebhookEndpointVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "webhook_endpoint_versions"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "webhook_endpoint_id"],
             ["webhook_endpoints.organisation_id", "webhook_endpoints.id"],
@@ -62,6 +72,7 @@ class WebhookEndpointVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     webhook_endpoint_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     version: Mapped[int] = mapped_column(nullable=False)
     url: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -74,6 +85,10 @@ class WebhookEndpointVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class MerchantEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "merchant_events"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
@@ -98,6 +113,7 @@ class MerchantEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -110,6 +126,10 @@ class MerchantEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class EventRecipient(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "event_recipients"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "merchant_event_id"],
             ["merchant_events.organisation_id", "merchant_events.id"],
@@ -124,6 +144,7 @@ class EventRecipient(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     merchant_event_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     endpoint_version_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
 
@@ -131,6 +152,10 @@ class EventRecipient(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class WebhookDelivery(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     __tablename__ = "webhook_deliveries"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "event_recipient_id"],
             ["event_recipients.organisation_id", "event_recipients.id"],
@@ -172,6 +197,7 @@ class WebhookDelivery(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     event_recipient_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     replay_of_delivery_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
@@ -186,6 +212,10 @@ class WebhookDelivery(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
 class WebhookDeliveryAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "webhook_delivery_attempts"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
         ForeignKeyConstraint(
             ["organisation_id", "webhook_delivery_id"],
             ["webhook_deliveries.organisation_id", "webhook_deliveries.id"],
@@ -205,6 +235,7 @@ class WebhookDeliveryAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     webhook_delivery_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     sequence: Mapped[int] = mapped_column(nullable=False)
     lease_token: Mapped[uuid.UUID] = mapped_column(nullable=False)

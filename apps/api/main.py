@@ -48,12 +48,17 @@ class LoginRequest(BaseModel):
         ),
     ]
     password: Annotated[str, Field(min_length=8, max_length=256)]
+    organisation_id: Annotated[
+        str | None, Field(alias="organisationId", pattern=r"^org_[0-9a-f]{32}$")
+    ] = None
 
 
 class SessionResponse(BaseModel):
     userId: str
     displayName: str
     organisationId: str
+    organisationRole: str | None
+    platformRole: str
     csrfToken: str
     expiresAt: str | None = None
 
@@ -245,6 +250,7 @@ def create_app(
                 password=payload.password,
                 session_secret=resolved.SESSION_SECRET.get_secret_value(),
                 csrf_secret=resolved.CSRF_SECRET.get_secret_value(),
+                organisation_public_id=payload.organisation_id,
             )
         response.set_cookie(
             key=resolved.SESSION_COOKIE_NAME,
@@ -260,6 +266,8 @@ def create_app(
             userId=str(issued.principal.user_id),
             displayName=issued.principal.display_name,
             organisationId=issued.principal.organisation_public_id,
+            organisationRole=issued.principal.membership_role,
+            platformRole=issued.principal.platform_role,
             csrfToken=issued.csrf_token,
             expiresAt=issued.expires_at.isoformat(),
         )
@@ -272,6 +280,8 @@ def create_app(
             userId=str(principal.user_id),
             displayName=principal.display_name,
             organisationId=principal.organisation_public_id,
+            organisationRole=principal.membership_role,
+            platformRole=principal.platform_role,
             csrfToken=csrf_token,
         )
 

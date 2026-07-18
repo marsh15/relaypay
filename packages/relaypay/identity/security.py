@@ -14,7 +14,15 @@ from sqlalchemy.orm import Session
 
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import digest_secret
-from relaypay.identity.models import APIKey, Organisation, SessionRecord, User
+from relaypay.identity.models import (
+    APIKey,
+    APIKeyVersion,
+    Environment,
+    Organisation,
+    OrganisationMembership,
+    SessionRecord,
+    User,
+)
 from relaypay.ids import new_uuid
 
 _PASSWORD_HASHER = PasswordHasher(time_cost=3, memory_cost=65_536, parallelism=2)
@@ -26,8 +34,12 @@ class Principal:
     kind: Literal["SESSION", "API_KEY"]
     organisation_id: uuid.UUID
     organisation_public_id: str
+    environment_id: uuid.UUID | None
+    environment_public_id: str | None
     display_name: str
     scopes: frozenset[str]
+    platform_role: str = "STANDARD"
+    membership_role: str | None = None
     user_id: uuid.UUID | None = None
     session_id: uuid.UUID | None = None
     api_key_id: uuid.UUID | None = None
@@ -73,6 +85,7 @@ def issue_session(
     password: str,
     session_secret: str,
     csrf_secret: str,
+    organisation_public_id: str | None = None,
     now: datetime | None = None,
 ) -> IssuedSession:
     normalized = email.strip().casefold()
@@ -87,13 +100,25 @@ def issue_session(
         )
 
     user = users[0]
-    organisation = session.get(Organisation, user.organisation_id)
-    if organisation is None or organisation.status != "ACTIVE":
-        raise RelayPayError(
-            code="INVALID_CREDENTIALS",
-            message="Email or password is incorrect",
-            http_status=401,
+    membership_query = (
+        select(OrganisationMembership, Organisation)
+        .join(Organisation, Organisation.id == OrganisationMembership.organisation_id)
+        .where(
+            OrganisationMembership.user_id == user.id,
+            OrganisationMembership.status == "ACTIVE",
+            Organisation.status == "ACTIVE",
         )
+    )
+    if organisation_public_id is not None:
+        membership_query = membership_query.where(Organisation.public_id == organisation_public_id)
+    memberships = session.execute(membership_query).all()
+    if len(memberships) != 1:
+        raise RelayPayError(
+            code="ORGANISATION_CONTEXT_REQUIRED",
+            message="Select exactly one organisation context",
+            http_status=409,
+        )
+    membership, organisation = memberships[0]
 
     token = secrets.token_urlsafe(32)
     csrf_token = secrets.token_urlsafe(32)
@@ -103,7 +128,7 @@ def issue_session(
     session.add(
         SessionRecord(
             id=session_id,
-            organisation_id=user.organisation_id,
+            organisation_id=organisation.id,
             user_id=user.id,
             token_digest=_token_digest(token, session_secret),
             csrf_digest=_csrf_digest(session_id, csrf_token, csrf_secret),
@@ -118,8 +143,12 @@ def issue_session(
             kind="SESSION",
             organisation_id=organisation.id,
             organisation_public_id=organisation.public_id,
+            environment_id=None,
+            environment_public_id=None,
             display_name=user.display_name,
-            scopes=frozenset({"admin"}),
+            scopes=_membership_scopes(membership.role),
+            platform_role=user.platform_role,
+            membership_role=membership.role,
             user_id=user.id,
             session_id=session_id,
         ),
@@ -143,11 +172,12 @@ def authenticate_session(
         raise RelayPayError(
             code="UNAUTHENTICATED", message="Authentication required", http_status=401
         )
-    user = session.scalar(
-        select(User).where(
-            User.id == record.user_id,
-            User.organisation_id == record.organisation_id,
-            User.status == "ACTIVE",
+    user = session.scalar(select(User).where(User.id == record.user_id, User.status == "ACTIVE"))
+    membership = session.scalar(
+        select(OrganisationMembership).where(
+            OrganisationMembership.user_id == record.user_id,
+            OrganisationMembership.organisation_id == record.organisation_id,
+            OrganisationMembership.status == "ACTIVE",
         )
     )
     organisation = session.scalar(
@@ -156,7 +186,7 @@ def authenticate_session(
             Organisation.status == "ACTIVE",
         )
     )
-    if user is None or organisation is None:
+    if user is None or membership is None or organisation is None:
         raise RelayPayError(
             code="UNAUTHENTICATED", message="Authentication required", http_status=401
         )
@@ -164,8 +194,12 @@ def authenticate_session(
         kind="SESSION",
         organisation_id=organisation.id,
         organisation_public_id=organisation.public_id,
+        environment_id=None,
+        environment_public_id=None,
         display_name=user.display_name,
-        scopes=frozenset({"admin"}),
+        scopes=_membership_scopes(membership.role),
+        platform_role=user.platform_role,
+        membership_role=membership.role,
         user_id=user.id,
         session_id=record.id,
     )
@@ -215,9 +249,12 @@ def revoke_session(session: Session, principal: Principal) -> None:
         record.revoked_at = datetime.now(UTC)
 
 
-def issue_api_key(*, pepper: str) -> tuple[IssuedAPIKey, bytes]:
+def issue_api_key(
+    *, pepper: str, environment_type: Literal["TEST", "LIVE_LIKE"] = "TEST"
+) -> tuple[IssuedAPIKey, bytes]:
     prefix_entropy = base64.b32encode(secrets.token_bytes(5)).decode("ascii").rstrip("=").lower()
-    public_prefix = f"rpk_test_{prefix_entropy}"
+    marker = "test" if environment_type == "TEST" else "live_like"
+    public_prefix = f"rpk_{marker}_{prefix_entropy}"
     secret = secrets.token_urlsafe(32)
     plaintext = f"{public_prefix}.{secret}"
     return IssuedAPIKey(plaintext=plaintext, public_prefix=public_prefix), digest_secret(
@@ -231,28 +268,32 @@ def authenticate_api_key(session: Session, *, plaintext: str, pepper: str) -> Pr
             code="UNAUTHENTICATED", message="Authentication required", http_status=401
         )
     public_prefix = plaintext.split(".", 1)[0]
-    record = session.scalar(
-        select(APIKey).where(APIKey.public_prefix == public_prefix, APIKey.status == "ACTIVE")
-    )
-    candidate = digest_secret(plaintext, pepper)
-    if record is None or not hmac.compare_digest(record.secret_digest, candidate):
-        raise RelayPayError(
-            code="UNAUTHENTICATED", message="Authentication required", http_status=401
-        )
-    organisation = session.scalar(
-        select(Organisation).where(
-            Organisation.id == record.organisation_id,
+    row = session.execute(
+        select(APIKey, APIKeyVersion, Organisation, Environment)
+        .join(APIKeyVersion, APIKeyVersion.api_key_id == APIKey.id)
+        .join(Organisation, Organisation.id == APIKey.organisation_id)
+        .join(Environment, Environment.id == APIKey.environment_id)
+        .where(
+            APIKeyVersion.public_prefix == public_prefix,
+            APIKeyVersion.status == "ACTIVE",
+            APIKey.status == "ACTIVE",
             Organisation.status == "ACTIVE",
+            Environment.status == "ACTIVE",
         )
-    )
-    if organisation is None:
+    ).one_or_none()
+    candidate = digest_secret(plaintext, pepper)
+    if row is None or not hmac.compare_digest(row[1].secret_digest, candidate):
         raise RelayPayError(
             code="UNAUTHENTICATED", message="Authentication required", http_status=401
         )
+    record, version, organisation, environment = row
+    version.last_used_at = datetime.now(UTC)
     return Principal(
         kind="API_KEY",
         organisation_id=organisation.id,
         organisation_public_id=organisation.public_id,
+        environment_id=environment.id,
+        environment_public_id=environment.public_id,
         display_name=record.name,
         scopes=frozenset(record.scopes),
         api_key_id=record.id,
@@ -267,6 +308,14 @@ def require_scopes(principal: Principal, *scopes: str) -> None:
             message="The authenticated principal lacks the required permission",
             http_status=403,
         )
+
+
+def _membership_scopes(role: str) -> frozenset[str]:
+    if role == "ORGANISATION_ADMIN":
+        return frozenset({"admin", "members:write", "keys:write", "operations:write"})
+    if role == "DEVELOPER":
+        return frozenset({"technical:read", "financial:read"})
+    return frozenset({"technical:read", "financial:read"})
 
 
 def sha256_text(value: str) -> str:

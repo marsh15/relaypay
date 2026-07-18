@@ -172,6 +172,7 @@ def _record_attempt(
         attempt = WebhookDeliveryAttempt(
             id=new_uuid(),
             organisation_id=delivery.organisation_id,
+            environment_id=delivery.environment_id,
             webhook_delivery_id=delivery.id,
             sequence=sequence,
             lease_token=claim.lease_token,

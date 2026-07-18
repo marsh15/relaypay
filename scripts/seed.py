@@ -8,7 +8,14 @@ from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.crypto import encrypt_webhook_secret
 from relaypay.event_delivery.models import WebhookEndpoint, WebhookEndpointVersion
-from relaypay.identity.models import APIKey, Organisation, User
+from relaypay.identity.models import (
+    APIKey,
+    APIKeyVersion,
+    Environment,
+    Organisation,
+    OrganisationMembership,
+    User,
+)
 from relaypay.identity.security import hash_password, issue_api_key
 from relaypay.ids import new_public_id
 from relaypay.ledger.models import LedgerAccount
@@ -48,31 +55,68 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
             )
             session.add(organisation)
             session.flush()
+            test_environment = Environment(
+                public_id=new_public_id("env"),
+                organisation_id=organisation.id,
+                name="Test",
+                environment_type="TEST",
+                status="ACTIVE",
+            )
+            live_environment = Environment(
+                public_id=new_public_id("env"),
+                organisation_id=organisation.id,
+                name="Live-like",
+                environment_type="LIVE_LIKE",
+                status="ACTIVE",
+            )
+            session.add_all([test_environment, live_environment])
+            user = User(
+                email_normalized=demo.email.casefold(),
+                display_name=f"{demo.name} administrator",
+                password_hash=hash_password(demo.password),
+                platform_role="STANDARD",
+                status="ACTIVE",
+            )
+            session.add(user)
+            session.flush()
             session.add(
-                User(
+                OrganisationMembership(
                     organisation_id=organisation.id,
-                    email_normalized=demo.email.casefold(),
-                    display_name=f"{demo.name} administrator",
-                    password_hash=hash_password(demo.password),
-                    role="ADMIN",
+                    user_id=user.id,
+                    role="ORGANISATION_ADMIN",
                     status="ACTIVE",
                 )
             )
-            issued, digest = issue_api_key(pepper=settings.API_KEY_PEPPER.get_secret_value())
+            issued, digest = issue_api_key(
+                pepper=settings.API_KEY_PEPPER.get_secret_value(), environment_type="TEST"
+            )
+            api_key = APIKey(
+                public_id=new_public_id("key"),
+                organisation_id=organisation.id,
+                environment_id=test_environment.id,
+                name="Seeded merchant key",
+                scopes=["customers:write", "payments:read", "payments:write"],
+                status="ACTIVE",
+            )
+            session.add(api_key)
+            session.flush()
             session.add(
-                APIKey(
+                APIKeyVersion(
                     organisation_id=organisation.id,
-                    name="Seeded merchant key",
+                    environment_id=test_environment.id,
+                    api_key_id=api_key.id,
+                    version=1,
                     public_prefix=issued.public_prefix,
                     secret_digest=digest,
-                    scopes=["customers:write", "payments:read", "payments:write"],
                     status="ACTIVE",
+                    activated_at=datetime.now(UTC),
                 )
             )
             session.add_all(
                 [
                     LedgerAccount(
                         organisation_id=organisation.id,
+                        environment_id=test_environment.id,
                         code="PROVIDER_CLEARING_ASSET",
                         name="Provider clearing",
                         account_type="ASSET",
@@ -80,6 +124,7 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
                     ),
                     LedgerAccount(
                         organisation_id=organisation.id,
+                        environment_id=test_environment.id,
                         code="MERCHANT_PAYABLE_LIABILITY",
                         name="Merchant payable",
                         account_type="LIABILITY",
@@ -89,9 +134,18 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
             )
             issued_keys.append((demo, issued.plaintext))
         for organisation in session.scalars(select(Organisation).order_by(Organisation.id)):
+            existing_test_environment = session.scalar(
+                select(Environment).where(
+                    Environment.organisation_id == organisation.id,
+                    Environment.environment_type == "TEST",
+                )
+            )
+            if existing_test_environment is None:
+                raise RuntimeError("organisation is missing its TEST environment")
             endpoint = session.scalar(
                 select(WebhookEndpoint).where(
                     WebhookEndpoint.organisation_id == organisation.id,
+                    WebhookEndpoint.environment_id == existing_test_environment.id,
                     WebhookEndpoint.name == "Bundled receiver",
                 )
             )
@@ -100,6 +154,7 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
             endpoint = WebhookEndpoint(
                 public_id=new_public_id("wh"),
                 organisation_id=organisation.id,
+                environment_id=existing_test_environment.id,
                 name="Bundled receiver",
                 status="ACTIVE",
             )
@@ -109,6 +164,7 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
                 WebhookEndpointVersion(
                     public_id=new_public_id("whv"),
                     organisation_id=organisation.id,
+                    environment_id=existing_test_environment.id,
                     webhook_endpoint_id=endpoint.id,
                     version=1,
                     url=f"{settings.RECEIVER_BASE_URL.rstrip('/')}/webhooks/relaypay",
