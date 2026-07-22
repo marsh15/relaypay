@@ -1,14 +1,22 @@
 import hashlib
 import hmac
+import json
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from relaypay.config import Settings
 from relaypay.database import build_engine, build_session_factory
-from relaypay.mock_provider.models import ProviderAccount, ProviderEffect
-from sqlalchemy import func, select
+from relaypay.mock_provider.models import (
+    ProviderAccount,
+    ProviderEffect,
+    ProviderStatementExport,
+    ProviderStatementItem,
+)
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import DBAPIError
 
 from apps.provider.main import create_app
 
@@ -144,3 +152,88 @@ def test_provider_validation_does_not_echo_unknown_input(
     response = client.post("/v1/effects", json=command)
     assert response.status_code == 422
     assert marker not in response.text
+
+
+def test_statement_export_is_an_immutable_idempotent_snapshot(
+    client: TestClient, settings: Settings, provider_account: str
+) -> None:
+    stable_key = f"capture:pay_{uuid.uuid4().hex}"
+    effect = client.post("/v1/effects", json=_command(provider_account, stable_key))
+    assert effect.status_code == 200
+
+    source_reference = f"daily_{uuid.uuid4().hex}"
+    now = datetime.now(UTC)
+    request = {
+        "accountId": provider_account,
+        "sourceReference": source_reference,
+        "periodStart": (now - timedelta(days=1)).isoformat(),
+        "periodEnd": (now + timedelta(days=1)).isoformat(),
+    }
+    headers = {"X-Provider-Control": settings.PROVIDER_CONTROL_SECRET.get_secret_value()}
+    first = client.post("/control/statements", headers=headers, json=request)
+    replay = client.post("/control/statements", headers=headers, json=request)
+
+    assert first.status_code == replay.status_code == 200
+    assert first.content == replay.content
+    assert first.headers["X-Statement-Id"] == replay.headers["X-Statement-Id"]
+    assert first.headers["X-Statement-SHA256"] == hashlib.sha256(first.content).hexdigest()
+    document = json.loads(first.content)
+    exported = next(item for item in document["items"] if item["stableKey"] == stable_key)
+    assert exported == {
+        "amount": 100_000,
+        "currency": "INR",
+        "occurredAt": exported["occurredAt"],
+        "operationKind": "CAPTURE",
+        "providerItemId": effect.json()["effectId"],
+        "stableKey": stable_key,
+        "status": "SUCCEEDED",
+    }
+
+    engine = build_engine(
+        settings.PROVIDER_DATABASE_URL.get_secret_value(), application_name="statement-proof-test"
+    )
+    factory = build_session_factory(engine)
+    with factory() as session, session.begin():
+        export_count = session.scalar(
+            select(func.count())
+            .select_from(ProviderStatementExport)
+            .where(ProviderStatementExport.source_reference == source_reference)
+        )
+        item_count = session.scalar(
+            select(func.count())
+            .select_from(ProviderStatementItem)
+            .join(
+                ProviderStatementExport,
+                ProviderStatementExport.id == ProviderStatementItem.statement_export_id,
+            )
+            .where(ProviderStatementExport.source_reference == source_reference)
+        )
+        assert export_count == 1
+        assert item_count == int(first.headers["X-Statement-Item-Count"])
+
+    with pytest.raises(DBAPIError), factory() as session, session.begin():
+        session.execute(
+            text(
+                "UPDATE provider_statement_exports SET source_reference = :replacement "
+                "WHERE source_reference = :source"
+            ),
+            {"replacement": f"changed_{uuid.uuid4().hex}", "source": source_reference},
+        )
+    engine.dispose()
+
+
+def test_statement_export_requires_control_authentication(
+    client: TestClient, provider_account: str
+) -> None:
+    now = datetime.now(UTC)
+    response = client.post(
+        "/control/statements",
+        json={
+            "accountId": provider_account,
+            "sourceReference": f"unauthorized_{uuid.uuid4().hex}",
+            "periodStart": (now - timedelta(days=1)).isoformat(),
+            "periodEnd": now.isoformat(),
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHENTICATED"

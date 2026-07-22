@@ -1,9 +1,10 @@
 import hashlib
 import hmac
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,6 +15,8 @@ from relaypay.mock_provider.models import (
     ProviderAccount,
     ProviderEffect,
     ProviderFaultDirective,
+    ProviderStatementExport,
+    ProviderStatementItem,
 )
 
 
@@ -44,6 +47,15 @@ class ProviderReply:
     status_code: int
     body: bytes
     headers: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class StatementExportResult:
+    public_id: str
+    source_reference: str
+    body: bytes
+    sha256: str
+    item_count: int
 
 
 def signature(body: bytes, signing_secret: str) -> str:
@@ -243,3 +255,108 @@ def configure_fault(
             )
         else:
             directive.remaining_uses += 1
+
+
+def export_statement(
+    factory: sessionmaker[Session],
+    *,
+    account_public_id: str,
+    source_reference: str,
+    period_start: datetime,
+    period_end: datetime,
+) -> StatementExportResult:
+    if period_end <= period_start:
+        raise RelayPayError(
+            code="INVALID_STATEMENT_PERIOD",
+            message="Statement period end must be after its start",
+            http_status=422,
+        )
+    with factory() as session, session.begin():
+        account = session.scalar(
+            select(ProviderAccount).where(ProviderAccount.public_id == account_public_id)
+        )
+        if account is None:
+            raise RelayPayError(
+                code="PROVIDER_ACCOUNT_NOT_FOUND",
+                message="Provider account was not found",
+                http_status=404,
+            )
+        existing = session.scalar(
+            select(ProviderStatementExport).where(
+                ProviderStatementExport.provider_account_id == account.id,
+                ProviderStatementExport.source_reference == source_reference,
+            )
+        )
+        if existing is not None:
+            count = session.scalar(
+                select(func.count())
+                .select_from(ProviderStatementItem)
+                .where(ProviderStatementItem.statement_export_id == existing.id)
+            )
+            return StatementExportResult(
+                public_id=existing.public_id,
+                source_reference=existing.source_reference,
+                body=existing.raw_bytes,
+                sha256=existing.raw_sha256.hex(),
+                item_count=count or 0,
+            )
+        effects = list(
+            session.scalars(
+                select(ProviderEffect)
+                .where(
+                    ProviderEffect.provider_account_id == account.id,
+                    ProviderEffect.created_at >= period_start,
+                    ProviderEffect.created_at < period_end,
+                )
+                .order_by(ProviderEffect.created_at, ProviderEffect.id)
+            )
+        )
+        item_values = [
+            {
+                "amount": effect.amount,
+                "currency": effect.currency,
+                "occurredAt": (effect.completed_at or effect.created_at).isoformat(),
+                "operationKind": effect.operation_kind,
+                "providerItemId": str(effect.id),
+                "stableKey": effect.stable_key,
+                "status": effect.outcome,
+            }
+            for effect in effects
+        ]
+        body = json.dumps({"items": item_values}, separators=(",", ":"), sort_keys=True).encode()
+        digest = hashlib.sha256(body).digest()
+        export = ProviderStatementExport(
+            public_id=f"stmt_{new_uuid().hex}",
+            provider_account_id=account.id,
+            source_reference=source_reference,
+            source_format="JSON",
+            period_start=period_start,
+            period_end=period_end,
+            raw_bytes=body,
+            raw_sha256=digest,
+        )
+        session.add(export)
+        session.flush()
+        session.add_all(
+            [
+                ProviderStatementItem(
+                    statement_export_id=export.id,
+                    ordinal=ordinal,
+                    provider_item_id=value["providerItemId"],
+                    stable_key=value["stableKey"],
+                    operation_kind=value["operationKind"],
+                    amount=value["amount"],
+                    currency=value["currency"],
+                    provider_status=value["status"],
+                    occurred_at=effect.completed_at or effect.created_at,
+                )
+                for ordinal, (effect, value) in enumerate(zip(effects, item_values, strict=True), 1)
+            ]
+        )
+        return StatementExportResult(
+            public_id=export.public_id,
+            source_reference=source_reference,
+            body=body,
+            sha256=digest.hex(),
+            item_count=len(effects),
+        )
