@@ -53,6 +53,14 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             ["organisation_id", "environment_id", "customer_id"],
             ["customers.organisation_id", "customers.environment_id", "customers.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "merchant_account_id"],
+            [
+                "merchant_accounts.organisation_id",
+                "merchant_accounts.environment_id",
+                "merchant_accounts.id",
+            ],
+        ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "environment_id", "merchant_reference"),
         UniqueConstraint("organisation_id", "id"),
@@ -65,6 +73,7 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     customer_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    merchant_account_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     merchant_reference: Mapped[str] = mapped_column(String(128), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")

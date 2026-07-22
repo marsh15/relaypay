@@ -46,3 +46,42 @@ _Avoid_: Approval
 An operator state closing a Mismatch with a note or link to an existing compensating journal; it
 does not create or alter a financial outcome.
 _Avoid_: Reconciliation fix
+
+## Merchant balances and settlement
+
+**Merchant Account**:
+An environment-scoped financial account that owns one set of payable, receivable, and payout
+ledger templates. Exactly one active Merchant Account is the default for existing `/api/v1`
+payment creation.
+_Avoid_: Organisation, ledger account
+
+**Pending Payable**:
+Captured merchant value that remains attributable to unsettled captures.
+_Avoid_: Balance row, cash
+
+**Available Payable**:
+Settled merchant value eligible for future payout reservation after receivable offsets.
+_Avoid_: Bank balance, cash
+
+**Merchant Receivable**:
+Value owed by the merchant after valid refunds exceed pending and available payable positions.
+_Avoid_: Negative balance mutation
+
+**Settlement Run**:
+A route-idempotent, immutable-outcome command that claims eligible capture value once for one
+Merchant Account.
+_Avoid_: Payout, reconciliation run
+
+**Settlement Item**:
+Immutable evidence binding one capture amount to its Settlement Run and settlement journal.
+_Avoid_: Mutable settlement line
+
+**Balance Transaction**:
+An immutable projection of one originating journal into pending, available, receivable, and
+payout-clearing deltas. It is reconstructable evidence, never balance authority.
+_Avoid_: Balance, counter
+
+**Phase 2 Opening Journal**:
+One deterministic journal per default Merchant Account and environment that transfers the net
+legacy merchant-payable position into Pending Payable without changing old journals or postings.
+_Avoid_: Backfill rewrite
