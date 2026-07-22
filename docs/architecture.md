@@ -37,8 +37,10 @@ sequenceDiagram
 
 - RelayPay database: organisations, sessions, API keys, payment resources, provider-operation
   observations, idempotency records, immutable journals/postings, merchant events, and delivery
-  leases/attempts.
-- Provider database: provider accounts, stable-key effects, and deterministic one-shot faults.
+  leases/attempts. It also owns exact statement bytes, immutable parsed items, leased
+  reconciliation runs, matches, mismatch evidence versions, and append-only workflow history.
+- Provider database: provider accounts, stable-key effects, deterministic one-shot faults, and
+  immutable statement-export snapshots.
 - Receiver schema: verified event IDs/digests and the deduplicated consumer effect.
 - Browser: no durable authority and no credentials in local storage. It receives only bounded,
   redacted evidence through the session-authenticated API.
@@ -48,6 +50,8 @@ sequenceDiagram
 Payment lock precedes child/resource locks. A logical command has one provider operation and one
 stable key. Refund availability is derived while holding the payment lock. Recovery and delivery
 claims use `FOR UPDATE SKIP LOCKED`, opaque lease tokens, expiry, and idempotent finalization.
+Reconciliation uses the same claim pattern; source imports serialize on a transaction-scoped
+PostgreSQL advisory lock and `(environment, provider, source)` uniqueness.
 
 ## Public surface
 
