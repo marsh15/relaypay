@@ -25,6 +25,7 @@ from relaypay.identity.security import (
     rotate_csrf,
     verify_csrf,
 )
+from relaypay.identity.service import require_organisation_admin
 from relaypay.payments.service import read_operation
 from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import HTTPProviderTransport, ProviderTransport
@@ -48,12 +49,17 @@ class LoginRequest(BaseModel):
         ),
     ]
     password: Annotated[str, Field(min_length=8, max_length=256)]
+    organisation_id: Annotated[
+        str | None, Field(alias="organisationId", pattern=r"^org_[0-9a-f]{32}$")
+    ] = None
 
 
 class SessionResponse(BaseModel):
     userId: str
     displayName: str
     organisationId: str
+    organisationRole: str | None
+    platformRole: str
     csrfToken: str
     expiresAt: str | None = None
 
@@ -90,7 +96,7 @@ def create_app(
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay API", version="0.2.0", lifespan=lifespan)
     app.state.settings = resolved
     app.state.engine = engine
     app.state.session_factory = session_factory
@@ -245,6 +251,7 @@ def create_app(
                 password=payload.password,
                 session_secret=resolved.SESSION_SECRET.get_secret_value(),
                 csrf_secret=resolved.CSRF_SECRET.get_secret_value(),
+                organisation_public_id=payload.organisation_id,
             )
         response.set_cookie(
             key=resolved.SESSION_COOKIE_NAME,
@@ -260,6 +267,8 @@ def create_app(
             userId=str(issued.principal.user_id),
             displayName=issued.principal.display_name,
             organisationId=issued.principal.organisation_public_id,
+            organisationRole=issued.principal.membership_role,
+            platformRole=issued.principal.platform_role,
             csrfToken=issued.csrf_token,
             expiresAt=issued.expires_at.isoformat(),
         )
@@ -272,6 +281,8 @@ def create_app(
             userId=str(principal.user_id),
             displayName=principal.display_name,
             organisationId=principal.organisation_public_id,
+            organisationRole=principal.membership_role,
+            platformRole=principal.platform_role,
             csrfToken=csrf_token,
         )
 
@@ -312,6 +323,7 @@ def create_app(
                 csrf_token=csrf_token,
                 csrf_secret=resolved.CSRF_SECRET.get_secret_value(),
             )
+        require_organisation_admin(principal)
         claim = claim_specific_operation(
             session_factory,
             organisation_id=principal.organisation_id,

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import httpx2
-from sqlalchemy import func, select
+from sqlalchemy import func, select, true
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -115,6 +115,7 @@ def prepare_first_send(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     operation_public_id: str,
     provider_account_id: str,
 ) -> PreparedOperation:
@@ -123,6 +124,9 @@ def prepare_first_send(
             select(ProviderOperation)
             .where(
                 ProviderOperation.organisation_id == organisation_id,
+                ProviderOperation.environment_id == environment_id
+                if environment_id is not None
+                else true(),
                 ProviderOperation.public_id == operation_public_id,
             )
             .with_for_update()
@@ -163,6 +167,7 @@ def prepare_first_send(
         session.add(
             ProviderAttempt(
                 organisation_id=organisation_id,
+                environment_id=operation.environment_id,
                 provider_operation_id=operation.id,
                 sequence=1,
                 attempt_kind="MUTATION",
@@ -274,6 +279,7 @@ def record_lookup_observation(
         ).digest()
         attempt = ProviderAttempt(
             organisation_id=operation.organisation_id,
+            environment_id=operation.environment_id,
             provider_operation_id=operation.id,
             sequence=sequence,
             attempt_kind="LOOKUP",
@@ -370,6 +376,7 @@ def dispatch_operation(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     operation_public_id: str,
     provider_account_id: str,
     transport: ProviderTransport,
@@ -378,6 +385,7 @@ def dispatch_operation(
     prepared = prepare_first_send(
         factory,
         organisation_id=organisation_id,
+        environment_id=environment_id,
         operation_public_id=operation_public_id,
         provider_account_id=provider_account_id,
     )

@@ -18,6 +18,7 @@ from relaypay.event_delivery.delivery import WebhookTransport, claim_delivery, d
 from relaypay.event_delivery.materializer import materialize_deliveries
 from relaypay.event_delivery.models import EventRecipient, MerchantEvent, WebhookDelivery
 from relaypay.idempotency import Fingerprint, build_fingerprint
+from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id
 from relaypay.ledger.models import Journal, Posting
 from relaypay.payments.models import Capture, Customer, PaymentIntent
@@ -136,9 +137,11 @@ def run_lost_capture_scenario(
     run_public_id = new_public_id("scn")
     correlation_id = f"scenario:{run_public_id}"
     with factory() as session, session.begin():
+        environment_id = resolve_environment_id(session, organisation_id=organisation_id)
         run = ScenarioRun(
             public_id=run_public_id,
             organisation_id=organisation_id,
+            environment_id=environment_id,
             scenario_type="LOST_CAPTURE_RESPONSE",
             status="RUNNING",
             correlation_id=correlation_id,
@@ -151,6 +154,7 @@ def run_lost_capture_scenario(
         result = _execute_lost_capture(
             factory,
             organisation_id=organisation_id,
+            environment_id=environment_id,
             settings=settings,
             provider_transport=provider_transport,
             fault_controller=fault_controller,
@@ -201,6 +205,7 @@ def _execute_lost_capture(
     factory: sessionmaker[Session],
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
     settings: Settings,
     provider_transport: ProviderTransport,
     fault_controller: ScenarioFaultController,
@@ -210,6 +215,7 @@ def _execute_lost_capture(
         customer = Customer(
             public_id=new_public_id("cus"),
             organisation_id=organisation_id,
+            environment_id=environment_id,
             merchant_customer_reference=f"scenario-{uuid.uuid4().hex}",
             display_name="Synthetic lost-response customer",
         )
@@ -225,6 +231,7 @@ def _execute_lost_capture(
     payment_result = create_payment_intent(
         factory,
         organisation_id=organisation_id,
+        environment_id=environment_id,
         payload=payment_payload,
         idempotency_key=f"scenario-payment-{uuid.uuid4().hex}",
         fingerprint=build_fingerprint(
@@ -240,6 +247,7 @@ def _execute_lost_capture(
     auth = initiate_authorization(
         factory,
         organisation_id=organisation_id,
+        environment_id=environment_id,
         payment_public_id=payment_id,
         idempotency_key=f"scenario-auth-{uuid.uuid4().hex}",
         fingerprint=_command_fingerprint(payment_id, "authorize"),
@@ -249,6 +257,7 @@ def _execute_lost_capture(
     dispatch_operation(
         factory,
         organisation_id=organisation_id,
+        environment_id=environment_id,
         operation_public_id=auth_operation_id,
         provider_account_id=settings.PROVIDER_ACCOUNT_ID,
         provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
@@ -259,6 +268,7 @@ def _execute_lost_capture(
         capture = initiate_capture(
             factory,
             organisation_id=organisation_id,
+            environment_id=environment_id,
             payment_public_id=payment_id,
             idempotency_key=f"scenario-capture-{suffix}-{uuid.uuid4().hex}",
             fingerprint=_command_fingerprint(payment_id, "capture"),
@@ -279,6 +289,7 @@ def _execute_lost_capture(
     dispatch_operation(
         factory,
         organisation_id=organisation_id,
+        environment_id=environment_id,
         operation_public_id=capture_operation_ids[0],
         provider_account_id=settings.PROVIDER_ACCOUNT_ID,
         provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),

@@ -76,6 +76,7 @@ def build_payments_router(
             dispatch_operation(
                 session_factory,
                 organisation_id=principal.organisation_id,
+                environment_id=principal.environment_id,
                 operation_public_id=operation_id,
                 provider_account_id=settings.PROVIDER_ACCOUNT_ID,
                 provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
@@ -84,6 +85,7 @@ def build_payments_router(
             return read_operation(
                 session_factory,
                 organisation_id=principal.organisation_id,
+                environment_id=principal.environment_id,
                 operation_public_id=operation_id,
             )
         return result
@@ -94,6 +96,7 @@ def build_payments_router(
         customer = create_customer(
             session_factory,
             organisation_id=principal.organisation_id,
+            environment_id=principal.environment_id,
             payload=payload,
         )
         return Response(
@@ -126,6 +129,7 @@ def build_payments_router(
             create_payment_intent(
                 session_factory,
                 organisation_id=principal.organisation_id,
+                environment_id=principal.environment_id,
                 payload=payload,
                 idempotency_key=idempotency_key,
                 fingerprint=fingerprint,
@@ -140,6 +144,7 @@ def build_payments_router(
             read_payment(
                 session_factory,
                 organisation_id=principal.organisation_id,
+                environment_id=principal.environment_id,
                 payment_public_id=payment_intent_id,
             )
         )
@@ -157,6 +162,7 @@ def build_payments_router(
                 initiate_authorization(
                     session_factory,
                     organisation_id=principal.organisation_id,
+                    environment_id=principal.environment_id,
                     payment_public_id=payment_intent_id,
                     idempotency_key=idempotency_key,
                     fingerprint=build_fingerprint(
@@ -185,6 +191,7 @@ def build_payments_router(
                 initiate_capture(
                     session_factory,
                     organisation_id=principal.organisation_id,
+                    environment_id=principal.environment_id,
                     payment_public_id=payment_intent_id,
                     idempotency_key=idempotency_key,
                     fingerprint=build_fingerprint(
@@ -213,6 +220,7 @@ def build_payments_router(
                 initiate_refund(
                     session_factory,
                     organisation_id=principal.organisation_id,
+                    environment_id=principal.environment_id,
                     payment_public_id=payment_intent_id,
                     payload=payload,
                     idempotency_key=idempotency_key,
@@ -236,6 +244,7 @@ def build_payments_router(
             read_operation(
                 session_factory,
                 organisation_id=principal.organisation_id,
+                environment_id=principal.environment_id,
                 operation_public_id=operation_id,
             )
         )

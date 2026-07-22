@@ -39,6 +39,7 @@ def materialize_delivery_batch(
             WebhookDelivery(
                 public_id=new_public_id("del"),
                 organisation_id=recipient.organisation_id,
+                environment_id=recipient.environment_id,
                 event_recipient_id=recipient.id,
                 status="PENDING",
                 attempt_count=0,

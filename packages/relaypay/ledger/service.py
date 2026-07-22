@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from relaypay.errors import RelayPayError
+from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.ledger.models import Journal, LedgerAccount, Posting
 
@@ -20,10 +21,13 @@ class JournalResult:
     credit_total: int
 
 
-def _account(session: Session, organisation_id: uuid.UUID, code: str) -> LedgerAccount:
+def _account(
+    session: Session, organisation_id: uuid.UUID, environment_id: uuid.UUID, code: str
+) -> LedgerAccount:
     account = session.scalar(
         select(LedgerAccount).where(
             LedgerAccount.organisation_id == organisation_id,
+            LedgerAccount.environment_id == environment_id,
             LedgerAccount.code == code,
             LedgerAccount.currency == "INR",
         )
@@ -42,6 +46,7 @@ def _post(
     session: Session,
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
     provider_operation_id: uuid.UUID,
     journal_type: JournalType,
     reference_id: uuid.UUID,
@@ -52,12 +57,13 @@ def _post(
     if amount <= 0:
         raise ValueError("journal amount must be positive paise")
 
-    debit = _account(session, organisation_id, debit_code)
-    credit = _account(session, organisation_id, credit_code)
+    debit = _account(session, organisation_id, environment_id, debit_code)
+    credit = _account(session, organisation_id, environment_id, credit_code)
     journal = Journal(
         id=new_uuid(),
         public_id=new_public_id("jrn"),
         organisation_id=organisation_id,
+        environment_id=environment_id,
         provider_operation_id=provider_operation_id,
         journal_type=journal_type,
         reference_type=journal_type,
@@ -70,6 +76,7 @@ def _post(
         [
             Posting(
                 organisation_id=organisation_id,
+                environment_id=environment_id,
                 journal_id=journal.id,
                 account_id=debit.id,
                 side="DEBIT",
@@ -78,6 +85,7 @@ def _post(
             ),
             Posting(
                 organisation_id=organisation_id,
+                environment_id=environment_id,
                 journal_id=journal.id,
                 account_id=credit.id,
                 side="CREDIT",
@@ -93,13 +101,18 @@ def post_capture_journal(
     session: Session,
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     provider_operation_id: uuid.UUID,
     capture_id: uuid.UUID,
     amount: int,
 ) -> JournalResult:
+    resolved_environment_id = resolve_environment_id(
+        session, organisation_id=organisation_id, environment_id=environment_id
+    )
     return _post(
         session,
         organisation_id=organisation_id,
+        environment_id=resolved_environment_id,
         provider_operation_id=provider_operation_id,
         journal_type="CAPTURE",
         reference_id=capture_id,
@@ -113,13 +126,18 @@ def post_refund_journal(
     session: Session,
     *,
     organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
     provider_operation_id: uuid.UUID,
     refund_id: uuid.UUID,
     amount: int,
 ) -> JournalResult:
+    resolved_environment_id = resolve_environment_id(
+        session, organisation_id=organisation_id, environment_id=environment_id
+    )
     return _post(
         session,
         organisation_id=organisation_id,
+        environment_id=resolved_environment_id,
         provider_operation_id=provider_operation_id,
         journal_type="REFUND",
         reference_id=refund_id,

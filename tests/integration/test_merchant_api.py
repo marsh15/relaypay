@@ -5,9 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 from relaypay.config import Settings
 from relaypay.database import build_engine, build_session_factory
-from relaypay.identity.models import APIKey, Organisation
+from relaypay.identity.models import APIKey, APIKeyVersion, Environment, Organisation
 from relaypay.identity.security import issue_api_key
 from relaypay.ids import new_public_id
+from sqlalchemy import select
 
 from apps.api.main import create_app
 
@@ -46,14 +47,32 @@ def merchant_keys(settings: Settings) -> tuple[str, str]:
             )
             session.add(organisation)
             session.flush()
+            environment = session.scalar(
+                select(Environment).where(
+                    Environment.organisation_id == organisation.id,
+                    Environment.environment_type == "TEST",
+                )
+            )
+            assert environment is not None
             issued, digest = issue_api_key(pepper=settings.API_KEY_PEPPER.get_secret_value())
+            key = APIKey(
+                public_id=new_public_id("key"),
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                name=f"{label} merchant key",
+                scopes=["customers:write", "payments:read", "payments:write"],
+                status="ACTIVE",
+            )
+            session.add(key)
+            session.flush()
             session.add(
-                APIKey(
+                APIKeyVersion(
                     organisation_id=organisation.id,
-                    name=f"{label} merchant key",
+                    environment_id=environment.id,
+                    api_key_id=key.id,
+                    version=1,
                     public_prefix=issued.public_prefix,
                     secret_digest=digest,
-                    scopes=["customers:write", "payments:read", "payments:write"],
                     status="ACTIVE",
                 )
             )

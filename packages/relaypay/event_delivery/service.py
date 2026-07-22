@@ -48,6 +48,7 @@ def append_merchant_event(
         id=new_uuid(),
         public_id=event_public_id,
         organisation_id=operation.organisation_id,
+        environment_id=operation.environment_id,
         payment_intent_id=payment.id,
         provider_operation_id=operation.id,
         event_type=event_type,
@@ -80,6 +81,7 @@ def append_merchant_event(
         [
             EventRecipient(
                 organisation_id=operation.organisation_id,
+                environment_id=operation.environment_id,
                 merchant_event_id=event.id,
                 endpoint_version_id=endpoint_version_id,
             )

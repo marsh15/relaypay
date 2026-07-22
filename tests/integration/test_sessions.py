@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from relaypay.config import Settings
 from relaypay.database import build_engine, build_session_factory
-from relaypay.identity.models import Organisation, SessionRecord, User
+from relaypay.identity.models import Organisation, OrganisationMembership, SessionRecord, User
 from relaypay.identity.security import hash_password
 from relaypay.ids import new_public_id
 from relaypay.payments.models import Customer, PaymentIntent
@@ -47,13 +47,20 @@ def seeded_admin(settings: Settings) -> tuple[str, str]:
         )
         session.add(organisation)
         session.flush()
+        user = User(
+            email_normalized=email.casefold(),
+            display_name="Session administrator",
+            password_hash=hash_password(password),
+            platform_role="STANDARD",
+            status="ACTIVE",
+        )
+        session.add(user)
+        session.flush()
         session.add(
-            User(
+            OrganisationMembership(
                 organisation_id=organisation.id,
-                email_normalized=email.casefold(),
-                display_name="Session administrator",
-                password_hash=hash_password(password),
-                role="ADMIN",
+                user_id=user.id,
+                role="ORGANISATION_ADMIN",
                 status="ACTIVE",
             )
         )
@@ -174,9 +181,13 @@ def test_evidence_is_admin_only_tenant_scoped_bounded_and_redacted(
     with factory() as session, session.begin():
         user = session.scalar(select(User).where(User.email_normalized == email.casefold()))
         assert user is not None
+        membership = session.scalar(
+            select(OrganisationMembership).where(OrganisationMembership.user_id == user.id)
+        )
+        assert membership is not None
         customer = Customer(
             public_id=new_public_id("cus"),
-            organisation_id=user.organisation_id,
+            organisation_id=membership.organisation_id,
             merchant_customer_reference=new_public_id("cus"),
             display_name="Evidence customer",
         )
@@ -184,7 +195,7 @@ def test_evidence_is_admin_only_tenant_scoped_bounded_and_redacted(
         session.flush()
         payment = PaymentIntent(
             public_id=new_public_id("pay"),
-            organisation_id=user.organisation_id,
+            organisation_id=membership.organisation_id,
             customer_id=customer.id,
             merchant_reference=new_public_id("pay"),
             amount=12_500,

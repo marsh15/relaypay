@@ -37,7 +37,10 @@ jobs:
       - name: Start clean dependencies
         run: docker compose up -d --wait postgres redis
 
-      - name: Migrate empty databases and seed synthetic tenants
+      - name: Prove v0.1 upgrade and deterministic M1 backfill
+        run: uv run python -m scripts.verify_m1_upgrade
+
+      - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
           make seed

@@ -111,6 +111,7 @@ def replay_delivery(
         replay = WebhookDelivery(
             public_id=new_public_id("del"),
             organisation_id=organisation_id,
+            environment_id=original.environment_id,
             event_recipient_id=original.event_recipient_id,
             replay_of_delivery_id=original.id,
             status="PENDING",
