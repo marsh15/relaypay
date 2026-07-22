@@ -189,3 +189,24 @@ three `WEBHOOK_TRANSPORT_ERROR` attempts and the scenario correctly entered `NEE
 No application assertion was represented as passing. The volume was discarded, the release
 surface was recreated from empty state using container-native migration/seed configuration, and
 the Playwright/axe rerun above passed. CI repeats that clean-volume sequence and remains canonical.
+
+## v0.3.0 final publication evidence
+
+M2 was published at `2026-07-22T06:18:21Z` after both the pull-request and merged-`main`
+empty-database gates passed:
+
+- Release PR: [#5](https://github.com/marsh15/relaypay/pull/5), with release gate
+  [29895985434](https://github.com/marsh15/relaypay/actions/runs/29895985434) passing in
+  `2m41s`.
+- Canonical `main` gate:
+  [29896155076](https://github.com/marsh15/relaypay/actions/runs/29896155076) passed in `2m52s`
+  on merge commit `f9572667d3b37946e2ebd5099ce86faa6d2ea155`.
+- Annotated tag `v0.3.0` has tag-object SHA
+  `8459f8b83f9a321be1c8f99660a8eb356f6d03f8` and resolves to that exact green `main`
+  commit.
+- Public release: [RelayPay v0.3.0 — Immutable reconciliation evidence](https://github.com/marsh15/relaypay/releases/tag/v0.3.0).
+- The release is final, not a draft or prerelease. GitHub reports the repository as public with
+  the MIT license, and the public notes retain the synthetic-data and no-hosting warning.
+- M2 intentionally has no generated binary attachment. GitHub reports an empty asset list; the
+  checked-in release-note source has SHA-256
+  `18b734c89d1806b20c02bdad87c844f6b89f5bf76d01b37756bd135288d912a0`.
