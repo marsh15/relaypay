@@ -2,8 +2,9 @@ from collections.abc import Callable
 from dataclasses import asdict
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.config import Settings
 from relaypay.demo_scenarios.service import (
     ScenarioFaultController,
@@ -26,6 +27,14 @@ from relaypay.identity.service import (
     set_membership,
 )
 from relaypay.provider_operations.service import ProviderTransport
+from relaypay.reconciliation.service import (
+    MAX_STATEMENT_BYTES,
+    acknowledge_mismatch,
+    import_statement,
+    list_mismatches,
+    refresh_mismatch_evidence,
+    resolve_mismatch,
+)
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -56,6 +65,19 @@ class MembershipUpdate(BaseModel):
 class APIKeyScopesUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     scopes: list[str] = Field(min_length=1, max_length=32)
+
+
+class MismatchNote(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    note: str = Field(min_length=1, max_length=1000)
+
+
+class MismatchResolution(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    note: str = Field(min_length=1, max_length=1000)
+    compensating_journal_id: str | None = Field(
+        default=None, alias="compensatingJournalId", min_length=1, max_length=64
+    )
 
 
 def build_admin_router(
@@ -160,6 +182,139 @@ def build_admin_router(
                 "version": version.version,
                 "secret": issued.plaintext,
                 "status": version.status,
+            }
+
+    @router.post("/admin/v1/environments/{environment_id}/statement-imports")
+    async def post_statement_import(
+        environment_id: str,
+        principal: PrincipalDep,
+        provider: Annotated[Literal["PAYMENT_PROVIDER"], Form()],
+        source_reference: Annotated[
+            str, Form(alias="sourceReference", min_length=1, max_length=128)
+        ],
+        source_format: Annotated[Literal["CSV", "JSON"], Form(alias="sourceFormat")],
+        period_start: Annotated[AwareDatetime, Form(alias="periodStart")],
+        period_end: Annotated[AwareDatetime, Form(alias="periodEnd")],
+        statement: Annotated[UploadFile, File()],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> JSONResponse:
+        require_csrf(principal, csrf_token)
+        raw_bytes = await statement.read(MAX_STATEMENT_BYTES + 1)
+        with session_factory() as session, session.begin():
+            result = import_statement(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                provider=provider,
+                source_reference=source_reference,
+                source_format=source_format,
+                period_start=period_start,
+                period_end=period_end,
+                raw_bytes=raw_bytes,
+            )
+            body = {
+                "id": result.statement_import.public_id,
+                "runId": result.reconciliation_run.public_id,
+                "runStatus": result.reconciliation_run.status,
+                "sha256": result.statement_import.raw_sha256.hex(),
+            }
+        return JSONResponse(status_code=201 if result.created else 200, content=body)
+
+    @router.get("/admin/v1/environments/{environment_id}/reconciliation-mismatches")
+    def get_reconciliation_mismatches(
+        environment_id: str,
+        principal: PrincipalDep,
+        status: Literal["OPEN", "ACKNOWLEDGED", "RESOLVED"] | None = None,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "id": mismatch.public_id,
+                    "type": mismatch.mismatch_type,
+                    "status": mismatch.workflow_status,
+                    "acknowledgementNote": mismatch.acknowledgement_note,
+                    "resolutionNote": mismatch.resolution_note,
+                    "compensatingJournalId": (
+                        str(mismatch.compensating_journal_id)
+                        if mismatch.compensating_journal_id
+                        else None
+                    ),
+                }
+                for mismatch in list_mismatches(
+                    session,
+                    principal=principal,
+                    environment_public_id=environment_id,
+                    workflow_status=status,
+                )
+            ]
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/reconciliation-mismatches/"
+        "{mismatch_id}/acknowledge"
+    )
+    def post_mismatch_acknowledgement(
+        environment_id: str,
+        mismatch_id: str,
+        payload: MismatchNote,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, str]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            mismatch = acknowledge_mismatch(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                mismatch_public_id=mismatch_id,
+                note=payload.note,
+            )
+            return {"id": mismatch.public_id, "status": mismatch.workflow_status}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/reconciliation-mismatches/{mismatch_id}/resolve"
+    )
+    def post_mismatch_resolution(
+        environment_id: str,
+        mismatch_id: str,
+        payload: MismatchResolution,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, str]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            mismatch = resolve_mismatch(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                mismatch_public_id=mismatch_id,
+                note=payload.note,
+                compensating_journal_public_id=payload.compensating_journal_id,
+            )
+            return {"id": mismatch.public_id, "status": mismatch.workflow_status}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/reconciliation-mismatches/"
+        "{mismatch_id}/evidence-versions",
+        status_code=201,
+    )
+    def post_mismatch_evidence_version(
+        environment_id: str,
+        mismatch_id: str,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            version = refresh_mismatch_evidence(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                mismatch_public_id=mismatch_id,
+            )
+            return {
+                "version": version.version,
+                "sha256": version.evidence_sha256.hex(),
+                "evidence": version.evidence,
             }
 
     @router.post(

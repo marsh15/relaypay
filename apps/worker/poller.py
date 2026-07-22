@@ -7,6 +7,7 @@ from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_
 from relaypay.event_delivery.materializer import materialize_deliveries
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
+from relaypay.reconciliation.service import run_reconciliation_batch
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,13 @@ def poll_once(settings: Settings) -> dict[str, int]:
             encryption_key=settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value(),
             transport=HTTPWebhookTransport(allowed_url=receiver_url),
         )
-        return {"recovered": recovered, "materialized": materialized, "delivered": delivered}
+        reconciled = run_reconciliation_batch(factory)
+        return {
+            "recovered": recovered,
+            "materialized": materialized,
+            "delivered": delivered,
+            "reconciled": reconciled,
+        }
     finally:
         engine.dispose()
 

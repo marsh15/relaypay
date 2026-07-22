@@ -61,6 +61,9 @@ never logged or returned to browsers. Exact inbound bytes are signature-checked 
 digested, replay-window checked, and deduplicated. Errors retain
 `{error:{code,message,details}}` without secrets or internal exception text.
 
-All credentials and data are synthetic, INR-only, and unsuitable for real financial use. Phase 2
-does not add PCI claims, real money, FX, disputes, inventory sagas, Kafka, RabbitMQ, Kubernetes,
-microservice decomposition, multi-region operation, hosting, or owner-account deployment.
+All credentials and data are synthetic and unsuitable for real financial use. Internal payment
+and ledger authority is INR-only; an imported statement may preserve another uppercase
+three-letter currency solely to report a reconciliation mismatch and never to perform FX. Phase
+2 does not add PCI claims, real money, FX, disputes, inventory sagas, Kafka, RabbitMQ,
+Kubernetes, microservice decomposition, multi-region operation, hosting, or owner-account
+deployment.

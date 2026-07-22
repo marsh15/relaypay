@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck unit test infra-up infra-down migrate seed reset demo console-install console-check console-e2e check
+.PHONY: install lint format typecheck unit test infra-up infra-down migrate seed reset demo reconciliation-demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -37,6 +37,9 @@ reset:
 
 demo:
 	uv run python -m scripts.lost_response_demo
+
+reconciliation-demo:
+	uv run python -m scripts.reconciliation_demo
 
 console-install:
 	cd apps/console && npm ci

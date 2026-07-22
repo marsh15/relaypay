@@ -3,6 +3,10 @@
 - Synthetic INR data only; no card, bank, UPI, KYC, PII, settlement, fee, dispute, or chargeback
   processing.
 - One deterministic mock provider and one exact allowlisted bundled receiver.
+- Reconciliation accepts bounded CSV/JSON evidence from the synthetic payment provider only;
+  connector-specific ingestion remains scheduled for M5.
+- Mismatch resolution records operator notes and may link an existing compensating journal, but
+  it never creates or changes payment, provider, or ledger outcomes.
 - Single-capture and bounded evidence assumptions are deliberate demonstration constraints.
 - No multi-region operation, automatic failover, point-in-time recovery, managed KMS, WAF, or
   production observability backend.

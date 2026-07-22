@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -87,6 +88,61 @@ class ProviderFaultDirective(ProviderBase):
     stable_key: Mapped[str] = mapped_column(String(128), nullable=False)
     fault_type: Mapped[str] = mapped_column(String(24), nullable=False)
     remaining_uses: Mapped[int] = mapped_column(nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ProviderStatementExport(ProviderBase):
+    __tablename__ = "provider_statement_exports"
+    __table_args__ = (
+        UniqueConstraint("provider_account_id", "source_reference"),
+        CheckConstraint("source_format IN ('CSV', 'JSON')"),
+        CheckConstraint("period_end > period_start"),
+        CheckConstraint("octet_length(raw_bytes) BETWEEN 1 AND 1048576"),
+        CheckConstraint("octet_length(raw_sha256) = 32"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    provider_account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("provider_accounts.id"), nullable=False
+    )
+    source_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_format: Mapped[str] = mapped_column(String(8), nullable=False)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    raw_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    raw_sha256: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ProviderStatementItem(ProviderBase):
+    __tablename__ = "provider_statement_items"
+    __table_args__ = (
+        UniqueConstraint("statement_export_id", "ordinal"),
+        UniqueConstraint("statement_export_id", "provider_item_id"),
+        CheckConstraint("ordinal > 0"),
+        CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND')"),
+        CheckConstraint("amount > 0"),
+        CheckConstraint("currency = 'INR'"),
+        CheckConstraint("provider_status IN ('PENDING', 'SUCCEEDED', 'DECLINED')"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    statement_export_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("provider_statement_exports.id"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    provider_item_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    stable_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    operation_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    provider_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

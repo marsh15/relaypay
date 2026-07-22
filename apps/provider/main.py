@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from fastapi import FastAPI, Header
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
@@ -14,6 +14,7 @@ from relaypay.mock_provider.service import (
     EffectCommand,
     apply_effect,
     configure_fault,
+    export_statement,
     lookup_effect,
 )
 from sqlalchemy import func, select
@@ -40,6 +41,15 @@ class FaultRequest(BaseModel):
     ] = Field(alias="faultType")
 
 
+class StatementExportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str = Field(alias="accountId", min_length=1, max_length=64)
+    source_reference: str = Field(alias="sourceReference", min_length=1, max_length=128)
+    period_start: AwareDatetime = Field(alias="periodStart")
+    period_end: AwareDatetime = Field(alias="periodEnd")
+
+
 def _error_response(error: RelayPayError) -> JSONResponse:
     return JSONResponse(
         status_code=error.http_status,
@@ -59,7 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay Mock Provider", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay Mock Provider", version="0.3.0", lifespan=lifespan)
 
     @app.exception_handler(RelayPayError)
     async def handle_relaypay_error(_, error: RelayPayError):  # type: ignore[no-untyped-def]
@@ -151,5 +161,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             )
         return {"stableKey": stable_key, "effectCount": count or 0}
+
+    @app.post("/control/statements")
+    def statement_export(
+        payload: StatementExportRequest,
+        control_secret: Annotated[str | None, Header(alias="X-Provider-Control")] = None,
+    ) -> Response:
+        expected = resolved.PROVIDER_CONTROL_SECRET.get_secret_value()
+        if control_secret is None or not hmac.compare_digest(control_secret, expected):
+            raise RelayPayError(
+                code="UNAUTHENTICATED", message="Authentication required", http_status=401
+            )
+        result = export_statement(
+            factory,
+            account_public_id=payload.account_id,
+            source_reference=payload.source_reference,
+            period_start=payload.period_start,
+            period_end=payload.period_end,
+        )
+        return Response(
+            content=result.body,
+            media_type="application/json",
+            headers={
+                "X-Statement-Id": result.public_id,
+                "X-Statement-SHA256": result.sha256,
+                "X-Statement-Item-Count": str(result.item_count),
+            },
+        )
 
     return app
