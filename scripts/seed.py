@@ -55,21 +55,16 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
             )
             session.add(organisation)
             session.flush()
-            test_environment = Environment(
-                public_id=new_public_id("env"),
-                organisation_id=organisation.id,
-                name="Test",
-                environment_type="TEST",
-                status="ACTIVE",
+            environments = list(
+                session.scalars(
+                    select(Environment).where(Environment.organisation_id == organisation.id)
+                )
             )
-            live_environment = Environment(
-                public_id=new_public_id("env"),
-                organisation_id=organisation.id,
-                name="Live-like",
-                environment_type="LIVE_LIKE",
-                status="ACTIVE",
+            if {item.environment_type for item in environments} != {"TEST", "LIVE_LIKE"}:
+                raise RuntimeError("organisation environments were not provisioned")
+            test_environment = next(
+                item for item in environments if item.environment_type == "TEST"
             )
-            session.add_all([test_environment, live_environment])
             user = User(
                 email_normalized=demo.email.casefold(),
                 display_name=f"{demo.name} administrator",

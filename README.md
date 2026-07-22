@@ -57,6 +57,10 @@ Integration tests use PostgreSQL and Redis at the development ports from `.env.e
 them with `make infra-up`, then run `make migrate` and `make seed` when not using the complete
 Compose stack.
 
+Upgrading an existing v0.1 database creates TEST and LIVE_LIKE environments, moves all legacy
+tenant data deterministically into TEST, and preserves immutable evidence. See the
+[v0.2.0 migration guide](docs/migrations/v0.2.0.md) before applying the migration.
+
 To restore only synthetic state, stop application processes and use the explicit destructive
 confirmation:
 
@@ -103,6 +107,7 @@ ledger history, immutable event bytes, and delivery progress.
 - [Phase 2 product contract](docs/phase-2/product-contract.md)
 - [Phase 2 implementation roadmap](docs/phase-2/implementation-roadmap.md)
 - [v0.1.0 release notes](docs/releases/v0.1.0.md)
+- [v0.2.0 release notes](docs/releases/v0.2.0.md)
 
 ## Technology
 
