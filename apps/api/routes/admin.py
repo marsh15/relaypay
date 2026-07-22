@@ -2,8 +2,9 @@ from collections.abc import Callable
 from dataclasses import asdict
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.config import Settings
 from relaypay.demo_scenarios.service import (
     ScenarioFaultController,
@@ -26,6 +27,7 @@ from relaypay.identity.service import (
     set_membership,
 )
 from relaypay.provider_operations.service import ProviderTransport
+from relaypay.reconciliation.service import MAX_STATEMENT_BYTES, import_statement
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -161,6 +163,42 @@ def build_admin_router(
                 "secret": issued.plaintext,
                 "status": version.status,
             }
+
+    @router.post("/admin/v1/environments/{environment_id}/statement-imports")
+    async def post_statement_import(
+        environment_id: str,
+        principal: PrincipalDep,
+        provider: Annotated[Literal["PAYMENT_PROVIDER"], Form()],
+        source_reference: Annotated[
+            str, Form(alias="sourceReference", min_length=1, max_length=128)
+        ],
+        source_format: Annotated[Literal["CSV", "JSON"], Form(alias="sourceFormat")],
+        period_start: Annotated[AwareDatetime, Form(alias="periodStart")],
+        period_end: Annotated[AwareDatetime, Form(alias="periodEnd")],
+        statement: Annotated[UploadFile, File()],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> JSONResponse:
+        require_csrf(principal, csrf_token)
+        raw_bytes = await statement.read(MAX_STATEMENT_BYTES + 1)
+        with session_factory() as session, session.begin():
+            result = import_statement(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                provider=provider,
+                source_reference=source_reference,
+                source_format=source_format,
+                period_start=period_start,
+                period_end=period_end,
+                raw_bytes=raw_bytes,
+            )
+            body = {
+                "id": result.statement_import.public_id,
+                "runId": result.reconciliation_run.public_id,
+                "runStatus": result.reconciliation_run.status,
+                "sha256": result.statement_import.raw_sha256.hex(),
+            }
+        return JSONResponse(status_code=201 if result.created else 200, content=body)
 
     @router.post(
         "/admin/v1/environments/{environment_id}/api-keys/{key_id}/rotate",
