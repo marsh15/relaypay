@@ -76,6 +76,43 @@ on both the release-fix branch and merged `main`:
 - GitHub reports the repository as public with the MIT license. The release is final, not a draft
   or prerelease, and retains the synthetic-data warning in its notes.
 
+## v0.2.0 release-candidate evidence
+
+Measured at `2026-07-22T05:03:53Z` (`2026-07-22T10:33:53+05:30`) on clean implementation
+commit `2db5f29772c43aa95109b2e12ae5db329457f1b3`. This documentation update records the
+results without changing the tested runtime.
+
+- Upgrade: `scripts.verify_m1_upgrade` created a representative v0.1 fixture at
+  `0005_scenarios`, upgraded it to `0006_identity_environments`, verified all legacy tenant rows
+  were assigned to TEST while LIVE_LIKE remained empty, checked membership and API-key-version
+  backfills, and confirmed SHA-256 digests across all eight immutable evidence tables were
+  unchanged.
+- Isolation: focused M1 integration tests proved reusable TEST/LIVE_LIKE business references,
+  composite-FK rejection of a cross-environment payment/customer link, global membership roles,
+  platform bootstrap idempotency, environment-scoped versioned key rotation/activation/revocation,
+  cross-boundary `404`, permission denial, and transactional audit actions.
+- Backend: Ruff reported `101 files left unchanged` and lint passed; strict mypy reported
+  `Success: no issues found in 71 source files`; pytest reported `67 passed in 10.26s`.
+- Database: RelayPay, provider, and receiver Alembic drift checks each reported
+  `No new upgrade operations detected`. The seed command created both synthetic organisations
+  through the canonical environment auto-provisioning path.
+- Console: the locked install used Next.js `16.2.11` and the patched sharp `0.35.3` override.
+  ESLint, TypeScript, and the production build passed; the registry-backed production audit
+  reported `found 0 vulnerabilities`.
+- Compose: both development and combined production-overlay configurations validated. The clean
+  service graph rebuilt from an empty RelayPay volume and all requested services became healthy.
+  A stalled GHCR base-image layer was retried once as a registry-only operation and then
+  downloaded successfully; no application or compilation stage failed.
+- Browser: the single Playwright lost-response journey, including axe analysis, passed in
+  `10.9s` (`5.6s` test body) against the clean container graph.
+- Lost-response CLI: exactly one provider effect, capture, balanced journal, event, recipient,
+  delivery, and receiver row were measured; two idempotency records retained stable replay bytes.
+  The measured terminal response SHA-256 was
+  `978bc6a175bf1689e83b1b850505634d237ac1d60beccf5ce7e391fe55fc64f2`.
+
+Tooling: Python test runtime `3.12.12`, uv `0.10.4`, Node.js `26.4.0`, npm `11.17.0`, Docker
+`29.5.2`, and Docker Compose `5.1.3`.
+
 ## Historical blocked rerun (not passing evidence)
 
 The full application image rebuild contacted Docker Hub and GHCR twice. Both attempts timed out
