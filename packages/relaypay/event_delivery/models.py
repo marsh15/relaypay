@@ -59,6 +59,15 @@ class WebhookEndpointVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "webhook_endpoint_id"],
             ["webhook_endpoints.organisation_id", "webhook_endpoints.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "webhook_endpoint_id"],
+            [
+                "webhook_endpoints.organisation_id",
+                "webhook_endpoints.environment_id",
+                "webhook_endpoints.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("webhook_endpoint_id", "version"),
         CheckConstraint("version > 0"),
@@ -94,9 +103,26 @@ class MerchantEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id", "event_type"),
         CheckConstraint(
@@ -135,9 +161,26 @@ class EventRecipient(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["merchant_events.organisation_id", "merchant_events.id"],
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "merchant_event_id"],
+            [
+                "merchant_events.organisation_id",
+                "merchant_events.environment_id",
+                "merchant_events.id",
+            ],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "endpoint_version_id"],
             ["webhook_endpoint_versions.organisation_id", "webhook_endpoint_versions.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "endpoint_version_id"],
+            [
+                "webhook_endpoint_versions.organisation_id",
+                "webhook_endpoint_versions.environment_id",
+                "webhook_endpoint_versions.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("merchant_event_id", "endpoint_version_id"),
         Index("ix_event_recipients_event_order", "merchant_event_id", "id"),
@@ -161,9 +204,26 @@ class WebhookDelivery(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             ["event_recipients.organisation_id", "event_recipients.id"],
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "event_recipient_id"],
+            [
+                "event_recipients.organisation_id",
+                "event_recipients.environment_id",
+                "event_recipients.id",
+            ],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "replay_of_delivery_id"],
             ["webhook_deliveries.organisation_id", "webhook_deliveries.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "replay_of_delivery_id"],
+            [
+                "webhook_deliveries.organisation_id",
+                "webhook_deliveries.environment_id",
+                "webhook_deliveries.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         CheckConstraint(
             "status IN ('PENDING', 'DELIVERING', 'RETRY_WAIT', 'DELIVERED', 'DEAD_LETTER')"
@@ -220,6 +280,15 @@ class WebhookDeliveryAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "webhook_delivery_id"],
             ["webhook_deliveries.organisation_id", "webhook_deliveries.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "webhook_delivery_id"],
+            [
+                "webhook_deliveries.organisation_id",
+                "webhook_deliveries.environment_id",
+                "webhook_deliveries.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("webhook_delivery_id", "sequence"),
         CheckConstraint("sequence > 0"),
         CheckConstraint("result IN ('ACKNOWLEDGED', 'RETRYABLE', 'PERMANENT', 'TRANSPORT_ERROR')"),

@@ -26,7 +26,9 @@ from relaypay.identity.service import (
     set_membership,
 )
 from relaypay.ids import new_public_id
+from relaypay.payments.models import Customer, PaymentIntent
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from scripts.bootstrap_platform_admin import bootstrap_platform_admin
 
@@ -252,4 +254,54 @@ def test_platform_bootstrap_is_idempotent_and_sessions_select_an_organisation() 
         assert issued.principal.organisation_public_id == second_organisation.public_id
         assert issued.principal.membership_role == "VIEWER"
         assert issued.principal.platform_role == "PLATFORM_ADMIN"
+    engine.dispose()
+
+
+def test_environment_scopes_business_keys_and_parent_references() -> None:
+    engine = build_engine(DATABASE_URL, application_name="m1-environment-constraint-test")
+    factory = build_session_factory(engine)
+    with factory() as session, session.begin():
+        organisation = Organisation(
+            public_id=new_public_id("org"), name="M1 environment constraints", status="ACTIVE"
+        )
+        session.add(organisation)
+        session.flush()
+        environments = list(
+            session.scalars(
+                select(Environment).where(Environment.organisation_id == organisation.id)
+            )
+        )
+        test_environment = next(item for item in environments if item.environment_type == "TEST")
+        live_environment = next(
+            item for item in environments if item.environment_type == "LIVE_LIKE"
+        )
+        test_customer = Customer(
+            public_id=new_public_id("cus"),
+            organisation_id=organisation.id,
+            environment_id=test_environment.id,
+            merchant_customer_reference="shared-reference",
+            display_name="Test customer",
+        )
+        live_customer = Customer(
+            public_id=new_public_id("cus"),
+            organisation_id=organisation.id,
+            environment_id=live_environment.id,
+            merchant_customer_reference="shared-reference",
+            display_name="Live-like customer",
+        )
+        session.add_all([test_customer, live_customer])
+
+    with factory() as session, pytest.raises(IntegrityError), session.begin():
+        session.add(
+            PaymentIntent(
+                public_id=new_public_id("pay"),
+                organisation_id=organisation.id,
+                environment_id=live_environment.id,
+                customer_id=test_customer.id,
+                merchant_reference="cross-environment-parent",
+                amount=100,
+                currency="INR",
+            )
+        )
+        session.flush()
     engine.dispose()

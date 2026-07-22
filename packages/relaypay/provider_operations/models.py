@@ -31,9 +31,18 @@ class ProviderOperation(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
-        UniqueConstraint("organisation_id", "stable_provider_key"),
-        UniqueConstraint("organisation_id", "kind", "resource_id"),
+        UniqueConstraint("organisation_id", "environment_id", "stable_provider_key"),
+        UniqueConstraint("organisation_id", "environment_id", "kind", "resource_id"),
         CheckConstraint("resource_type IN ('AUTHORIZATION', 'CAPTURE', 'REFUND')"),
         CheckConstraint("kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND')"),
         CheckConstraint("status IN ('PROCESSING', 'SUCCEEDED', 'FAILED', 'REQUIRES_REVIEW')"),
@@ -91,6 +100,15 @@ class ProviderAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id", "sequence"),
         CheckConstraint("sequence > 0"),
@@ -135,9 +153,26 @@ class OperationHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["provider_operations.organisation_id", "provider_operations.id"],
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "evidence_attempt_id"],
             ["provider_attempts.organisation_id", "provider_attempts.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "evidence_attempt_id"],
+            [
+                "provider_attempts.organisation_id",
+                "provider_attempts.environment_id",
+                "provider_attempts.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         CheckConstraint(
             "actor_type IN ('REQUEST', 'RECOVERY_WORKER', 'ADMIN_LOOKUP', 'FINALIZER')"
         ),
@@ -166,7 +201,16 @@ class IdempotencyRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
         ),
-        UniqueConstraint("organisation_id", "key_digest"),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
+        UniqueConstraint("organisation_id", "environment_id", "key_digest"),
         CheckConstraint("target_type IN ('PAYMENT_INTENT', 'PROVIDER_OPERATION')"),
         CheckConstraint(
             "(is_terminal AND http_status IS NOT NULL AND response_bytes IS NOT NULL "

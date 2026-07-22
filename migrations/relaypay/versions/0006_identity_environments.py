@@ -38,15 +38,53 @@ ENVIRONMENT_TABLES = (
     "scenario_runs",
 )
 
-IMMUTABLE_TABLES = (
+SCOPE_PARENT_TABLES = (
+    "authorizations",
+    "captures",
+    "refunds",
+    "provider_operations",
     "provider_attempts",
     "operation_history",
+    "idempotency_records",
     "journals",
     "postings",
     "webhook_endpoint_versions",
     "merchant_events",
     "event_recipients",
+    "webhook_deliveries",
     "webhook_delivery_attempts",
+    "scenario_runs",
+)
+
+SCOPE_RELATIONSHIPS = (
+    ("payment_intents", "customers", "customer_id"),
+    ("provider_operations", "payment_intents", "payment_intent_id"),
+    ("provider_attempts", "provider_operations", "provider_operation_id"),
+    ("operation_history", "provider_operations", "provider_operation_id"),
+    ("operation_history", "provider_attempts", "evidence_attempt_id"),
+    ("idempotency_records", "provider_operations", "provider_operation_id"),
+    ("authorizations", "payment_intents", "payment_intent_id"),
+    ("authorizations", "provider_operations", "provider_operation_id"),
+    ("captures", "payment_intents", "payment_intent_id"),
+    ("captures", "authorizations", "authorization_id"),
+    ("captures", "provider_operations", "provider_operation_id"),
+    ("captures", "journals", "journal_id"),
+    ("refunds", "payment_intents", "payment_intent_id"),
+    ("refunds", "captures", "capture_id"),
+    ("refunds", "provider_operations", "provider_operation_id"),
+    ("refunds", "journals", "journal_id"),
+    ("journals", "provider_operations", "provider_operation_id"),
+    ("postings", "journals", "journal_id"),
+    ("postings", "ledger_accounts", "account_id"),
+    ("webhook_endpoint_versions", "webhook_endpoints", "webhook_endpoint_id"),
+    ("merchant_events", "payment_intents", "payment_intent_id"),
+    ("merchant_events", "provider_operations", "provider_operation_id"),
+    ("event_recipients", "merchant_events", "merchant_event_id"),
+    ("event_recipients", "webhook_endpoint_versions", "endpoint_version_id"),
+    ("webhook_deliveries", "event_recipients", "event_recipient_id"),
+    ("webhook_deliveries", "webhook_deliveries", "replay_of_delivery_id"),
+    ("webhook_delivery_attempts", "webhook_deliveries", "webhook_delivery_id"),
+    ("scenario_runs", "payment_intents", "payment_intent_id"),
 )
 
 
@@ -222,7 +260,7 @@ def upgrade() -> None:
     op.drop_column("api_keys", "secret_digest")
     op.drop_column("api_keys", "last_used_at")
 
-    for table in IMMUTABLE_TABLES:
+    for table in ENVIRONMENT_TABLES:
         op.execute(f"ALTER TABLE {table} DISABLE TRIGGER USER")
     for table in ENVIRONMENT_TABLES:
         op.add_column(table, sa.Column("environment_id", sa.Uuid(), nullable=True))
@@ -241,7 +279,7 @@ def upgrade() -> None:
             ["organisation_id", "environment_id"],
             ["organisation_id", "id"],
         )
-    for table in IMMUTABLE_TABLES:
+    for table in ENVIRONMENT_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE TRIGGER USER")
 
     op.create_unique_constraint(
@@ -273,10 +311,67 @@ def upgrade() -> None:
         ["organisation_id", "environment_id", "code", "currency"],
     )
     op.create_unique_constraint(
+        "provider_operations_scope_stable_key",
+        "provider_operations",
+        ["organisation_id", "environment_id", "stable_provider_key"],
+    )
+    op.create_unique_constraint(
+        "provider_operations_scope_resource_key",
+        "provider_operations",
+        ["organisation_id", "environment_id", "kind", "resource_id"],
+    )
+    op.create_unique_constraint(
+        "idempotency_records_scope_digest_key",
+        "idempotency_records",
+        ["organisation_id", "environment_id", "key_digest"],
+    )
+    op.create_unique_constraint(
+        "journals_scope_reference_key",
+        "journals",
+        ["organisation_id", "environment_id", "journal_type", "reference_id"],
+    )
+    for name, table in (
+        ("customers_organisation_id_merchant_customer_reference_key", "customers"),
+        ("payment_intents_organisation_id_merchant_reference_key", "payment_intents"),
+        ("ledger_accounts_organisation_id_code_currency_key", "ledger_accounts"),
+        ("provider_operations_organisation_id_stable_provider_key_key", "provider_operations"),
+        ("provider_operations_organisation_id_kind_resource_id_key", "provider_operations"),
+        ("idempotency_records_organisation_id_key_digest_key", "idempotency_records"),
+        ("journals_organisation_id_journal_type_reference_id_key", "journals"),
+    ):
+        op.drop_constraint(name, table, type_="unique")
+    op.drop_index("uq_refunds_merchant_reference", table_name="refunds")
+    op.create_index(
+        "uq_refunds_merchant_reference",
+        "refunds",
+        ["organisation_id", "environment_id", "merchant_refund_reference"],
+        unique=True,
+        postgresql_where=sa.text("merchant_refund_reference IS NOT NULL"),
+    )
+    op.create_unique_constraint(
         "webhook_endpoints_scope_id_key",
         "webhook_endpoints",
         ["organisation_id", "environment_id", "id"],
     )
+    for table in SCOPE_PARENT_TABLES:
+        op.create_unique_constraint(
+            f"{table}_scope_id_key", table, ["organisation_id", "environment_id", "id"]
+        )
+    for source, target, reference_column in SCOPE_RELATIONSHIPS:
+        provider_link = target == "provider_operations" and source in {
+            "authorizations",
+            "captures",
+            "refunds",
+        }
+        op.create_foreign_key(
+            f"{source}_{reference_column}_scope_fkey",
+            source,
+            target,
+            ["organisation_id", "environment_id", reference_column],
+            ["organisation_id", "environment_id", "id"],
+            deferrable=True if provider_link else None,
+            initially="DEFERRED" if provider_link else None,
+        )
 
     op.create_table(
         "audit_records",
@@ -324,6 +419,63 @@ def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS audit_records_immutable ON audit_records")
     op.drop_index("ix_audit_records_scope_created", table_name="audit_records")
     op.drop_table("audit_records")
+    for source, _target, reference_column in reversed(SCOPE_RELATIONSHIPS):
+        op.drop_constraint(f"{source}_{reference_column}_scope_fkey", source, type_="foreignkey")
+    for table in reversed(SCOPE_PARENT_TABLES):
+        op.drop_constraint(f"{table}_scope_id_key", table, type_="unique")
+    op.drop_index("uq_refunds_merchant_reference", table_name="refunds")
+    op.create_index(
+        "uq_refunds_merchant_reference",
+        "refunds",
+        ["organisation_id", "merchant_refund_reference"],
+        unique=True,
+        postgresql_where=sa.text("merchant_refund_reference IS NOT NULL"),
+    )
+    for name, table, columns in (
+        (
+            "customers_organisation_id_merchant_customer_reference_key",
+            "customers",
+            ["organisation_id", "merchant_customer_reference"],
+        ),
+        (
+            "payment_intents_organisation_id_merchant_reference_key",
+            "payment_intents",
+            ["organisation_id", "merchant_reference"],
+        ),
+        (
+            "ledger_accounts_organisation_id_code_currency_key",
+            "ledger_accounts",
+            ["organisation_id", "code", "currency"],
+        ),
+        (
+            "provider_operations_organisation_id_stable_provider_key_key",
+            "provider_operations",
+            ["organisation_id", "stable_provider_key"],
+        ),
+        (
+            "provider_operations_organisation_id_kind_resource_id_key",
+            "provider_operations",
+            ["organisation_id", "kind", "resource_id"],
+        ),
+        (
+            "idempotency_records_organisation_id_key_digest_key",
+            "idempotency_records",
+            ["organisation_id", "key_digest"],
+        ),
+        (
+            "journals_organisation_id_journal_type_reference_id_key",
+            "journals",
+            ["organisation_id", "journal_type", "reference_id"],
+        ),
+    ):
+        op.create_unique_constraint(name, table, columns)
+    for name, table in (
+        ("journals_scope_reference_key", "journals"),
+        ("idempotency_records_scope_digest_key", "idempotency_records"),
+        ("provider_operations_scope_resource_key", "provider_operations"),
+        ("provider_operations_scope_stable_key", "provider_operations"),
+    ):
+        op.drop_constraint(name, table, type_="unique")
     for name, table in (
         ("webhook_endpoints_scope_id_key", "webhook_endpoints"),
         ("ledger_accounts_scope_code_key", "ledger_accounts"),

@@ -27,6 +27,15 @@ class ScenarioRun(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "payment_intent_id"],
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("public_id"),
         UniqueConstraint("correlation_id"),

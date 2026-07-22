@@ -27,7 +27,6 @@ class LedgerAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "environment_id", "code", "currency"),
         UniqueConstraint("organisation_id", "id"),
-        UniqueConstraint("organisation_id", "code", "currency"),
         CheckConstraint("account_type IN ('ASSET', 'LIABILITY')"),
         CheckConstraint("currency = 'INR'"),
     )
@@ -51,9 +50,18 @@ class Journal(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id"),
-        UniqueConstraint("organisation_id", "journal_type", "reference_id"),
+        UniqueConstraint("organisation_id", "environment_id", "journal_type", "reference_id"),
         CheckConstraint("journal_type IN ('CAPTURE', 'REFUND', 'COMPENSATION')"),
         CheckConstraint("currency = 'INR'"),
     )
@@ -82,9 +90,22 @@ class Posting(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "journal_id"], ["journals.organisation_id", "journals.id"]
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "journal_id"],
+            ["journals.organisation_id", "journals.environment_id", "journals.id"],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "account_id"],
             ["ledger_accounts.organisation_id", "ledger_accounts.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "account_id"],
+            [
+                "ledger_accounts.organisation_id",
+                "ledger_accounts.environment_id",
+                "ledger_accounts.id",
+            ],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         CheckConstraint("side IN ('DEBIT', 'CREDIT')"),
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),

@@ -28,7 +28,6 @@ class Customer(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "environment_id", "merchant_customer_reference"),
         UniqueConstraint("organisation_id", "id"),
-        UniqueConstraint("organisation_id", "merchant_customer_reference"),
     )
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -50,10 +49,13 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         ForeignKeyConstraint(
             ["organisation_id", "customer_id"], ["customers.organisation_id", "customers.id"]
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "customer_id"],
+            ["customers.organisation_id", "customers.environment_id", "customers.id"],
+        ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "environment_id", "merchant_reference"),
         UniqueConstraint("organisation_id", "id"),
-        UniqueConstraint("organisation_id", "merchant_reference"),
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),
         Index("ix_payment_intents_organisation_created", "organisation_id", "created_at"),
@@ -80,11 +82,30 @@ class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
             ["provider_operations.organisation_id", "provider_operations.id"],
             deferrable=True,
             initially="DEFERRED",
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("organisation_id", "payment_intent_id"),
         UniqueConstraint("provider_operation_id"),
@@ -122,8 +143,24 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "authorization_id"],
             ["authorizations.organisation_id", "authorizations.id"],
+        ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "authorization_id"],
+            [
+                "authorizations.organisation_id",
+                "authorizations.environment_id",
+                "authorizations.id",
+            ],
         ),
         ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
@@ -132,8 +169,23 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             initially="DEFERRED",
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "journal_id"], ["journals.organisation_id", "journals.id"]
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "journal_id"],
+            ["journals.organisation_id", "journals.environment_id", "journals.id"],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("organisation_id", "payment_intent_id"),
         UniqueConstraint("provider_operation_id"),
@@ -177,7 +229,19 @@ class Refund(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             ["payment_intents.organisation_id", "payment_intents.id"],
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "capture_id"], ["captures.organisation_id", "captures.id"]
+        ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "capture_id"],
+            ["captures.organisation_id", "captures.environment_id", "captures.id"],
         ),
         ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
@@ -186,8 +250,23 @@ class Refund(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             initially="DEFERRED",
         ),
         ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
             ["organisation_id", "journal_id"], ["journals.organisation_id", "journals.id"]
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "journal_id"],
+            ["journals.organisation_id", "journals.environment_id", "journals.id"],
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id"),
         UniqueConstraint("journal_id"),
@@ -205,6 +284,7 @@ class Refund(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         Index(
             "uq_refunds_merchant_reference",
             "organisation_id",
+            "environment_id",
             "merchant_refund_reference",
             unique=True,
             postgresql_where=text("merchant_refund_reference IS NOT NULL"),
