@@ -113,6 +113,24 @@ results without changing the tested runtime.
 Tooling: Python test runtime `3.12.12`, uv `0.10.4`, Node.js `26.4.0`, npm `11.17.0`, Docker
 `29.5.2`, and Docker Compose `5.1.3`.
 
+## v0.2.0 final publication evidence
+
+M1 was published at `2026-07-22T05:13:37Z` after both required GitHub release gates passed:
+
+- M1 PR: [#3](https://github.com/marsh15/relaypay/pull/3), with release gate
+  [29892833055](https://github.com/marsh15/relaypay/actions/runs/29892833055) passing in
+  `2m45s` on head commit `76c73ac9fbe446344afb28af2031bf031af68de0`.
+- Canonical `main` gate:
+  [29892993497](https://github.com/marsh15/relaypay/actions/runs/29892993497) passed in `2m51s`
+  on merge commit `addb342d93a3b2e25ee4e9d3724d66f0c4fe0fd9`.
+- Annotated tag `v0.2.0` has tag-object SHA
+  `6f41ccbe011ce1dac50585d36c4bfb0617f2221c` and resolves to that green `main` commit.
+- Public release: [RelayPay v0.2.0 — Identity and environment isolation](https://github.com/marsh15/relaypay/releases/tag/v0.2.0).
+- M1 does not generate a milestone binary, so the verified release asset list is intentionally
+  empty and no artifact digest applies. Generated binaries remain excluded from Git.
+- GitHub reports the repository as public with the MIT license. The release is final, not a draft
+  or prerelease, and retains the synthetic-data and no-hosting warning.
+
 ## Historical blocked rerun (not passing evidence)
 
 The full application image rebuild contacted Docker Hub and GHCR twice. Both attempts timed out
