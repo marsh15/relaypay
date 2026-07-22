@@ -4,6 +4,7 @@ from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_
 from relaypay.event_delivery.materializer import materialize_deliveries
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
+from relaypay.reconciliation.service import run_reconciliation_batch
 
 from apps.worker.celery_app import app
 
@@ -53,5 +54,18 @@ def deliver_webhooks() -> int:
             encryption_key=settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value(),
             transport=HTTPWebhookTransport(allowed_url=receiver_url),
         )
+    finally:
+        engine.dispose()
+
+
+@app.task(name="relaypay.reconcile_statements")  # type: ignore[untyped-decorator]
+def reconcile_statements() -> int:
+    settings = get_settings()
+    engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-reconciliation-worker",
+    )
+    try:
+        return run_reconciliation_batch(build_session_factory(engine))
     finally:
         engine.dispose()

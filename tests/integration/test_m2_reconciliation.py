@@ -3,12 +3,14 @@ import hashlib
 import io
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
 import pytest
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
+from relaypay.idempotency import canonical_json_bytes
 from relaypay.identity.models import (
     AuditRecord,
     Environment,
@@ -17,12 +19,31 @@ from relaypay.identity.models import (
     User,
 )
 from relaypay.identity.security import Principal, hash_password
-from relaypay.ids import new_public_id
-from relaypay.reconciliation.models import ReconciliationRun, StatementImport, StatementItem
-from relaypay.reconciliation.service import import_statement, parse_statement
+from relaypay.ids import new_public_id, new_uuid
+from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent
+from relaypay.provider_operations.models import ProviderOperation
+from relaypay.reconciliation.models import (
+    MismatchEvidenceVersion,
+    MismatchWorkflowHistory,
+    ReconciliationMatch,
+    ReconciliationMismatch,
+    ReconciliationRun,
+    StatementImport,
+    StatementItem,
+)
+from relaypay.reconciliation.service import (
+    acknowledge_mismatch,
+    claim_reconciliation_run,
+    import_statement,
+    parse_statement,
+    process_reconciliation_claim,
+    refresh_mismatch_evidence,
+    resolve_mismatch,
+)
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import Session
 
 pytestmark = pytest.mark.integration
 
@@ -258,4 +279,422 @@ def test_statement_import_requires_organisation_admin() -> None:
                 raw_bytes=_statement(now),
             )
         assert denied.value.http_status == 403
+    engine.dispose()
+
+
+def test_concurrent_statement_source_replay_creates_one_import_and_run() -> None:
+    engine, principal, environment = _seed_identity()
+    factory = build_session_factory(engine)
+    now = datetime.now(UTC)
+    arguments = ImportArguments(
+        principal=principal,
+        environment_public_id=environment.public_id,
+        provider="PAYMENT_PROVIDER",
+        source_reference=f"concurrent-replay-{uuid.uuid4().hex}",
+        source_format="JSON",
+        period_start=now - timedelta(minutes=1),
+        period_end=now + timedelta(minutes=1),
+        raw_bytes=_statement(now),
+    )
+
+    def execute_import() -> tuple[bool, uuid.UUID, uuid.UUID]:
+        with factory() as session, session.begin():
+            result = import_statement(session, **arguments)
+            return result.created, result.statement_import.id, result.reconciliation_run.id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: execute_import(), range(2)))
+    assert {created for created, _, _ in results} == {False, True}
+    assert len({statement_id for _, statement_id, _ in results}) == 1
+    assert len({run_id for _, _, run_id in results}) == 1
+    engine.dispose()
+
+
+def _add_authorization(
+    session: Session,
+    *,
+    principal: Principal,
+    environment: Environment,
+    customer: Customer,
+    stable_key: str,
+    amount: int = 100_000,
+) -> tuple[ProviderOperation, Authorization, PaymentIntent]:
+    payment = PaymentIntent(
+        public_id=new_public_id("pay"),
+        organisation_id=principal.organisation_id,
+        environment_id=environment.id,
+        customer_id=customer.id,
+        merchant_reference=f"m2-payment-{uuid.uuid4().hex}",
+        amount=amount,
+        currency="INR",
+    )
+    session.add(payment)
+    session.flush([payment])
+    operation_id = new_uuid()
+    authorization_id = new_uuid()
+    response = canonical_json_bytes({"status": "SUCCEEDED"})
+    operation = ProviderOperation(
+        id=operation_id,
+        public_id=new_public_id("op"),
+        organisation_id=principal.organisation_id,
+        environment_id=environment.id,
+        payment_intent_id=payment.id,
+        resource_type="AUTHORIZATION",
+        resource_id=authorization_id,
+        kind="AUTHORIZE",
+        stable_provider_key=stable_key,
+        status="SUCCEEDED",
+        attempt_count=1,
+        apply_failure_count=0,
+        provider_request_bytes=b"{}",
+        provider_request_sha256=hashlib.sha256(b"{}").digest(),
+        last_sent_at=datetime.now(UTC),
+        terminal_http_status=200,
+        terminal_response_headers={"Content-Type": "application/json"},
+        terminal_response_bytes=response,
+        terminal_response_sha256=hashlib.sha256(response).digest(),
+        finalized_at=datetime.now(UTC),
+    )
+    authorization = Authorization(
+        id=authorization_id,
+        public_id=new_public_id("auth"),
+        organisation_id=principal.organisation_id,
+        environment_id=environment.id,
+        payment_intent_id=payment.id,
+        provider_operation_id=operation.id,
+        amount=amount,
+        currency="INR",
+        status="SUCCEEDED",
+        authorized_at=datetime.now(UTC),
+    )
+    session.add_all([operation, authorization])
+    session.flush([operation, authorization])
+    return operation, authorization, payment
+
+
+def _statement_item(
+    *,
+    stable_key: str,
+    occurred_at: datetime,
+    operation_kind: str = "AUTHORIZE",
+    amount: int = 100_000,
+    currency: str = "INR",
+    status: str = "SUCCEEDED",
+) -> dict[str, object]:
+    return {
+        "providerItemId": f"provider_{uuid.uuid4().hex}",
+        "stableKey": stable_key,
+        "operationKind": operation_kind,
+        "amount": amount,
+        "currency": currency,
+        "status": status,
+        "occurredAt": occurred_at.isoformat(),
+    }
+
+
+def test_leased_reconciliation_is_deterministic_and_covers_seeded_mismatches() -> None:
+    engine, principal, environment = _seed_identity()
+    factory = build_session_factory(engine)
+    now = datetime.now(UTC)
+    with factory() as session, session.begin():
+        customer = Customer(
+            public_id=new_public_id("cus"),
+            organisation_id=principal.organisation_id,
+            environment_id=environment.id,
+            merchant_customer_reference=f"m2-customer-{uuid.uuid4().hex}",
+            display_name="Synthetic M2 customer",
+        )
+        session.add(customer)
+        session.flush([customer])
+        exact, exact_authorization, exact_payment = _add_authorization(
+            session,
+            principal=principal,
+            environment=environment,
+            customer=customer,
+            stable_key=f"authorize:exact:{uuid.uuid4().hex}",
+        )
+        amount_mismatch, _, _ = _add_authorization(
+            session,
+            principal=principal,
+            environment=environment,
+            customer=customer,
+            stable_key=f"authorize:amount:{uuid.uuid4().hex}",
+        )
+        currency_mismatch, _, _ = _add_authorization(
+            session,
+            principal=principal,
+            environment=environment,
+            customer=customer,
+            stable_key=f"authorize:currency:{uuid.uuid4().hex}",
+        )
+        status_mismatch, _, _ = _add_authorization(
+            session,
+            principal=principal,
+            environment=environment,
+            customer=customer,
+            stable_key=f"authorize:status:{uuid.uuid4().hex}",
+        )
+        duplicate, _, _ = _add_authorization(
+            session,
+            principal=principal,
+            environment=environment,
+            customer=customer,
+            stable_key=f"authorize:duplicate:{uuid.uuid4().hex}",
+        )
+        _add_authorization(
+            session,
+            principal=principal,
+            environment=environment,
+            customer=customer,
+            stable_key=f"authorize:missing-provider:{uuid.uuid4().hex}",
+        )
+        capture_id = new_uuid()
+        capture_operation = ProviderOperation(
+            id=new_uuid(),
+            public_id=new_public_id("op"),
+            organisation_id=principal.organisation_id,
+            environment_id=environment.id,
+            payment_intent_id=exact_payment.id,
+            resource_type="CAPTURE",
+            resource_id=capture_id,
+            kind="CAPTURE",
+            stable_provider_key=f"capture:missing-journal:{uuid.uuid4().hex}",
+            status="PROCESSING",
+            attempt_count=0,
+            apply_failure_count=0,
+        )
+        capture = Capture(
+            id=capture_id,
+            public_id=new_public_id("cap"),
+            organisation_id=principal.organisation_id,
+            environment_id=environment.id,
+            payment_intent_id=exact_payment.id,
+            authorization_id=exact_authorization.id,
+            provider_operation_id=capture_operation.id,
+            amount=100_000,
+            currency="INR",
+            status="PROCESSING",
+        )
+        session.add_all([capture_operation, capture])
+
+    items = [
+        _statement_item(stable_key=exact.stable_provider_key, occurred_at=now),
+        _statement_item(
+            stable_key=amount_mismatch.stable_provider_key, occurred_at=now, amount=100_001
+        ),
+        _statement_item(
+            stable_key=currency_mismatch.stable_provider_key, occurred_at=now, currency="USD"
+        ),
+        _statement_item(
+            stable_key=status_mismatch.stable_provider_key, occurred_at=now, status="DECLINED"
+        ),
+        _statement_item(stable_key=duplicate.stable_provider_key, occurred_at=now),
+        _statement_item(stable_key=duplicate.stable_provider_key, occurred_at=now),
+        _statement_item(stable_key=f"authorize:absent:{uuid.uuid4().hex}", occurred_at=now),
+        _statement_item(
+            stable_key=capture_operation.stable_provider_key,
+            occurred_at=now,
+            operation_kind="CAPTURE",
+            status="SUCCEEDED",
+        ),
+    ]
+    raw_bytes = json.dumps({"items": items}, separators=(",", ":"), sort_keys=True).encode()
+    import_arguments = ImportArguments(
+        principal=principal,
+        environment_public_id=environment.public_id,
+        provider="PAYMENT_PROVIDER",
+        source_reference=f"seeded-mismatches-{uuid.uuid4().hex}",
+        source_format="JSON",
+        period_start=now - timedelta(minutes=1),
+        period_end=now + timedelta(minutes=1),
+        raw_bytes=raw_bytes,
+    )
+    with factory() as session, session.begin():
+        imported = import_statement(session, **import_arguments)
+        run_id = imported.reconciliation_run.id
+
+    claim = claim_reconciliation_run(factory, run_id=run_id)
+    assert claim is not None
+    assert process_reconciliation_claim(factory, claim)
+
+    with factory() as session, session.begin():
+        run = session.get(ReconciliationRun, run_id)
+        assert run is not None
+        assert run.status == "COMPLETED"
+        mismatch_types = set(
+            session.scalars(
+                select(ReconciliationMismatch.mismatch_type).where(
+                    ReconciliationMismatch.reconciliation_run_id == run_id
+                )
+            )
+        )
+        assert mismatch_types == {
+            "MISSING_INTERNAL_TRANSACTION",
+            "MISSING_PROVIDER_TRANSACTION",
+            "AMOUNT_MISMATCH",
+            "CURRENCY_MISMATCH",
+            "STATUS_MISMATCH",
+            "DUPLICATE_PROVIDER_EFFECT",
+            "MISSING_INTERNAL_JOURNAL",
+        }
+        match_count = session.scalar(
+            select(func.count())
+            .select_from(ReconciliationMatch)
+            .where(ReconciliationMatch.reconciliation_run_id == run_id)
+        )
+        mismatch_count = session.scalar(
+            select(func.count())
+            .select_from(ReconciliationMismatch)
+            .where(ReconciliationMismatch.reconciliation_run_id == run_id)
+        )
+        evidence_count = session.scalar(
+            select(func.count())
+            .select_from(MismatchEvidenceVersion)
+            .join(
+                ReconciliationMismatch,
+                ReconciliationMismatch.id == MismatchEvidenceVersion.reconciliation_mismatch_id,
+            )
+            .where(ReconciliationMismatch.reconciliation_run_id == run_id)
+        )
+        history_count = session.scalar(
+            select(func.count())
+            .select_from(MismatchWorkflowHistory)
+            .join(
+                ReconciliationMismatch,
+                ReconciliationMismatch.id == MismatchWorkflowHistory.reconciliation_mismatch_id,
+            )
+            .where(ReconciliationMismatch.reconciliation_run_id == run_id)
+        )
+        assert match_count == 1
+        assert mismatch_count == evidence_count == history_count == 9
+        workflow_mismatch = session.scalar(
+            select(ReconciliationMismatch).where(
+                ReconciliationMismatch.reconciliation_run_id == run_id,
+                ReconciliationMismatch.mismatch_type == "MISSING_INTERNAL_TRANSACTION",
+            )
+        )
+        assert workflow_mismatch is not None
+        workflow_mismatch_id = workflow_mismatch.public_id
+        first_evidence = session.scalar(
+            select(MismatchEvidenceVersion).where(
+                MismatchEvidenceVersion.reconciliation_mismatch_id == workflow_mismatch.id,
+                MismatchEvidenceVersion.version == 1,
+            )
+        )
+        assert first_evidence is not None
+        first_evidence_digest = first_evidence.evidence_sha256
+
+    with factory() as session, session.begin():
+        refreshed = refresh_mismatch_evidence(
+            session,
+            principal=principal,
+            environment_public_id=environment.public_id,
+            mismatch_public_id=workflow_mismatch_id,
+        )
+        assert refreshed.version == 2
+    with factory() as session, session.begin():
+        acknowledged = acknowledge_mismatch(
+            session,
+            principal=principal,
+            environment_public_id=environment.public_id,
+            mismatch_public_id=workflow_mismatch_id,
+            note="Synthetic operator reviewed the immutable evidence.",
+        )
+        assert acknowledged.workflow_status == "ACKNOWLEDGED"
+    with factory() as session, session.begin():
+        resolved = resolve_mismatch(
+            session,
+            principal=principal,
+            environment_public_id=environment.public_id,
+            mismatch_public_id=workflow_mismatch_id,
+            note="Synthetic discrepancy was resolved without changing payment outcome.",
+        )
+        assert resolved.workflow_status == "RESOLVED"
+        assert resolved.compensating_journal_id is None
+    with factory() as session, session.begin():
+        with pytest.raises(RelayPayError) as invalid_transition:
+            acknowledge_mismatch(
+                session,
+                principal=principal,
+                environment_public_id=environment.public_id,
+                mismatch_public_id=workflow_mismatch_id,
+                note="A resolved mismatch cannot be acknowledged again.",
+            )
+        assert invalid_transition.value.code == "INVALID_MISMATCH_TRANSITION"
+        persisted_versions = list(
+            session.scalars(
+                select(MismatchEvidenceVersion)
+                .join(
+                    ReconciliationMismatch,
+                    ReconciliationMismatch.id == MismatchEvidenceVersion.reconciliation_mismatch_id,
+                )
+                .where(ReconciliationMismatch.public_id == workflow_mismatch_id)
+                .order_by(MismatchEvidenceVersion.version)
+            )
+        )
+        assert [version.version for version in persisted_versions] == [1, 2]
+        assert persisted_versions[0].evidence_sha256 == first_evidence_digest
+        workflow_history = list(
+            session.scalars(
+                select(MismatchWorkflowHistory)
+                .join(
+                    ReconciliationMismatch,
+                    ReconciliationMismatch.id == MismatchWorkflowHistory.reconciliation_mismatch_id,
+                )
+                .where(ReconciliationMismatch.public_id == workflow_mismatch_id)
+                .order_by(MismatchWorkflowHistory.created_at, MismatchWorkflowHistory.id)
+            )
+        )
+        assert [entry.to_status for entry in workflow_history] == [
+            "OPEN",
+            "ACKNOWLEDGED",
+            "RESOLVED",
+        ]
+
+    with factory() as session, session.begin():
+        replay = import_statement(session, **import_arguments)
+        assert not replay.created
+        assert replay.reconciliation_run.id == run_id
+    assert claim_reconciliation_run(factory, run_id=run_id) is None
+    with factory() as session, session.begin():
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ReconciliationMismatch)
+                .where(ReconciliationMismatch.reconciliation_run_id == run_id)
+            )
+            == mismatch_count
+        )
+    engine.dispose()
+
+
+def test_expired_reconciliation_lease_is_reclaimed_and_stale_claim_is_rejected() -> None:
+    engine, principal, environment = _seed_identity()
+    factory = build_session_factory(engine)
+    now = datetime.now(UTC)
+    with factory() as session, session.begin():
+        imported = import_statement(
+            session,
+            principal=principal,
+            environment_public_id=environment.public_id,
+            provider="PAYMENT_PROVIDER",
+            source_reference=f"lease-reclaim-{uuid.uuid4().hex}",
+            source_format="JSON",
+            period_start=now - timedelta(minutes=1),
+            period_end=now + timedelta(minutes=1),
+            raw_bytes=b'{"items":[]}',
+        )
+        run_id = imported.reconciliation_run.id
+    stale = claim_reconciliation_run(factory, run_id=run_id, lease_seconds=-1)
+    assert stale is not None
+    reclaimed = claim_reconciliation_run(factory, run_id=run_id)
+    assert reclaimed is not None
+    assert reclaimed.lease_token != stale.lease_token
+    assert not process_reconciliation_claim(factory, stale)
+    assert process_reconciliation_claim(factory, reclaimed)
+    with factory() as session, session.begin():
+        run = session.get(ReconciliationRun, run_id)
+        assert run is not None
+        assert run.status == "COMPLETED"
+        assert run.attempt_count == 2
     engine.dispose()

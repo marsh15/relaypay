@@ -27,5 +27,9 @@ app.conf.update(
             "task": "relaypay.deliver_webhooks",
             "schedule": 1.0,
         },
+        "reconcile-statements": {
+            "task": "relaypay.reconcile_statements",
+            "schedule": 1.0,
+        },
     },
 )

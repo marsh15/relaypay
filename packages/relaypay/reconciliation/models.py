@@ -76,7 +76,7 @@ class StatementItem(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint("ordinal > 0"),
         CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND')"),
         CheckConstraint("amount > 0"),
-        CheckConstraint("currency = 'INR'"),
+        CheckConstraint("currency ~ '^[A-Z]{3}$'"),
         CheckConstraint("provider_status IN ('PENDING', 'SUCCEEDED', 'DECLINED')"),
         Index("ix_statement_items_stable_key", "statement_import_id", "stable_key"),
     )
