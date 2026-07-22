@@ -40,6 +40,9 @@ jobs:
       - name: Prove v0.1 upgrade and deterministic M1 backfill
         run: uv run python -m scripts.verify_m1_upgrade
 
+      - name: Prove v0.2 upgrade without rewriting evidence
+        run: uv run python -m scripts.verify_m2_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
