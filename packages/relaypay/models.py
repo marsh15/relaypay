@@ -18,6 +18,15 @@ from relaypay.provider_operations.models import (
     ProviderAttempt,
     ProviderOperation,
 )
+from relaypay.reconciliation.models import (
+    MismatchEvidenceVersion,
+    MismatchWorkflowHistory,
+    ReconciliationMatch,
+    ReconciliationMismatch,
+    ReconciliationRun,
+    StatementImport,
+    StatementItem,
+)
 
 __all__ = [
     "APIKey",
@@ -29,15 +38,22 @@ __all__ = [
     "Journal",
     "LedgerAccount",
     "MerchantEvent",
+    "MismatchEvidenceVersion",
+    "MismatchWorkflowHistory",
     "OperationHistory",
     "Organisation",
     "PaymentIntent",
     "Posting",
     "ProviderAttempt",
     "ProviderOperation",
+    "ReconciliationMatch",
+    "ReconciliationMismatch",
+    "ReconciliationRun",
     "Refund",
     "ScenarioRun",
     "SessionRecord",
+    "StatementImport",
+    "StatementItem",
     "User",
     "WebhookDelivery",
     "WebhookDeliveryAttempt",
