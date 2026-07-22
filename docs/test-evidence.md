@@ -124,3 +124,50 @@ green.
 
 The later canonical GitHub runs listed above resolved this publication gate. The local timeout
 remains documented as historical evidence and is not represented as a successful local image run.
+
+## v0.3.0 release-candidate evidence
+
+Measured at `2026-07-22T06:09:10Z` (`2026-07-22T11:39:10+05:30`) on clean implementation
+commit `4d056a8e719ec65890fe821d120ab74cfcc74067`. This evidence-only update does not change
+the tested runtime.
+
+- Upgrade compatibility: the permanent `scripts.verify_m1_upgrade` proof passed from the v0.1
+  schema through head with deterministic TEST/LIVE_LIKE backfill and unchanged immutable
+  evidence. `scripts.verify_m2_upgrade` then upgraded representative v0.2 RelayPay and provider
+  fixtures in disposable schemas, verified every pre-existing table digest was unchanged, and
+  confirmed all nine new statement/reconciliation tables started empty.
+- Reconciliation contract: seven focused HTTP/domain integration tests covered bounded JSON and
+  CSV parsing, exact raw digests, CSRF and role denial, concurrent source replay serialization,
+  `STATEMENT_SOURCE_CONFLICT`, immutable rows, all seven mismatch types, exact matches,
+  `SKIP LOCKED` lease reclaim, stale-token rejection, run/item/mismatch deduplication, immutable
+  evidence refresh, and `OPEN → ACKNOWLEDGED → RESOLVED` history.
+- Backend: Ruff lint passed and formatting reported `110 files already formatted`; strict mypy
+  reported `Success: no issues found in 76 source files`; pytest reported `76 passed in 11.57s`.
+- Database: RelayPay, provider, and receiver drift checks each reported
+  `No new upgrade operations detected` after the fresh migration and seed sequence.
+- Console: ESLint, strict TypeScript, and the Next.js `16.2.11` production build passed. The
+  production dependency audit reported `found 0 vulnerabilities`.
+- Compose: configuration validation passed. Images rebuilt with RelayPay `0.3.0`; fresh
+  PostgreSQL/Redis state migrated and seeded inside Compose, and provider, receiver, API, and
+  console became healthy.
+- Browser: the single Playwright lost-response journey, including axe analysis, passed in `5.9s`
+  (`4.8s` test body) on the final clean container-seeded graph.
+- Reconciliation demo: the provider exported two exact items; the API imported immutable bytes
+  with SHA-256 `5975ac49ff866f20cc6c28b60907cb4cfa2a48b506846d419899fd9796ce7c48`;
+  the leased worker completed the run with zero mismatches in the seeded TEST environment.
+- Permanent CLI: exactly one provider effect, capture, balanced journal, event, recipient,
+  delivery, and receiver row were measured; two idempotency records retained stable replay bytes.
+- Publication safety: the tracked-file credential-pattern scan returned no matches. The MIT
+  license and synthetic-data/no-hosting warnings remain present.
+
+Tooling: Python `3.12.12`, uv `0.10.4`, Node.js `26.4.0`, npm `11.17.0`, Docker `29.5.2`, and
+Docker Compose `5.1.3`.
+
+## v0.3.0 invalid local browser setup (not passing evidence)
+
+The first local Playwright attempt reused a host-seeded volume whose webhook endpoint was
+`localhost:8002`; inside Compose, the enforced allowlist is `receiver:8002`. PostgreSQL recorded
+three `WEBHOOK_TRANSPORT_ERROR` attempts and the scenario correctly entered `NEEDS_INSPECTION`.
+No application assertion was represented as passing. The volume was discarded, the release
+surface was recreated from empty state using container-native migration/seed configuration, and
+the Playwright/axe rerun above passed. CI repeats that clean-volume sequence and remains canonical.
