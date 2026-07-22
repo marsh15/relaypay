@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
 import pytest
+from fastapi.testclient import TestClient
+from relaypay.config import Settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import canonical_json_bytes
@@ -44,6 +46,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
+
+from apps.api.main import create_app
 
 pytestmark = pytest.mark.integration
 
@@ -697,4 +701,80 @@ def test_expired_reconciliation_lease_is_reclaimed_and_stale_claim_is_rejected()
         assert run is not None
         assert run.status == "COMPLETED"
         assert run.attempt_count == 2
+    engine.dispose()
+
+
+def test_statement_import_http_contract_enforces_csrf_replay_and_conflict() -> None:
+    engine, principal, environment = _seed_identity()
+    factory = build_session_factory(engine)
+    with factory() as session, session.begin():
+        user = session.get(User, principal.user_id)
+        assert user is not None
+        email = user.email_normalized
+    settings = Settings(
+        APP_ENV="test",
+        RELAYPAY_DATABASE_URL=DATABASE_URL,
+        PROVIDER_DATABASE_URL=(
+            "postgresql+psycopg://provider_app:provider_app_dev@localhost:55432/provider"
+        ),
+        RECEIVER_DATABASE_URL=(
+            "postgresql+psycopg://receiver_app:receiver_app_dev@localhost:55432/relaypay"
+        ),
+        SESSION_SECRET="m2-session-secret-for-tests-at-least-32-bytes",
+        CSRF_SECRET="m2-csrf-secret-for-tests-at-least-32-bytes",
+        API_KEY_PEPPER="m2-api-key-pepper-for-tests-at-least-32-bytes",
+        IDEMPOTENCY_KEY_PEPPER="m2-idempotency-pepper-for-tests",
+        WEBHOOK_SECRET_ENCRYPTION_KEY="unused-in-m2-http-tests",
+        PROVIDER_SIGNING_SECRET="m2-provider-signing-test",
+        PROVIDER_CONTROL_SECRET="m2-provider-control-test",
+        RECEIVER_WEBHOOK_SECRET="m2-receiver-webhook-test",
+    )
+    now = datetime.now(UTC)
+    raw_bytes = _statement(now)
+    source_reference = f"http-import-{uuid.uuid4().hex}"
+    form = {
+        "provider": "PAYMENT_PROVIDER",
+        "sourceReference": source_reference,
+        "sourceFormat": "JSON",
+        "periodStart": (now - timedelta(minutes=1)).isoformat(),
+        "periodEnd": (now + timedelta(minutes=1)).isoformat(),
+    }
+    path = f"/api/admin/v1/environments/{environment.public_id}/statement-imports"
+    with TestClient(create_app(settings)) as client:
+        login = client.post(
+            "/api/session/login",
+            json={"email": email, "password": "Synthetic-M2-Admin-Password!"},
+        )
+        assert login.status_code == 200
+        headers = {"X-CSRF-Token": login.json()["csrfToken"]}
+        first = client.post(
+            path,
+            headers=headers,
+            data=form,
+            files={"statement": ("statement.json", raw_bytes, "application/json")},
+        )
+        replay = client.post(
+            path,
+            headers=headers,
+            data=form,
+            files={"statement": ("statement.json", raw_bytes, "application/json")},
+        )
+        assert first.status_code == 201, first.text
+        assert replay.status_code == 200, replay.text
+        assert first.json() == replay.json()
+        conflict = client.post(
+            path,
+            headers=headers,
+            data=form,
+            files={"statement": ("statement.json", _statement(now, amount=1), "application/json")},
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["error"]["code"] == "STATEMENT_SOURCE_CONFLICT"
+        missing_csrf = client.post(
+            path,
+            data=form | {"sourceReference": f"no-csrf-{uuid.uuid4().hex}"},
+            files={"statement": ("statement.json", raw_bytes, "application/json")},
+        )
+        assert missing_csrf.status_code == 403
+        assert missing_csrf.json()["error"]["code"] == "CSRF_INVALID"
     engine.dispose()
