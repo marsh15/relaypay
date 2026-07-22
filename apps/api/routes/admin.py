@@ -17,9 +17,12 @@ from relaypay.identity.service import (
     activate_api_key_version,
     create_api_key,
     list_environments,
+    list_memberships,
     provision_organisation,
     revoke_api_key,
     rotate_api_key,
+    set_api_key_scopes,
+    set_membership,
 )
 from relaypay.provider_operations.service import ProviderTransport
 from sqlalchemy.orm import Session, sessionmaker
@@ -40,6 +43,18 @@ class APIKeyCreate(BaseModel):
 class OrganisationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     name: str = Field(min_length=1, max_length=128)
+
+
+class MembershipUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    email: str = Field(min_length=3, max_length=320)
+    role: Literal["ORGANISATION_ADMIN", "DEVELOPER", "VIEWER"]
+    status: Literal["ACTIVE", "DISABLED"] = "ACTIVE"
+
+
+class APIKeyScopesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    scopes: list[str] = Field(min_length=1, max_length=32)
 
 
 def build_admin_router(
@@ -86,6 +101,41 @@ def build_admin_router(
         with session_factory() as session, session.begin():
             organisation = provision_organisation(session, principal=principal, name=payload.name)
             return {"id": organisation.public_id, "name": organisation.name}
+
+    @router.get("/admin/v1/memberships")
+    def get_memberships(principal: PrincipalDep) -> list[dict[str, str]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "userId": str(user.id),
+                    "email": user.email_normalized,
+                    "displayName": user.display_name,
+                    "role": membership.role,
+                    "status": membership.status,
+                }
+                for membership, user in list_memberships(session, principal)
+            ]
+
+    @router.put("/admin/v1/memberships")
+    def put_membership(
+        payload: MembershipUpdate,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, str]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            membership = set_membership(
+                session,
+                principal=principal,
+                email=payload.email,
+                role=payload.role,
+                status=payload.status,
+            )
+            return {
+                "userId": str(membership.user_id),
+                "role": membership.role,
+                "status": membership.status,
+            }
 
     @router.post("/admin/v1/environments/{environment_id}/api-keys", status_code=201)
     def post_api_key(
@@ -173,6 +223,25 @@ def build_admin_router(
                 key_public_id=key_id,
             )
         return {"id": key_id, "status": "REVOKED"}
+
+    @router.patch("/admin/v1/environments/{environment_id}/api-keys/{key_id}/scopes")
+    def patch_api_key_scopes(
+        environment_id: str,
+        key_id: str,
+        payload: APIKeyScopesUpdate,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            key = set_api_key_scopes(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                key_public_id=key_id,
+                scopes=payload.scopes,
+            )
+            return {"id": key.public_id, "scopes": key.scopes}
 
     @router.post("/demo/scenarios", status_code=201)
     def create_scenario(

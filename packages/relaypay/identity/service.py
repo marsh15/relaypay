@@ -12,6 +12,7 @@ from relaypay.identity.models import (
     Environment,
     Organisation,
     OrganisationMembership,
+    User,
 )
 from relaypay.identity.security import IssuedAPIKey, Principal, issue_api_key
 from relaypay.ids import new_public_id
@@ -86,6 +87,63 @@ def list_environments(session: Session, principal: Principal) -> list[Environmen
             .order_by(Environment.environment_type.desc())
         )
     )
+
+
+def list_memberships(
+    session: Session, principal: Principal
+) -> list[tuple[OrganisationMembership, User]]:
+    return list(
+        session.execute(
+            select(OrganisationMembership, User)
+            .join(User, User.id == OrganisationMembership.user_id)
+            .where(OrganisationMembership.organisation_id == principal.organisation_id)
+            .order_by(User.email_normalized)
+        ).tuples()
+    )
+
+
+def set_membership(
+    session: Session,
+    *,
+    principal: Principal,
+    email: str,
+    role: str,
+    status: str,
+) -> OrganisationMembership:
+    require_organisation_admin(principal)
+    user = session.scalar(select(User).where(User.email_normalized == email.strip().casefold()))
+    if user is None:
+        raise not_found("User")
+    membership = session.scalar(
+        select(OrganisationMembership)
+        .where(
+            OrganisationMembership.organisation_id == principal.organisation_id,
+            OrganisationMembership.user_id == user.id,
+        )
+        .with_for_update()
+    )
+    action = "MEMBERSHIP_UPDATED"
+    if membership is None:
+        membership = OrganisationMembership(
+            organisation_id=principal.organisation_id,
+            user_id=user.id,
+            role=role,
+            status=status,
+        )
+        session.add(membership)
+        action = "MEMBERSHIP_CREATED"
+    else:
+        membership.role = role
+        membership.status = status
+    append_audit(
+        session,
+        principal=principal,
+        action=action,
+        target_type="ORGANISATION_MEMBERSHIP",
+        target_id=str(user.id),
+        details={"role": role, "status": status},
+    )
+    return membership
 
 
 def _environment(session: Session, principal: Principal, public_id: str) -> Environment:
@@ -240,6 +298,7 @@ def activate_api_key_version(
         if item.status == "ACTIVE":
             item.status = "REVOKED"
             item.revoked_at = now
+    session.flush()
     target.status = "ACTIVE"
     target.activated_at = now
     append_audit(
@@ -286,3 +345,38 @@ def revoke_api_key(
         target_type="API_KEY",
         target_id=key.public_id,
     )
+
+
+def set_api_key_scopes(
+    session: Session,
+    *,
+    principal: Principal,
+    environment_public_id: str,
+    key_public_id: str,
+    scopes: list[str],
+) -> APIKey:
+    require_organisation_admin(principal)
+    environment = _environment(session, principal, environment_public_id)
+    key = session.scalar(
+        select(APIKey)
+        .where(
+            APIKey.organisation_id == principal.organisation_id,
+            APIKey.environment_id == environment.id,
+            APIKey.public_id == key_public_id,
+            APIKey.status == "ACTIVE",
+        )
+        .with_for_update()
+    )
+    if key is None:
+        raise not_found("API key")
+    key.scopes = scopes
+    append_audit(
+        session,
+        principal=principal,
+        environment_id=environment.id,
+        action="API_KEY_SCOPES_CHANGED",
+        target_type="API_KEY",
+        target_id=key.public_id,
+        details={"scopes": scopes},
+    )
+    return key
