@@ -11,7 +11,12 @@ from relaypay.identity.models import (
     OrganisationMembership,
     User,
 )
-from relaypay.identity.security import Principal, authenticate_api_key, hash_password
+from relaypay.identity.security import (
+    Principal,
+    authenticate_api_key,
+    hash_password,
+    issue_session,
+)
 from relaypay.identity.service import (
     activate_api_key_version,
     create_api_key,
@@ -22,6 +27,8 @@ from relaypay.identity.service import (
 )
 from relaypay.ids import new_public_id
 from sqlalchemy import select
+
+from scripts.bootstrap_platform_admin import bootstrap_platform_admin
 
 pytestmark = pytest.mark.integration
 
@@ -184,4 +191,65 @@ def test_memberships_key_rotation_scopes_revocation_and_audits() -> None:
                 status="ACTIVE",
             )
         assert denied.value.http_status == 403
+    engine.dispose()
+
+
+def test_platform_bootstrap_is_idempotent_and_sessions_select_an_organisation() -> None:
+    engine = build_engine(DATABASE_URL, application_name="m1-bootstrap-test")
+    factory = build_session_factory(engine)
+    email = f"platform-{uuid.uuid4().hex}@example.test"
+    password = "Synthetic-M1-Platform-Password!"
+    with factory() as session, session.begin():
+        assert bootstrap_platform_admin(
+            session, email=email, password=password, display_name="M1 platform admin"
+        )
+    with factory() as session, session.begin():
+        assert not bootstrap_platform_admin(
+            session,
+            email=email,
+            password="Different-Password-Not-Applied!",
+            display_name="Different name not applied",
+        )
+        user = session.scalar(select(User).where(User.email_normalized == email))
+        assert user is not None
+        memberships = list(
+            session.scalars(
+                select(OrganisationMembership).where(OrganisationMembership.user_id == user.id)
+            )
+        )
+        assert len(memberships) == 1
+        second_organisation = Organisation(
+            public_id=new_public_id("org"), name="Second context", status="ACTIVE"
+        )
+        session.add(second_organisation)
+        session.flush()
+        session.add(
+            OrganisationMembership(
+                organisation_id=second_organisation.id,
+                user_id=user.id,
+                role="VIEWER",
+                status="ACTIVE",
+            )
+        )
+    with factory() as session, session.begin():
+        with pytest.raises(RelayPayError) as context_required:
+            issue_session(
+                session,
+                email=email,
+                password=password,
+                session_secret="m1-session-secret-at-least-32-bytes",
+                csrf_secret="m1-csrf-secret-at-least-32-bytes",
+            )
+        assert context_required.value.code == "ORGANISATION_CONTEXT_REQUIRED"
+        issued = issue_session(
+            session,
+            email=email,
+            password=password,
+            organisation_public_id=second_organisation.public_id,
+            session_secret="m1-session-secret-at-least-32-bytes",
+            csrf_secret="m1-csrf-secret-at-least-32-bytes",
+        )
+        assert issued.principal.organisation_public_id == second_organisation.public_id
+        assert issued.principal.membership_role == "VIEWER"
+        assert issued.principal.platform_role == "PLATFORM_ADMIN"
     engine.dispose()

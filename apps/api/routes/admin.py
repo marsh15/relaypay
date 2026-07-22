@@ -19,6 +19,7 @@ from relaypay.identity.service import (
     list_environments,
     list_memberships,
     provision_organisation,
+    require_organisation_admin,
     revoke_api_key,
     rotate_api_key,
     set_api_key_scopes,
@@ -250,6 +251,7 @@ def build_admin_router(
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
         require_csrf(principal, csrf_token)
+        require_organisation_admin(principal)
         result = run_lost_capture_scenario(
             session_factory,
             organisation_id=principal.organisation_id,
@@ -285,6 +287,7 @@ def build_admin_router(
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, str]:
         require_csrf(principal, csrf_token)
+        require_organisation_admin(principal)
         replay_id = replay_delivery(
             session_factory,
             organisation_id=principal.organisation_id,

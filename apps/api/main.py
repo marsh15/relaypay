@@ -25,6 +25,7 @@ from relaypay.identity.security import (
     rotate_csrf,
     verify_csrf,
 )
+from relaypay.identity.service import require_organisation_admin
 from relaypay.payments.service import read_operation
 from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import HTTPProviderTransport, ProviderTransport
@@ -322,6 +323,7 @@ def create_app(
                 csrf_token=csrf_token,
                 csrf_secret=resolved.CSRF_SECRET.get_secret_value(),
             )
+        require_organisation_admin(principal)
         claim = claim_specific_operation(
             session_factory,
             organisation_id=principal.organisation_id,
