@@ -5,6 +5,7 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -169,6 +170,10 @@ class ReconciliationMatch(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
                 "provider_operations.id",
             ],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "journal_id"],
+            ["journals.organisation_id", "journals.environment_id", "journals.id"],
+        ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("reconciliation_run_id", "statement_item_id"),
         CheckConstraint("match_type IN ('EXACT', 'DECLINED_WITHOUT_JOURNAL')"),
@@ -179,6 +184,7 @@ class ReconciliationMatch(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     reconciliation_run_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     statement_item_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    journal_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     match_type: Mapped[str] = mapped_column(String(32), nullable=False)
     evidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
 
@@ -314,7 +320,7 @@ class MismatchWorkflowHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     reconciliation_mismatch_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     from_status: Mapped[str | None] = mapped_column(String(16))
     to_status: Mapped[str] = mapped_column(String(16), nullable=False)
-    actor_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     note: Mapped[str | None] = mapped_column(String(1000))
 
 
