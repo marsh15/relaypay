@@ -187,7 +187,9 @@ def main() -> None:
                 )
             )
             before = _historical_evidence(connection)
-        command.upgrade(config, "head")
+        # This is the permanent M3 boundary proof. Later migrations have their
+        # own upgrade proofs and must not be folded into this transaction.
+        command.upgrade(config, "0009_merchant_balances")
         with engine.begin() as connection:
             _verify_m3(connection, before)
         engine.dispose()
