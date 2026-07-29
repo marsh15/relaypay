@@ -259,3 +259,11 @@ healthy.
 The first Playwright launch was blocked by the local process sandbox before a browser page opened
 (`MachPortRendezvousServer: Permission denied`). It was rerun unchanged with the required macOS
 process permission against the same clean stack and passed as recorded above.
+
+The first PR gate, GitHub Actions run
+[30470963237](https://github.com/marsh15/relaypay/actions/runs/30470963237), stopped in the
+permanent M1 upgrade proof. That proof counted M3's new LIVE_LIKE ledger templates and opening
+journal as if they were v0.1 rows. No later step ran and the result is not passing evidence.
+Commit `32985c3` corrected the proof boundary: the M1 check snapshots exact legacy IDs and bytes,
+the M2 check ends at its `0008_statement_currency` milestone boundary, and the separate M3 check
+owns `0008→head`. Fresh/disposable local reruns of all three upgrade proofs then passed.
