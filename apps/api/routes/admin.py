@@ -35,6 +35,13 @@ from relaypay.merchant_balances.service import (
     read_admin_balances,
     run_settlement,
 )
+from relaypay.payouts.service import (
+    create_beneficiary,
+    create_payout,
+    create_retry,
+    list_beneficiaries,
+    list_payouts,
+)
 from relaypay.provider_operations.service import ProviderTransport
 from relaypay.reconciliation.service import (
     MAX_STATEMENT_BYTES,
@@ -93,6 +100,21 @@ class MerchantAccountCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     reference: str = Field(min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=128)
+
+
+class BeneficiaryCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reference: str = Field(min_length=1, max_length=128)
+    display_name: str = Field(alias="displayName", min_length=1, max_length=128)
+    bank_account_reference: str = Field(alias="bankAccountReference", min_length=1, max_length=128)
+
+
+class PayoutCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    merchant_account_id: str = Field(alias="merchantAccountId", min_length=1, max_length=64)
+    beneficiary_id: str = Field(alias="beneficiaryId", min_length=1, max_length=64)
+    amount: int = Field(strict=True, gt=0)
+    currency: Literal["INR"]
 
 
 def build_admin_router(
@@ -263,6 +285,133 @@ def build_admin_router(
             idempotency_key=idempotency_key,
             fingerprint=fingerprint,
             key_pepper=settings.API_KEY_PEPPER.get_secret_value(),
+        )
+        headers = {"Content-Type": "application/json"}
+        if result.replayed:
+            headers["Idempotency-Replayed"] = "true"
+        return Response(content=result.body, status_code=result.status_code, headers=headers)
+
+    @router.get("/admin/v1/environments/{environment_id}/beneficiaries")
+    def get_beneficiaries(environment_id: str, principal: PrincipalDep) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "id": item.public_id,
+                    "reference": item.reference,
+                    "displayName": item.display_name,
+                    "bankAccountReference": item.bank_account_reference,
+                    "currency": item.currency,
+                    "status": item.status,
+                }
+                for item in list_beneficiaries(
+                    session,
+                    principal=principal,
+                    environment_public_id=environment_id,
+                )
+            ]
+
+    @router.post("/admin/v1/environments/{environment_id}/beneficiaries", status_code=201)
+    def post_beneficiary(
+        environment_id: str,
+        payload: BeneficiaryCreate,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            item = create_beneficiary(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                reference=payload.reference,
+                display_name=payload.display_name,
+                bank_account_reference=payload.bank_account_reference,
+            )
+            return {
+                "id": item.public_id,
+                "reference": item.reference,
+                "displayName": item.display_name,
+                "bankAccountReference": item.bank_account_reference,
+                "currency": item.currency,
+                "status": item.status,
+            }
+
+    @router.get("/admin/v1/environments/{environment_id}/payouts")
+    def get_payouts(environment_id: str, principal: PrincipalDep) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "id": item.public_id,
+                    "amount": item.amount,
+                    "currency": item.currency,
+                    "status": item.status,
+                    "failureCode": item.failure_code,
+                    "reviewReason": item.review_reason,
+                }
+                for item in list_payouts(
+                    session,
+                    principal=principal,
+                    environment_public_id=environment_id,
+                )
+            ]
+
+    @router.post("/admin/v1/environments/{environment_id}/payouts")
+    def post_payout(
+        environment_id: str,
+        payload: PayoutCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1)],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        require_csrf(principal, csrf_token)
+        fingerprint = build_fingerprint(
+            api_version="admin-v1",
+            method="POST",
+            route_template="/environments/{environment_id}/payouts",
+            path_params={"environment_id": environment_id},
+            body=payload,
+        )
+        result = create_payout(
+            session_factory,
+            principal=principal,
+            environment_public_id=environment_id,
+            merchant_public_id=payload.merchant_account_id,
+            beneficiary_public_id=payload.beneficiary_id,
+            amount=payload.amount,
+            idempotency_key=idempotency_key,
+            fingerprint=fingerprint,
+            key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
+        )
+        headers = {"Content-Type": "application/json"}
+        if result.replayed:
+            headers["Idempotency-Replayed"] = "true"
+        return Response(content=result.body, status_code=result.status_code, headers=headers)
+
+    @router.post("/admin/v1/environments/{environment_id}/payouts/{payout_id}/attempts")
+    def post_payout_retry(
+        environment_id: str,
+        payout_id: str,
+        payload: EmptyCommand,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1)],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        require_csrf(principal, csrf_token)
+        fingerprint = build_fingerprint(
+            api_version="admin-v1",
+            method="POST",
+            route_template="/environments/{environment_id}/payouts/{payout_id}/attempts",
+            path_params={"environment_id": environment_id, "payout_id": payout_id},
+            body=payload,
+        )
+        result = create_retry(
+            session_factory,
+            principal=principal,
+            environment_public_id=environment_id,
+            payout_public_id=payout_id,
+            idempotency_key=idempotency_key,
+            fingerprint=fingerprint,
+            key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
         )
         headers = {"Content-Type": "application/json"}
         if result.replayed:

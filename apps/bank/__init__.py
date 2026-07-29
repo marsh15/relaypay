@@ -1,0 +1,1 @@
+"""Synthetic bank boundary application."""

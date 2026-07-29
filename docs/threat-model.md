@@ -18,6 +18,7 @@ is synthetic, but the sandbox preserves production-style integrity properties.
 | Workers → PostgreSQL | duplicate claims, stale acknowledgement | short transactions, `SKIP LOCKED`, random lease token, expiry/reclamation, shared idempotent finalizer |
 | Tenant → evidence | cross-tenant records or secret leakage | organisation predicate on reads, admin-only session surface, `404` for foreign IDs, bounded collections, redacted key hints and safe error codes |
 | Administrator → settlement | duplicate movement, cross-environment account, stale balance | session+CSRF, route-aware idempotency, composite tenant keys, merchant/capture row locks, unique immutable settlement item per capture |
+| RelayPay → synthetic bank | duplicate transfer, forged result, ambiguous timeout | committed send evidence, one stable key per numbered attempt, lookup-only recovery, exact signed response validation, reservation retained under ambiguity |
 | Database roles | cross-database/schema access | distinct app/migrator roles, revoked public connect/create, isolated receiver schema, composite tenant foreign keys |
 
 ## Abuse resistance

@@ -25,6 +25,9 @@ PublicIdPrefix = Literal[
     "mac",
     "stl",
     "btx",
+    "bnf",
+    "pot",
+    "pat",
 ]
 
 _PUBLIC_ID_SEPARATOR: Final = "_"

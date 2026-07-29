@@ -12,7 +12,7 @@ from relaypay.ledger.models import Journal, LedgerAccount, Posting
 from relaypay.merchant_balances.models import BalanceTransaction, SettlementItem
 from relaypay.payments.models import Capture, PaymentIntent, Refund
 
-JournalType = Literal["CAPTURE", "REFUND", "SETTLEMENT"]
+JournalType = Literal["CAPTURE", "REFUND", "SETTLEMENT", "PAYOUT"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +113,7 @@ def add_balance_transaction(
     pending_delta: int = 0,
     available_delta: int = 0,
     receivable_delta: int = 0,
+    payout_clearing_delta: int = 0,
 ) -> BalanceTransaction:
     transaction = BalanceTransaction(
         id=new_uuid(),
@@ -125,7 +126,7 @@ def add_balance_transaction(
         pending_delta=pending_delta,
         available_delta=available_delta,
         receivable_delta=receivable_delta,
-        payout_clearing_delta=0,
+        payout_clearing_delta=payout_clearing_delta,
         currency="INR",
     )
     session.add(transaction)

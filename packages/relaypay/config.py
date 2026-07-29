@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     RELAYPAY_MIGRATION_DATABASE_URL: SecretStr | None = None
     PROVIDER_DATABASE_URL: SecretStr
     PROVIDER_MIGRATION_DATABASE_URL: SecretStr | None = None
+    BANK_DATABASE_URL: SecretStr = SecretStr(
+        "postgresql+psycopg://bank_app:bank_app_dev@localhost:55432/bank"
+    )
+    BANK_MIGRATION_DATABASE_URL: SecretStr | None = None
     RECEIVER_DATABASE_URL: SecretStr
     REDIS_URL: SecretStr = SecretStr("redis://localhost:6379/0")
     CELERY_BROKER_URL: SecretStr = SecretStr("redis://localhost:6379/0")
@@ -35,6 +39,10 @@ class Settings(BaseSettings):
     PROVIDER_ACCOUNT_ID: str = "acct_relaypay_demo"
     PROVIDER_SIGNING_SECRET: SecretStr = Field(min_length=16)
     PROVIDER_CONTROL_SECRET: SecretStr = Field(min_length=16)
+    BANK_BASE_URL: str = "http://localhost:8003"
+    BANK_ACCOUNT_ID: str = "bank_relaypay_demo"
+    BANK_SIGNING_SECRET: SecretStr = SecretStr("dev-bank-signing-secret-change-me")
+    BANK_CONTROL_SECRET: SecretStr = SecretStr("dev-bank-control-secret-change-me")
     RECEIVER_BASE_URL: str = "http://localhost:8002"
     RECEIVER_WEBHOOK_SECRET: SecretStr = Field(min_length=16)
 

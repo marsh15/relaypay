@@ -96,7 +96,7 @@ def create_app(
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay API", version="0.4.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay API", version="0.5.0", lifespan=lifespan)
     app.state.settings = resolved
     app.state.engine = engine
     app.state.session_factory = session_factory

@@ -60,6 +60,12 @@ receivable or available, and refunds debit pending/available or debit receivable
 transactions are immutable journal-keyed projections; they never replace postings as authority.
 No network operation occurs inside these accounting transactions.
 
+Payout creation locks the merchant and appends a reservation without posting a journal. Each bank
+attempt has a stable numbered key and immutable mutation-send evidence committed before HTTP. Once
+sent, workers may only look up that key. Ambiguity retains the reservation; verified decline
+releases it; verified success atomically consumes it with one payout journal, balance transaction,
+terminal response, history record, and event.
+
 ## Public surface
 
 Caddy exposes the console, `/api/*`, `/health/*`, and the bundled `/webhooks/relaypay` receiver.

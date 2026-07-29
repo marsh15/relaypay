@@ -18,6 +18,15 @@ from relaypay.merchant_balances.models import (
     SettlementRun,
 )
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
+from relaypay.payouts.models import (
+    Beneficiary,
+    Payout,
+    PayoutAttempt,
+    PayoutAttemptEvidence,
+    PayoutEvent,
+    PayoutHistory,
+    PayoutReservationHistory,
+)
 from relaypay.provider_operations.models import (
     IdempotencyRecord,
     OperationHistory,
@@ -38,6 +47,7 @@ __all__ = [
     "APIKey",
     "Authorization",
     "BalanceTransaction",
+    "Beneficiary",
     "Capture",
     "Customer",
     "EventRecipient",
@@ -51,6 +61,12 @@ __all__ = [
     "OperationHistory",
     "Organisation",
     "PaymentIntent",
+    "Payout",
+    "PayoutAttempt",
+    "PayoutAttemptEvidence",
+    "PayoutEvent",
+    "PayoutHistory",
+    "PayoutReservationHistory",
     "Posting",
     "ProviderAttempt",
     "ProviderOperation",

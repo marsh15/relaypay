@@ -57,10 +57,9 @@ Integration tests use PostgreSQL and Redis at the development ports from `.env.e
 them with `make infra-up`, then run `make migrate` and `make seed` when not using the complete
 Compose stack.
 
-Upgrading an existing v0.3 database adds merchant ownership, posting-derived balances, and
-deterministic settlement without rewriting historical financial evidence. See the
-[v0.4.0 migration guide](docs/migrations/v0.4.0.md) before applying the migration. The permanent
-[v0.3.0 migration guide](docs/migrations/v0.3.0.md) remains available for v0.2 databases.
+Upgrading an existing v0.4 database adds reserved payouts and the separately credentialed
+synthetic bank without rewriting historical financial evidence. See the
+[v0.5.0 migration guide](docs/migrations/v0.5.0.md) before applying the migration.
 
 With the complete stack running, export a synthetic provider statement, import it into TEST,
 and process its reconciliation run with:
@@ -97,6 +96,8 @@ flowchart LR
     Merchant["Synthetic merchant client"] --> API
     API --> RelayDB[("RelayPay PostgreSQL")]
     API --> Provider["Deterministic provider"]
+    Worker --> Bank["Deterministic synthetic bank"]
+    Bank --> BankDB[("Bank PostgreSQL")]
     Provider --> ProviderDB[("Provider PostgreSQL")]
     Poller["Recovery / delivery poller"] --> RelayDB
     Poller --> Reconcile["Leased reconciliation runs"]
@@ -126,6 +127,7 @@ ledger history, immutable event bytes, and delivery progress.
 - [v0.2.0 release notes](docs/releases/v0.2.0.md)
 - [v0.3.0 release notes](docs/releases/v0.3.0.md)
 - [v0.4.0 release notes](docs/releases/v0.4.0.md)
+- [v0.5.0 release notes](docs/releases/v0.5.0.md)
 
 ## Technology
 

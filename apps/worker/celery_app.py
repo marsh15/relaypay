@@ -31,5 +31,9 @@ app.conf.update(
             "task": "relaypay.reconcile_statements",
             "schedule": 1.0,
         },
+        "dispatch-payouts": {
+            "task": "relaypay.dispatch_payouts",
+            "schedule": 1.0,
+        },
     },
 )

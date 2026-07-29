@@ -2,6 +2,7 @@ from relaypay.config import get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_batch
 from relaypay.event_delivery.materializer import materialize_deliveries
+from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
 from relaypay.reconciliation.service import run_reconciliation_batch
@@ -67,5 +68,23 @@ def reconcile_statements() -> int:
     )
     try:
         return run_reconciliation_batch(build_session_factory(engine))
+    finally:
+        engine.dispose()
+
+
+@app.task(name="relaypay.dispatch_payouts")  # type: ignore[untyped-decorator]
+def dispatch_payouts() -> int:
+    settings = get_settings()
+    engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-payout-worker",
+    )
+    try:
+        return run_payout_batch(
+            build_session_factory(engine),
+            bank_account_id=settings.BANK_ACCOUNT_ID,
+            bank_signing_secret=settings.BANK_SIGNING_SECRET.get_secret_value(),
+            transport=HTTPBankTransport(base_url=settings.BANK_BASE_URL),
+        )
     finally:
         engine.dispose()
