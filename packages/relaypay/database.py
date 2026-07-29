@@ -26,8 +26,10 @@ def build_engine(database_url: str, *, application_name: str) -> Engine:
 
 def build_session_factory(engine: Engine) -> sessionmaker[Session]:
     from relaypay.identity.environments import install_environment_defaults
+    from relaypay.merchant_balances.defaults import install_merchant_defaults
 
     install_environment_defaults()
+    install_merchant_defaults()
     return sessionmaker(
         bind=engine, class_=RelayPaySession, expire_on_commit=False, autobegin=False
     )

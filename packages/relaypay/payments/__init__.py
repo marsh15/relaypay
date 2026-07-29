@@ -1,23 +1,6 @@
-"""Payment lifecycle module."""
+"""Payment lifecycle domain.
 
-from relaypay.payments.service import (
-    HTTPResult,
-    create_customer,
-    create_payment_intent,
-    initiate_authorization,
-    initiate_capture,
-    initiate_refund,
-    read_operation,
-    read_payment,
-)
-
-__all__ = [
-    "HTTPResult",
-    "create_customer",
-    "create_payment_intent",
-    "initiate_authorization",
-    "initiate_capture",
-    "initiate_refund",
-    "read_operation",
-    "read_payment",
-]
+Import services from ``relaypay.payments.service`` explicitly. Keeping the
+package initializer side-effect free prevents ORM metadata imports from
+initializing the service dependency graph during migrations.
+"""
