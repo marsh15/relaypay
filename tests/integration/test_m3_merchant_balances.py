@@ -4,6 +4,8 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from fastapi.testclient import TestClient
+from relaypay.config import Settings
 from relaypay.contracts import EmptyCommand
 from relaypay.database import build_engine, build_session_factory
 from relaypay.idempotency import build_fingerprint, canonical_json_bytes
@@ -19,6 +21,8 @@ from relaypay.provider_operations.models import ProviderOperation
 from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+
+from apps.api.main import create_app
 
 pytestmark = [pytest.mark.integration, pytest.mark.concurrency]
 
@@ -262,5 +266,94 @@ def test_capture_settlement_and_replay_are_posting_derived() -> None:
                 )
                 == 2
             )
+    finally:
+        engine.dispose()
+
+
+def test_merchant_balance_admin_api_preserves_exact_settlement_replay() -> None:
+    engine, principal, environment = _identity()
+    factory = build_session_factory(engine)
+    try:
+        _successful_capture(factory, principal, environment, 50_000)
+        with factory() as session, session.begin():
+            user = session.get(User, principal.user_id)
+            assert user is not None
+            email = user.email_normalized
+
+        settings = Settings(
+            APP_ENV="test",
+            RELAYPAY_DATABASE_URL=DATABASE_URL,
+            PROVIDER_DATABASE_URL=(
+                "postgresql+psycopg://provider_app:provider_app_dev@localhost:55432/provider"
+            ),
+            RECEIVER_DATABASE_URL=(
+                "postgresql+psycopg://receiver_app:receiver_app_dev@localhost:55432/relaypay"
+            ),
+            SESSION_SECRET="m3-session-secret-for-tests-at-least-32-bytes",
+            CSRF_SECRET="m3-csrf-secret-for-tests-at-least-32-bytes",
+            API_KEY_PEPPER="m3-api-key-pepper-for-tests-at-least-32-bytes",
+            IDEMPOTENCY_KEY_PEPPER="m3-idempotency-pepper-for-tests",
+            WEBHOOK_SECRET_ENCRYPTION_KEY="unused-in-m3-http-tests",
+            PROVIDER_SIGNING_SECRET="m3-provider-signing-test",
+            PROVIDER_CONTROL_SECRET="m3-provider-control-test",
+            RECEIVER_WEBHOOK_SECRET="m3-receiver-webhook-test",
+        )
+        base = f"/api/admin/v1/environments/{environment.public_id}/merchant-accounts"
+        with TestClient(create_app(settings)) as client:
+            login = client.post(
+                "/api/session/login",
+                json={"email": email, "password": "Synthetic-M3-Admin-Password!"},
+            )
+            assert login.status_code == 200
+            csrf = login.json()["csrfToken"]
+            listed = client.get(base)
+            assert listed.status_code == 200
+            default = next(item for item in listed.json() if item["isDefault"])
+
+            created_account = client.post(
+                base,
+                headers={"X-CSRF-Token": csrf},
+                json={"reference": f"secondary-{uuid.uuid4().hex}", "name": "Secondary"},
+            )
+            assert created_account.status_code == 201
+            assert created_account.json()["isDefault"] is False
+
+            settlement_path = f"{base}/{default['id']}/settlements"
+            headers = {
+                "X-CSRF-Token": csrf,
+                "Idempotency-Key": f"m3-http-settlement-{uuid.uuid4().hex}",
+            }
+            first = client.post(settlement_path, headers=headers, json={})
+            replay = client.post(settlement_path, headers=headers, json={})
+            assert first.status_code == 201, first.text
+            assert replay.status_code == 200, replay.text
+            assert replay.content == first.content
+            assert replay.headers["Idempotency-Replayed"] == "true"
+
+            balances = client.get(f"{base}/{default['id']}/balances")
+            assert balances.status_code == 200
+            assert balances.json() == {
+                "merchantAccountId": default["id"],
+                "currency": "INR",
+                "pending": 0,
+                "available": 50_000,
+                "reserved": 0,
+                "receivable": 0,
+                "payoutEligible": 50_000,
+            }
+            transactions = client.get(f"{base}/{default['id']}/balance-transactions")
+            assert transactions.status_code == 200
+            assert [item["type"] for item in transactions.json()] == [
+                "CAPTURE",
+                "SETTLEMENT",
+            ]
+
+            missing_csrf = client.post(
+                settlement_path,
+                headers={"Idempotency-Key": f"missing-csrf-{uuid.uuid4().hex}"},
+                json={},
+            )
+            assert missing_csrf.status_code == 403
+            assert missing_csrf.json()["error"]["code"] == "CSRF_INVALID"
     finally:
         engine.dispose()
