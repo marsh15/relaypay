@@ -4,8 +4,8 @@
 
 The protected assets are tenant boundaries, opaque sessions and CSRF tokens, API-key material,
 provider/webhook signing secrets, idempotency fingerprints and terminal bytes, financial journals,
-event bytes/digests, and delivery/recovery leases. All data is synthetic, but the sandbox preserves
-production-style integrity properties.
+merchant balances, settlement claims, event bytes/digests, and delivery/recovery leases. All data
+is synthetic, but the sandbox preserves production-style integrity properties.
 
 ## Trust boundaries and controls
 
@@ -17,6 +17,7 @@ production-style integrity properties.
 | RelayPay → receiver | SSRF, tampering, duplicate consumer effect | exact configured URL allowlist, no redirects, timestamp+body HMAC, immutable event bytes/digest, receiver event-ID/digest deduplication |
 | Workers → PostgreSQL | duplicate claims, stale acknowledgement | short transactions, `SKIP LOCKED`, random lease token, expiry/reclamation, shared idempotent finalizer |
 | Tenant → evidence | cross-tenant records or secret leakage | organisation predicate on reads, admin-only session surface, `404` for foreign IDs, bounded collections, redacted key hints and safe error codes |
+| Administrator → settlement | duplicate movement, cross-environment account, stale balance | session+CSRF, route-aware idempotency, composite tenant keys, merchant/capture row locks, unique immutable settlement item per capture |
 | Database roles | cross-database/schema access | distinct app/migrator roles, revoked public connect/create, isolated receiver schema, composite tenant foreign keys |
 
 ## Abuse resistance

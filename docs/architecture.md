@@ -38,7 +38,8 @@ sequenceDiagram
 - RelayPay database: organisations, sessions, API keys, payment resources, provider-operation
   observations, idempotency records, immutable journals/postings, merchant events, and delivery
   leases/attempts. It also owns exact statement bytes, immutable parsed items, leased
-  reconciliation runs, matches, mismatch evidence versions, and append-only workflow history.
+  reconciliation runs, matches, mismatch evidence versions, append-only workflow history,
+  merchant accounts, settlement claims/items, and immutable balance transactions.
 - Provider database: provider accounts, stable-key effects, deterministic one-shot faults, and
   immutable statement-export snapshots.
 - Receiver schema: verified event IDs/digests and the deduplicated consumer effect.
@@ -52,6 +53,12 @@ stable key. Refund availability is derived while holding the payment lock. Recov
 claims use `FOR UPDATE SKIP LOCKED`, opaque lease tokens, expiry, and idempotent finalization.
 Reconciliation uses the same claim pattern; source imports serialize on a transaction-scoped
 PostgreSQL advisory lock and `(environment, provider, source)` uniqueness.
+
+Merchant balance commands lock the merchant before claiming captures. Balances are reconstructed
+from debit/credit postings: capture credits pending payable, settlement debits pending and credits
+receivable or available, and refunds debit pending/available or debit receivable. Balance
+transactions are immutable journal-keyed projections; they never replace postings as authority.
+No network operation occurs inside these accounting transactions.
 
 ## Public surface
 
