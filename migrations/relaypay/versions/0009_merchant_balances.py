@@ -126,6 +126,42 @@ def upgrade() -> None:
           ) AS template(code, name, account_type)
         """
     )
+    op.execute(
+        """
+        CREATE FUNCTION relaypay_create_environment_default_merchant() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        DECLARE
+          merchant_id uuid := md5(NEW.id::text || chr(58) || 'DEFAULT_MERCHANT')::uuid;
+        BEGIN
+          INSERT INTO merchant_accounts
+            (id, public_id, organisation_id, environment_id, reference, name, currency,
+             is_default, status)
+          VALUES
+            (merchant_id, 'mac_' || replace(merchant_id::text, '-', ''), NEW.organisation_id,
+             NEW.id, 'default', 'Default merchant account', 'INR', true, 'ACTIVE')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO ledger_accounts
+            (id, organisation_id, environment_id, merchant_account_id, code, name,
+             account_type, currency)
+          SELECT md5(merchant_id::text || chr(58) || template.code)::uuid,
+                 NEW.organisation_id, NEW.id, merchant_id, template.code, template.name,
+                 template.account_type, 'INR'
+            FROM (VALUES
+              ('PENDING_PAYABLE_LIABILITY', 'Pending merchant payable', 'LIABILITY'),
+              ('AVAILABLE_PAYABLE_LIABILITY', 'Available merchant payable', 'LIABILITY'),
+              ('PAYOUT_CLEARING_ASSET', 'Payout clearing', 'ASSET'),
+              ('MERCHANT_RECEIVABLE_ASSET', 'Merchant receivable', 'ASSET')
+            ) AS template(code, name, account_type)
+          ON CONFLICT DO NOTHING;
+          RETURN NEW;
+        END;
+        $$;
+        CREATE TRIGGER environment_default_merchant
+          AFTER INSERT ON environments
+          FOR EACH ROW EXECUTE FUNCTION relaypay_create_environment_default_merchant();
+        """
+    )
 
     op.add_column("journals", sa.Column("merchant_account_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
@@ -351,6 +387,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP FUNCTION IF EXISTS relaypay_create_environment_default_merchant() CASCADE")
     op.execute("DROP FUNCTION IF EXISTS relaypay_prevent_balance_evidence_mutation() CASCADE")
     op.drop_index("ix_balance_transactions_account_created", table_name="balance_transactions")
     op.drop_table("balance_transactions")
