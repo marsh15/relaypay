@@ -220,6 +220,8 @@ def _account_balance(session: Session, ledger_account: LedgerAccount) -> int:
 
 
 def derive_balances(session: Session, merchant: MerchantAccount) -> MerchantBalances:
+    from relaypay.payouts.models import PayoutReservationHistory
+
     pending = _account_balance(
         session,
         account(
@@ -250,7 +252,16 @@ def derive_balances(session: Session, merchant: MerchantAccount) -> MerchantBala
             merchant_account_id=merchant.id,
         ),
     )
-    reserved = 0
+    reserved = int(
+        session.scalar(
+            select(func.coalesce(func.sum(PayoutReservationHistory.amount_delta), 0)).where(
+                PayoutReservationHistory.merchant_account_id == merchant.id
+            )
+        )
+        or 0
+    )
+    if reserved < 0:
+        raise RuntimeError("payout reservation history cannot derive a negative reservation")
     return MerchantBalances(pending, available, receivable, reserved, max(available - reserved, 0))
 
 

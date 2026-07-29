@@ -99,7 +99,8 @@ class Journal(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         UniqueConstraint("provider_operation_id"),
         UniqueConstraint("organisation_id", "environment_id", "journal_type", "reference_id"),
         CheckConstraint(
-            "journal_type IN ('CAPTURE', 'REFUND', 'COMPENSATION', 'OPENING', 'SETTLEMENT')"
+            "journal_type IN "
+            "('CAPTURE', 'REFUND', 'COMPENSATION', 'OPENING', 'SETTLEMENT', 'PAYOUT')"
         ),
         CheckConstraint("currency = 'INR'"),
     )

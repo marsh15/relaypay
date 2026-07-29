@@ -7,6 +7,8 @@ x-app-environment: &app-environment
   RELAYPAY_MIGRATION_DATABASE_URL: postgresql+psycopg://relaypay_migrator:${RELAYPAY_MIGRATOR_DB_PASSWORD:-relaypay_migrator_dev}@postgres:5432/relaypay
   PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:${PROVIDER_APP_DB_PASSWORD:-provider_app_dev}@postgres:5432/provider
   PROVIDER_MIGRATION_DATABASE_URL: postgresql+psycopg://provider_migrator:${PROVIDER_MIGRATOR_DB_PASSWORD:-provider_migrator_dev}@postgres:5432/provider
+  BANK_DATABASE_URL: postgresql+psycopg://bank_app:${BANK_APP_DB_PASSWORD:-bank_app_dev}@postgres:5432/bank
+  BANK_MIGRATION_DATABASE_URL: postgresql+psycopg://bank_migrator:${BANK_MIGRATOR_DB_PASSWORD:-bank_migrator_dev}@postgres:5432/bank
   RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}@postgres:5432/relaypay
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/0
@@ -19,6 +21,10 @@ x-app-environment: &app-environment
   PROVIDER_ACCOUNT_ID: ${PROVIDER_ACCOUNT_ID:-acct_relaypay_demo}
   PROVIDER_SIGNING_SECRET: ${PROVIDER_SIGNING_SECRET:-dev-provider-signing-secret-change-me}
   PROVIDER_CONTROL_SECRET: ${PROVIDER_CONTROL_SECRET:-dev-provider-control-secret-change-me}
+  BANK_BASE_URL: http://bank:8003
+  BANK_ACCOUNT_ID: ${BANK_ACCOUNT_ID:-bank_relaypay_demo}
+  BANK_SIGNING_SECRET: ${BANK_SIGNING_SECRET:-dev-bank-signing-secret-change-me}
+  BANK_CONTROL_SECRET: ${BANK_CONTROL_SECRET:-dev-bank-control-secret-change-me}
   RECEIVER_BASE_URL: http://receiver:8002
   RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:-dev-receiver-secret-change-me}
 
@@ -45,6 +51,8 @@ services:
       RELAYPAY_APP_DB_PASSWORD: ${RELAYPAY_APP_DB_PASSWORD:-relaypay_app_dev}
       PROVIDER_MIGRATOR_DB_PASSWORD: ${PROVIDER_MIGRATOR_DB_PASSWORD:-provider_migrator_dev}
       PROVIDER_APP_DB_PASSWORD: ${PROVIDER_APP_DB_PASSWORD:-provider_app_dev}
+      BANK_MIGRATOR_DB_PASSWORD: ${BANK_MIGRATOR_DB_PASSWORD:-bank_migrator_dev}
+      BANK_APP_DB_PASSWORD: ${BANK_APP_DB_PASSWORD:-bank_app_dev}
       RECEIVER_APP_DB_PASSWORD: ${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}
     ports:
       - "55432:5432"
@@ -87,6 +95,7 @@ services:
       - |
         alembic -c migrations/relaypay/alembic.ini upgrade head
         alembic -c migrations/provider/alembic.ini upgrade head
+        alembic -c migrations/bank/alembic.ini upgrade head
         alembic -c migrations/receiver/alembic.ini upgrade head
         python -m scripts.seed
     depends_on:
@@ -108,6 +117,8 @@ services:
       redis:
         condition: service_healthy
       provider:
+        condition: service_healthy
+      bank:
         condition: service_healthy
       receiver:
         condition: service_healthy
@@ -156,6 +167,25 @@ services:
       retries: 5
       start_period: 30s
 
+  bank:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["uvicorn", "apps.bank.asgi:app", "--host", "0.0.0.0", "--port", "8003", "--no-access-log"]
+    environment: *app-environment
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health/live')"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
   poller:
     <<: *service-defaults
     build:
@@ -167,6 +197,8 @@ services:
       migrate:
         condition: service_completed_successfully
       provider:
+        condition: service_healthy
+      bank:
         condition: service_healthy
       receiver:
         condition: service_healthy
@@ -184,6 +216,8 @@ services:
       redis:
         condition: service_healthy
       provider:
+        condition: service_healthy
+      bank:
         condition: service_healthy
       receiver:
         condition: service_healthy

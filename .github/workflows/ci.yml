@@ -46,6 +46,9 @@ jobs:
       - name: Prove v0.3 merchant-balance upgrade and opening transfer
         run: uv run python -m scripts.verify_m3_upgrade
 
+      - name: Prove v0.4 payout upgrade preserves historical evidence
+        run: uv run python -m scripts.verify_m4_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
@@ -53,6 +56,7 @@ jobs:
           uv run alembic -c migrations/relaypay/alembic.ini check
           uv run alembic -c migrations/provider/alembic.ini check
           uv run alembic -c migrations/receiver/alembic.ini check
+          uv run alembic -c migrations/bank/alembic.ini check
 
       - name: Backend correctness gate
         run: |
@@ -72,7 +76,7 @@ jobs:
       - name: Recreate clean release surface
         run: |
           docker compose down --volumes
-          docker compose up -d --build --wait provider receiver api console
+          docker compose up -d --build --wait provider bank receiver api console
 
       - name: One primary browser journey
         working-directory: apps/console

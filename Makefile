@@ -28,6 +28,7 @@ migrate:
 	uv run alembic -c migrations/relaypay/alembic.ini upgrade head
 	uv run alembic -c migrations/provider/alembic.ini upgrade head
 	uv run alembic -c migrations/receiver/alembic.ini upgrade head
+	uv run alembic -c migrations/bank/alembic.ini upgrade head
 
 seed:
 	uv run python -m scripts.seed

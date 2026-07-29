@@ -139,7 +139,9 @@ class BalanceTransaction(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("journal_id"),
-        CheckConstraint("transaction_type IN ('OPENING', 'CAPTURE', 'REFUND', 'SETTLEMENT')"),
+        CheckConstraint(
+            "transaction_type IN ('OPENING', 'CAPTURE', 'REFUND', 'SETTLEMENT', 'PAYOUT')"
+        ),
         CheckConstraint("currency = 'INR'"),
         CheckConstraint(
             "pending_delta <> 0 OR available_delta <> 0 OR receivable_delta <> 0 "

@@ -8,8 +8,8 @@
 - Mismatch resolution records operator notes and may link an existing compensating journal, but
   it never creates or changes payment, provider, or ledger outcomes.
 - Single-capture and bounded evidence assumptions are deliberate demonstration constraints.
-- Merchant settlement is synchronous and API-first. Payout reservations, beneficiaries, and the
-  synthetic bank boundary arrive in M4; reserved balance is therefore zero in v0.4.
+- Merchant settlement and payout administration are API-first. The synthetic bank is a
+  deterministic test boundary, not a real transfer rail.
 - No multi-region operation, automatic failover, point-in-time recovery, managed KMS, WAF, or
   production observability backend.
 - In-process login rate limiting is per API process; a distributed limiter is required before
