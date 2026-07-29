@@ -24,6 +24,7 @@ pytestmark = pytest.mark.integration
 @dataclass(frozen=True, slots=True)
 class LedgerContext:
     organisation_id: uuid.UUID
+    environment_id: uuid.UUID
     payment_id: uuid.UUID
     authorization_id: uuid.UUID
     amount: int
@@ -124,7 +125,13 @@ def ledger_context(session_factory: sessionmaker[Session]) -> LedgerContext:
                 ),
             ]
         )
-    return LedgerContext(organisation_id, payment_id, authorization_id, amount)
+    return LedgerContext(
+        organisation_id,
+        customer.environment_id,
+        payment_id,
+        authorization_id,
+        amount,
+    )
 
 
 def _capture_operation(
@@ -247,7 +254,8 @@ def test_unbalanced_journal_fails_at_commit(
         operation, capture = _capture_operation(session, ledger_context)
         accounts = session.scalars(
             select(LedgerAccount).where(
-                LedgerAccount.organisation_id == ledger_context.organisation_id
+                LedgerAccount.organisation_id == ledger_context.organisation_id,
+                LedgerAccount.environment_id == ledger_context.environment_id,
             )
         ).all()
         journal = Journal(
@@ -295,6 +303,7 @@ def test_journal_requires_at_least_two_postings(
         account = session.scalar(
             select(LedgerAccount).where(
                 LedgerAccount.organisation_id == ledger_context.organisation_id,
+                LedgerAccount.environment_id == ledger_context.environment_id,
                 LedgerAccount.code == "PROVIDER_CLEARING_ASSET",
             )
         )
@@ -364,7 +373,8 @@ def test_non_inr_posting_is_rejected(
         operation, capture = _capture_operation(session, ledger_context)
         account = session.scalar(
             select(LedgerAccount).where(
-                LedgerAccount.organisation_id == ledger_context.organisation_id
+                LedgerAccount.organisation_id == ledger_context.organisation_id,
+                LedgerAccount.environment_id == ledger_context.environment_id,
             )
         )
         assert account is not None
