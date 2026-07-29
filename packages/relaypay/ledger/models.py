@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,15 +25,42 @@ class LedgerAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             ["organisation_id", "environment_id"],
             ["environments.organisation_id", "environments.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "merchant_account_id"],
+            [
+                "merchant_accounts.organisation_id",
+                "merchant_accounts.environment_id",
+                "merchant_accounts.id",
+            ],
+        ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
-        UniqueConstraint("organisation_id", "environment_id", "code", "currency"),
         UniqueConstraint("organisation_id", "id"),
         CheckConstraint("account_type IN ('ASSET', 'LIABILITY')"),
         CheckConstraint("currency = 'INR'"),
+        Index(
+            "uq_ledger_accounts_global_code",
+            "organisation_id",
+            "environment_id",
+            "code",
+            "currency",
+            unique=True,
+            postgresql_where=text("merchant_account_id IS NULL"),
+        ),
+        Index(
+            "uq_ledger_accounts_merchant_code",
+            "organisation_id",
+            "environment_id",
+            "merchant_account_id",
+            "code",
+            "currency",
+            unique=True,
+            postgresql_where=text("merchant_account_id IS NOT NULL"),
+        ),
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    merchant_account_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     account_type: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -45,6 +73,14 @@ class Journal(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ForeignKeyConstraint(
             ["organisation_id", "environment_id"],
             ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "merchant_account_id"],
+            [
+                "merchant_accounts.organisation_id",
+                "merchant_accounts.environment_id",
+                "merchant_accounts.id",
+            ],
         ),
         ForeignKeyConstraint(
             ["organisation_id", "provider_operation_id"],
@@ -62,14 +98,17 @@ class Journal(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id"),
         UniqueConstraint("organisation_id", "environment_id", "journal_type", "reference_id"),
-        CheckConstraint("journal_type IN ('CAPTURE', 'REFUND', 'COMPENSATION')"),
+        CheckConstraint(
+            "journal_type IN ('CAPTURE', 'REFUND', 'COMPENSATION', 'OPENING', 'SETTLEMENT')"
+        ),
         CheckConstraint("currency = 'INR'"),
     )
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
-    provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    merchant_account_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    provider_operation_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     journal_type: Mapped[str] = mapped_column(String(16), nullable=False)
     reference_type: Mapped[str] = mapped_column(String(32), nullable=False)
     reference_id: Mapped[uuid.UUID] = mapped_column(nullable=False)

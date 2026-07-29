@@ -11,6 +11,12 @@ from relaypay.event_delivery.models import (
 )
 from relaypay.identity.models import APIKey, Organisation, SessionRecord, User
 from relaypay.ledger.models import Journal, LedgerAccount, Posting
+from relaypay.merchant_balances.models import (
+    BalanceTransaction,
+    MerchantAccount,
+    SettlementItem,
+    SettlementRun,
+)
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
 from relaypay.provider_operations.models import (
     IdempotencyRecord,
@@ -31,12 +37,14 @@ from relaypay.reconciliation.models import (
 __all__ = [
     "APIKey",
     "Authorization",
+    "BalanceTransaction",
     "Capture",
     "Customer",
     "EventRecipient",
     "IdempotencyRecord",
     "Journal",
     "LedgerAccount",
+    "MerchantAccount",
     "MerchantEvent",
     "MismatchEvidenceVersion",
     "MismatchWorkflowHistory",
@@ -52,6 +60,8 @@ __all__ = [
     "Refund",
     "ScenarioRun",
     "SessionRecord",
+    "SettlementItem",
+    "SettlementRun",
     "StatementImport",
     "StatementItem",
     "User",

@@ -57,16 +57,22 @@ Integration tests use PostgreSQL and Redis at the development ports from `.env.e
 them with `make infra-up`, then run `make migrate` and `make seed` when not using the complete
 Compose stack.
 
-Upgrading an existing v0.2 database adds immutable statement imports and leased reconciliation
-evidence without rewriting existing rows. See the
-[v0.3.0 migration guide](docs/migrations/v0.3.0.md) before applying the migration. The permanent
-[v0.2.0 migration guide](docs/migrations/v0.2.0.md) remains available for v0.1 databases.
+Upgrading an existing v0.3 database adds merchant ownership, posting-derived balances, and
+deterministic settlement without rewriting historical financial evidence. See the
+[v0.4.0 migration guide](docs/migrations/v0.4.0.md) before applying the migration. The permanent
+[v0.3.0 migration guide](docs/migrations/v0.3.0.md) remains available for v0.2 databases.
 
 With the complete stack running, export a synthetic provider statement, import it into TEST,
 and process its reconciliation run with:
 
 ```bash
 RELAYPAY_DEMO_PASSWORD='RelayPay-Northstar-2026!' make reconciliation-demo
+```
+
+Run the permanent lost-response proof and settle its capture into available merchant balance:
+
+```bash
+make merchant-balance-demo
 ```
 
 To restore only synthetic state, stop application processes and use the explicit destructive
@@ -119,6 +125,7 @@ ledger history, immutable event bytes, and delivery progress.
 - [v0.1.0 release notes](docs/releases/v0.1.0.md)
 - [v0.2.0 release notes](docs/releases/v0.2.0.md)
 - [v0.3.0 release notes](docs/releases/v0.3.0.md)
+- [v0.4.0 release notes](docs/releases/v0.4.0.md)
 
 ## Technology
 

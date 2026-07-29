@@ -138,7 +138,7 @@ def main() -> None:
         command.upgrade(relaypay_config, "0006_identity_environments")
         with relaypay_engine.connect() as connection:
             relaypay_before = _table_digests(connection)
-        command.upgrade(relaypay_config, "head")
+        command.upgrade(relaypay_config, "0008_statement_currency")
         with relaypay_engine.connect() as connection:
             assert all(
                 _table_digests(connection)[table] == digest

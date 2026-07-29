@@ -2,10 +2,11 @@ from collections.abc import Callable
 from dataclasses import asdict
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.config import Settings
+from relaypay.contracts import EmptyCommand
 from relaypay.demo_scenarios.service import (
     ScenarioFaultController,
     read_scenario_run,
@@ -13,6 +14,7 @@ from relaypay.demo_scenarios.service import (
 )
 from relaypay.event_delivery.admin import read_delivery, replay_delivery
 from relaypay.event_delivery.delivery import WebhookTransport
+from relaypay.idempotency import build_fingerprint
 from relaypay.identity.security import Principal, verify_csrf
 from relaypay.identity.service import (
     activate_api_key_version,
@@ -25,6 +27,13 @@ from relaypay.identity.service import (
     rotate_api_key,
     set_api_key_scopes,
     set_membership,
+)
+from relaypay.merchant_balances.service import (
+    create_admin_merchant_account,
+    list_admin_merchant_accounts,
+    list_balance_transactions,
+    read_admin_balances,
+    run_settlement,
 )
 from relaypay.provider_operations.service import ProviderTransport
 from relaypay.reconciliation.service import (
@@ -80,6 +89,12 @@ class MismatchResolution(BaseModel):
     )
 
 
+class MerchantAccountCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reference: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128)
+
+
 def build_admin_router(
     *,
     settings: Settings,
@@ -113,6 +128,146 @@ def build_admin_router(
                 }
                 for item in list_environments(session, principal)
             ]
+
+    @router.get("/admin/v1/environments/{environment_id}/merchant-accounts")
+    def get_merchant_accounts(
+        environment_id: str, principal: PrincipalDep
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "id": item.public_id,
+                    "reference": item.reference,
+                    "name": item.name,
+                    "currency": item.currency,
+                    "isDefault": item.is_default,
+                    "status": item.status,
+                }
+                for item in list_admin_merchant_accounts(
+                    session,
+                    principal=principal,
+                    environment_public_id=environment_id,
+                )
+            ]
+
+    @router.post("/admin/v1/environments/{environment_id}/merchant-accounts", status_code=201)
+    def post_merchant_account(
+        environment_id: str,
+        payload: MerchantAccountCreate,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            item = create_admin_merchant_account(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                reference=payload.reference,
+                name=payload.name,
+            )
+            return {
+                "id": item.public_id,
+                "reference": item.reference,
+                "name": item.name,
+                "currency": item.currency,
+                "isDefault": item.is_default,
+                "status": item.status,
+            }
+
+    @router.get(
+        "/admin/v1/environments/{environment_id}/merchant-accounts/{merchant_account_id}/balances"
+    )
+    def get_merchant_account_balances(
+        environment_id: str,
+        merchant_account_id: str,
+        principal: PrincipalDep,
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            merchant, balances = read_admin_balances(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                merchant_public_id=merchant_account_id,
+            )
+            return {
+                "merchantAccountId": merchant.public_id,
+                "currency": merchant.currency,
+                "pending": balances.pending,
+                "available": balances.available,
+                "reserved": balances.reserved,
+                "receivable": balances.receivable,
+                "payoutEligible": balances.payout_eligible,
+            }
+
+    @router.get(
+        "/admin/v1/environments/{environment_id}/merchant-accounts/"
+        "{merchant_account_id}/balance-transactions"
+    )
+    def get_merchant_account_balance_transactions(
+        environment_id: str,
+        merchant_account_id: str,
+        principal: PrincipalDep,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "id": item.public_id,
+                    "journalId": str(item.journal_id),
+                    "type": item.transaction_type,
+                    "pendingDelta": item.pending_delta,
+                    "availableDelta": item.available_delta,
+                    "receivableDelta": item.receivable_delta,
+                    "payoutClearingDelta": item.payout_clearing_delta,
+                    "currency": item.currency,
+                    "createdAt": item.created_at.isoformat(),
+                }
+                for item in list_balance_transactions(
+                    session,
+                    principal=principal,
+                    environment_public_id=environment_id,
+                    merchant_public_id=merchant_account_id,
+                )
+            ]
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/merchant-accounts/"
+        "{merchant_account_id}/settlements"
+    )
+    def post_merchant_account_settlement(
+        environment_id: str,
+        merchant_account_id: str,
+        payload: EmptyCommand,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1)],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        require_csrf(principal, csrf_token)
+        fingerprint = build_fingerprint(
+            api_version="admin-v1",
+            method="POST",
+            route_template=(
+                "/environments/{environment_id}/merchant-accounts/{merchant_account_id}/settlements"
+            ),
+            path_params={
+                "environment_id": environment_id,
+                "merchant_account_id": merchant_account_id,
+            },
+            body=payload,
+        )
+        result = run_settlement(
+            session_factory,
+            principal=principal,
+            environment_public_id=environment_id,
+            merchant_public_id=merchant_account_id,
+            idempotency_key=idempotency_key,
+            fingerprint=fingerprint,
+            key_pepper=settings.API_KEY_PEPPER.get_secret_value(),
+        )
+        headers = {"Content-Type": "application/json"}
+        if result.replayed:
+            headers["Idempotency-Replayed"] = "true"
+        return Response(content=result.body, status_code=result.status_code, headers=headers)
 
     @router.post("/admin/v1/organisations", status_code=201)
     def post_organisation(

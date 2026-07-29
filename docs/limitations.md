@@ -1,13 +1,15 @@
 # Limitations and non-goals
 
-- Synthetic INR data only; no card, bank, UPI, KYC, PII, settlement, fee, dispute, or chargeback
-  processing.
+- Synthetic INR data only; no card, bank, UPI, KYC, PII, real settlement, fee, dispute, or
+  chargeback processing.
 - One deterministic mock provider and one exact allowlisted bundled receiver.
 - Reconciliation accepts bounded CSV/JSON evidence from the synthetic payment provider only;
   connector-specific ingestion remains scheduled for M5.
 - Mismatch resolution records operator notes and may link an existing compensating journal, but
   it never creates or changes payment, provider, or ledger outcomes.
 - Single-capture and bounded evidence assumptions are deliberate demonstration constraints.
+- Merchant settlement is synchronous and API-first. Payout reservations, beneficiaries, and the
+  synthetic bank boundary arrive in M4; reserved balance is therefore zero in v0.4.
 - No multi-region operation, automatic failover, point-in-time recovery, managed KMS, WAF, or
   production observability backend.
 - In-process login rate limiting is per API process; a distributed limiter is required before

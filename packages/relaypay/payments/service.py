@@ -13,6 +13,7 @@ from relaypay.errors import RelayPayError, not_found
 from relaypay.idempotency import Fingerprint, canonical_json_bytes, digest_secret, key_hint
 from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
+from relaypay.merchant_balances.service import default_merchant_account_id
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
 
@@ -141,12 +142,18 @@ def create_payment_intent(
             if customer is None:
                 raise not_found("Customer")
 
+            merchant_account_id = default_merchant_account_id(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+            )
             payment = PaymentIntent(
                 id=payment_id,
                 public_id=payment_public_id,
                 organisation_id=organisation_id,
                 environment_id=resolved_environment_id,
                 customer_id=customer.id,
+                merchant_account_id=merchant_account_id,
                 merchant_reference=payload.merchant_reference,
                 amount=payload.amount,
                 currency=payload.currency,
