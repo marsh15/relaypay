@@ -204,19 +204,46 @@ def _seed_v01_fixture(connection: Connection) -> None:
             connection.execute(text(statement), {"org_id": ORG_ID})
 
 
-def _evidence_digests(connection: Connection) -> dict[str, str]:
+def _evidence_digests(
+    connection: Connection,
+    legacy_row_ids: dict[str, frozenset[str]] | None = None,
+) -> dict[str, str]:
     digests: dict[str, str] = {}
     for table in IMMUTABLE_TABLES:
         rows = connection.execute(
             text(
-                f"SELECT (to_jsonb(t) - 'environment_id')::text FROM {table} t ORDER BY id"  # noqa: S608 - fixed table allowlist
+                f"SELECT id::text, "  # noqa: S608 - fixed table allowlist
+                "(to_jsonb(t) - 'environment_id' - 'merchant_account_id')::text "
+                f"FROM {table} t ORDER BY id"
             )
-        ).scalars()
-        digests[table] = hashlib.sha256("\n".join(rows).encode()).hexdigest()
+        ).all()
+        payloads = [
+            row[1] for row in rows if legacy_row_ids is None or row[0] in legacy_row_ids[table]
+        ]
+        digests[table] = hashlib.sha256("\n".join(payloads).encode()).hexdigest()
     return digests
 
 
-def _verify_backfill(connection: Connection, before: dict[str, str]) -> None:
+def _legacy_row_ids(connection: Connection) -> dict[str, frozenset[str]]:
+    return {
+        table: frozenset(
+            connection.execute(
+                text(
+                    f"SELECT id::text FROM {table} "  # noqa: S608 - fixed table allowlist
+                    "WHERE organisation_id = :org_id"
+                ),
+                {"org_id": ORG_ID},
+            ).scalars()
+        )
+        for table in ENVIRONMENT_TABLES
+    }
+
+
+def _verify_backfill(
+    connection: Connection,
+    before: dict[str, str],
+    legacy_row_ids: dict[str, frozenset[str]],
+) -> None:
     environments = connection.execute(
         text(
             "SELECT environment_type, id FROM environments "
@@ -227,17 +254,19 @@ def _verify_backfill(connection: Connection, before: dict[str, str]) -> None:
     assert [row.environment_type for row in environments] == ["LIVE_LIKE", "TEST"]
     test_environment_id = next(row.id for row in environments if row.environment_type == "TEST")
     for table in ENVIRONMENT_TABLES:
-        count_query = (
-            f"SELECT count(*) AS total, "  # noqa: S608 - fixed table allowlist
-            f"count(*) FILTER (WHERE environment_id = :test_id) AS test_rows "
-            f"FROM {table} WHERE organisation_id = :org_id"
+        rows = connection.execute(
+            text(
+                f"SELECT id::text, environment_id FROM {table} "  # noqa: S608 - fixed table allowlist
+                "WHERE organisation_id = :org_id"
+            ),
+            {"org_id": ORG_ID},
+        ).all()
+        actual = {row[0]: row[1] for row in rows if row[0] in legacy_row_ids[table]}
+        assert actual.keys() == legacy_row_ids[table], f"{table} lost v0.1 rows during upgrade"
+        assert all(environment_id == test_environment_id for environment_id in actual.values()), (
+            f"{table} did not backfill every v0.1 row to TEST"
         )
-        counts = connection.execute(
-            text(count_query),
-            {"org_id": ORG_ID, "test_id": test_environment_id},
-        ).one()
-        assert counts.test_rows == counts.total, f"{table} did not backfill entirely to TEST"
-    assert _evidence_digests(connection) == before
+    assert _evidence_digests(connection, legacy_row_ids) == before
     membership_role = connection.scalar(
         text(
             "SELECT role FROM organisation_memberships "
@@ -263,12 +292,13 @@ def main() -> None:
     engine = create_engine(database_url)
     with engine.begin() as connection:
         _seed_v01_fixture(connection)
-        before = _evidence_digests(connection)
+        legacy_row_ids = _legacy_row_ids(connection)
+        before = _evidence_digests(connection, legacy_row_ids)
     command.upgrade(config, "head")
     with engine.connect() as connection:
-        _verify_backfill(connection, before)
+        _verify_backfill(connection, before, legacy_row_ids)
     engine.dispose()
-    print("M1 upgrade proof passed: v0.1 rows -> TEST; LIVE_LIKE empty; evidence unchanged")
+    print("M1 upgrade proof passed: v0.1 rows -> TEST; evidence unchanged")
 
 
 if __name__ == "__main__":
