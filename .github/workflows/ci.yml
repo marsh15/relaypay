@@ -43,6 +43,9 @@ jobs:
       - name: Prove v0.2 upgrade without rewriting evidence
         run: uv run python -m scripts.verify_m2_upgrade
 
+      - name: Prove v0.3 merchant-balance upgrade and opening transfer
+        run: uv run python -m scripts.verify_m3_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
@@ -56,6 +59,7 @@ jobs:
           make lint
           make typecheck
           make test
+          make merchant-balance-demo
 
       - name: Console quality and dependency gate
         working-directory: apps/console
