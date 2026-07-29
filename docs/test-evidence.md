@@ -267,3 +267,11 @@ journal as if they were v0.1 rows. No later step ran and the result is not passi
 Commit `32985c3` corrected the proof boundary: the M1 check snapshots exact legacy IDs and bytes,
 the M2 check ends at its `0008_statement_currency` milestone boundary, and the separate M3 check
 owns `0008→head`. Fresh/disposable local reruns of all three upgrade proofs then passed.
+
+The second PR gate,
+[30471574423](https://github.com/marsh15/relaypay/actions/runs/30471574423), confirmed all three
+upgrade proofs and the complete backend gate, then stopped at the registry-backed production
+audit. Two new high-severity PostCSS source-map disclosure advisories covered the locked
+`8.5.10`. Commit `1daa959` applied the minimum patched `8.5.18` override. A clean install, lint,
+typecheck, production build, and production-only offline audit then passed locally; the live
+registry result remains gated by the next GitHub run.
