@@ -275,3 +275,24 @@ audit. Two new high-severity PostCSS source-map disclosure advisories covered th
 `8.5.10`. Commit `1daa959` applied the minimum patched `8.5.18` override. A clean install, lint,
 typecheck, production build, and production-only offline audit then passed locally; the live
 registry result remains gated by the next GitHub run.
+
+## v0.4.0 final publication evidence
+
+M3 was published at `2026-07-29T16:51:45Z` after both required empty-database release gates
+passed:
+
+- M3 PR: [#7](https://github.com/marsh15/relaypay/pull/7), with release gate
+  [30472083493](https://github.com/marsh15/relaypay/actions/runs/30472083493) passing in
+  `3m09s` on head commit `a2586883e128c1878e48b35b4fe9b30c896c8b0c`.
+- Canonical `main` gate:
+  [30472361535](https://github.com/marsh15/relaypay/actions/runs/30472361535) passed in `3m04s`
+  on merge commit `35a3e79610e2121103d15c4ba7e664c47a9f9713`.
+- Annotated tag `v0.4.0` has tag-object SHA
+  `0ddcf22634ad649af0584d0c1682999482c4e909` and resolves to that exact green `main`
+  commit.
+- Public release: [RelayPay v0.4.0 — Ledger-backed merchant balances](https://github.com/marsh15/relaypay/releases/tag/v0.4.0).
+- The release is final, not a draft or prerelease. GitHub reports the repository as public with
+  the MIT license, and the notes retain the synthetic-data and no-hosting warning.
+- M3 intentionally has no generated binary attachment. GitHub reports an empty asset list; the
+  tag-pinned checked-in release-note source has SHA-256
+  `a3c3322643ca4a44324d8e4971930d194f1592c5e7f292d82bd8e4437ebc6a25`.
