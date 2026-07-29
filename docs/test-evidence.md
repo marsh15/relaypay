@@ -189,3 +189,52 @@ three `WEBHOOK_TRANSPORT_ERROR` attempts and the scenario correctly entered `NEE
 No application assertion was represented as passing. The volume was discarded, the release
 surface was recreated from empty state using container-native migration/seed configuration, and
 the Playwright/axe rerun above passed. CI repeats that clean-volume sequence and remains canonical.
+
+## v0.4.0 release-candidate evidence
+
+Measured at `2026-07-29T16:26:18Z` (`2026-07-29T21:56:18+05:30`) on clean implementation
+commit `abd481c23811d191ba9aae958f0e19d2a3edf009`. This evidence-only update does not change
+the tested runtime.
+
+- Upgrade compatibility: `scripts.verify_m3_upgrade` built a representative v0.3 database,
+  upgraded it to `0009_merchant_balances`, and proved byte-for-byte stability for the old journal,
+  postings, and event evidence. It measured one deterministic 100-unit opening transfer, one
+  default merchant, four merchant ledger templates, and automatic default provisioning for a new
+  environment.
+- Financial invariants: the five focused merchant-balance tests covered capture to pending,
+  deterministic settlement to available, exact replay, concurrent settlement exclusion,
+  refund-after-payout receivables, later settlement offset, posting-derived reconstruction,
+  immutable balance transactions, CSRF, account isolation, and API replay.
+- Backend: Ruff lint passed and formatting reported `118 files already formatted`; strict mypy
+  reported `Success: no issues found in 82 source files`; pytest reported `81 passed in 12.28s`.
+- Database: fresh RelayPay, provider, and receiver migrations applied from empty PostgreSQL state.
+  All three Alembic drift checks reported `No new upgrade operations detected`.
+- Console: the locked install, ESLint, strict TypeScript, and Next.js `16.2.11` production build
+  passed. The production-only offline audit reported `found 0 vulnerabilities`; the canonical
+  registry-backed audit remains mandatory in GitHub Actions.
+- Compose: both default and collision-safe host-port configurations validated. Images rebuilt
+  with RelayPay `0.4.0`; a new PostgreSQL volume migrated and seeded inside Compose; provider,
+  receiver, API, and console all became healthy.
+- Browser: the permanent Playwright lost-response journey, including axe analysis, passed in
+  `8.3s` (`6.5s` test body) against the exact clean container graph.
+- Merchant-balance demo: exactly one provider effect, capture, journal, event, recipient,
+  delivery, and receiver row were measured. Pending moved from `125000` to zero, available moved
+  to `125000`, and merchant receivable remained zero after deterministic settlement.
+- Compatibility: `/api/v1` payment response bytes and the permanent lost-response proof remain
+  unchanged. All new settlement APIs are additive admin surfaces, and no network I/O occurs
+  inside financial transactions.
+
+Tooling: Python `3.12.12`, uv `0.10.4`, Node.js `26.4.0`, npm `11.17.0`, Docker `29.6.2`, and
+Docker Compose `5.3.1`.
+
+## v0.4.0 invalid local gate attempts (not passing evidence)
+
+The first clean Compose start could not bind host port `8000` because an unrelated
+`python -m http.server` process already owned it; the console port was likewise occupied by an
+unrelated project. No service failure was represented as passing. Compose gained opt-in host-port
+overrides, the same images started on `18000` and `13000`, and every requested service became
+healthy.
+
+The first Playwright launch was blocked by the local process sandbox before a browser page opened
+(`MachPortRendezvousServer: Permission denied`). It was rerun unchanged with the required macOS
+process permission against the same clean stack and passed as recorded above.
