@@ -9,6 +9,8 @@ x-app-environment: &app-environment
   PROVIDER_MIGRATION_DATABASE_URL: postgresql+psycopg://provider_migrator:${PROVIDER_MIGRATOR_DB_PASSWORD:-provider_migrator_dev}@postgres:5432/provider
   BANK_DATABASE_URL: postgresql+psycopg://bank_app:${BANK_APP_DB_PASSWORD:-bank_app_dev}@postgres:5432/bank
   BANK_MIGRATION_DATABASE_URL: postgresql+psycopg://bank_migrator:${BANK_MIGRATOR_DB_PASSWORD:-bank_migrator_dev}@postgres:5432/bank
+  COMMERCE_DATABASE_URL: postgresql+psycopg://commerce_app:${COMMERCE_APP_DB_PASSWORD:-commerce_app_dev}@postgres:5432/commerce
+  COMMERCE_MIGRATION_DATABASE_URL: postgresql+psycopg://commerce_migrator:${COMMERCE_MIGRATOR_DB_PASSWORD:-commerce_migrator_dev}@postgres:5432/commerce
   RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}@postgres:5432/relaypay
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/0
@@ -25,6 +27,10 @@ x-app-environment: &app-environment
   BANK_ACCOUNT_ID: ${BANK_ACCOUNT_ID:-bank_relaypay_demo}
   BANK_SIGNING_SECRET: ${BANK_SIGNING_SECRET:-dev-bank-signing-secret-change-me}
   BANK_CONTROL_SECRET: ${BANK_CONTROL_SECRET:-dev-bank-control-secret-change-me}
+  COMMERCE_BASE_URL: http://commerce:8004
+  COMMERCE_ACCOUNT_ID: ${COMMERCE_ACCOUNT_ID:-commerce_relaypay_demo}
+  COMMERCE_CONTROL_SECRET: ${COMMERCE_CONTROL_SECRET:-dev-commerce-control-secret-change-me}
+  CONNECTOR_CREDENTIAL_ENCRYPTION_KEY: ${CONNECTOR_CREDENTIAL_ENCRYPTION_KEY:-dev-connector-credential-encryption-key}
   RECEIVER_BASE_URL: http://receiver:8002
   RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:-dev-receiver-secret-change-me}
 
@@ -53,6 +59,8 @@ services:
       PROVIDER_APP_DB_PASSWORD: ${PROVIDER_APP_DB_PASSWORD:-provider_app_dev}
       BANK_MIGRATOR_DB_PASSWORD: ${BANK_MIGRATOR_DB_PASSWORD:-bank_migrator_dev}
       BANK_APP_DB_PASSWORD: ${BANK_APP_DB_PASSWORD:-bank_app_dev}
+      COMMERCE_MIGRATOR_DB_PASSWORD: ${COMMERCE_MIGRATOR_DB_PASSWORD:-commerce_migrator_dev}
+      COMMERCE_APP_DB_PASSWORD: ${COMMERCE_APP_DB_PASSWORD:-commerce_app_dev}
       RECEIVER_APP_DB_PASSWORD: ${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}
     ports:
       - "55432:5432"
@@ -96,6 +104,7 @@ services:
         alembic -c migrations/relaypay/alembic.ini upgrade head
         alembic -c migrations/provider/alembic.ini upgrade head
         alembic -c migrations/bank/alembic.ini upgrade head
+        alembic -c migrations/commerce/alembic.ini upgrade head
         alembic -c migrations/receiver/alembic.ini upgrade head
         python -m scripts.seed
     depends_on:
@@ -119,6 +128,8 @@ services:
       provider:
         condition: service_healthy
       bank:
+        condition: service_healthy
+      commerce:
         condition: service_healthy
       receiver:
         condition: service_healthy
@@ -186,6 +197,25 @@ services:
       retries: 5
       start_period: 30s
 
+  commerce:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["uvicorn", "apps.commerce.asgi:app", "--host", "0.0.0.0", "--port", "8004", "--no-access-log"]
+    environment: *app-environment
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health/live')"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
   poller:
     <<: *service-defaults
     build:
@@ -199,6 +229,8 @@ services:
       provider:
         condition: service_healthy
       bank:
+        condition: service_healthy
+      commerce:
         condition: service_healthy
       receiver:
         condition: service_healthy

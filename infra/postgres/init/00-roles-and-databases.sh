@@ -8,6 +8,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set=provider_app_password="$PROVIDER_APP_DB_PASSWORD" \
   --set=bank_migrator_password="$BANK_MIGRATOR_DB_PASSWORD" \
   --set=bank_app_password="$BANK_APP_DB_PASSWORD" \
+  --set=commerce_migrator_password="$COMMERCE_MIGRATOR_DB_PASSWORD" \
+  --set=commerce_app_password="$COMMERCE_APP_DB_PASSWORD" \
   --set=receiver_app_password="$RECEIVER_APP_DB_PASSWORD" <<'SQL'
 CREATE ROLE relaypay_migrator LOGIN PASSWORD :'relaypay_migrator_password';
 CREATE ROLE relaypay_app LOGIN PASSWORD :'relaypay_app_password';
@@ -15,18 +17,32 @@ CREATE ROLE provider_migrator LOGIN PASSWORD :'provider_migrator_password';
 CREATE ROLE provider_app LOGIN PASSWORD :'provider_app_password';
 CREATE ROLE bank_migrator LOGIN PASSWORD :'bank_migrator_password';
 CREATE ROLE bank_app LOGIN PASSWORD :'bank_app_password';
+CREATE ROLE commerce_migrator LOGIN PASSWORD :'commerce_migrator_password';
+CREATE ROLE commerce_app LOGIN PASSWORD :'commerce_app_password';
 CREATE ROLE receiver_app LOGIN PASSWORD :'receiver_app_password';
 
 CREATE DATABASE relaypay OWNER relaypay_migrator;
 CREATE DATABASE provider OWNER provider_migrator;
 CREATE DATABASE bank OWNER bank_migrator;
+CREATE DATABASE commerce OWNER commerce_migrator;
 
 REVOKE CONNECT ON DATABASE relaypay FROM PUBLIC;
 REVOKE CONNECT ON DATABASE provider FROM PUBLIC;
 REVOKE CONNECT ON DATABASE bank FROM PUBLIC;
+REVOKE CONNECT ON DATABASE commerce FROM PUBLIC;
 GRANT CONNECT ON DATABASE relaypay TO relaypay_migrator, relaypay_app, receiver_app;
 GRANT CONNECT ON DATABASE provider TO provider_migrator, provider_app;
 GRANT CONNECT ON DATABASE bank TO bank_migrator, bank_app;
+GRANT CONNECT ON DATABASE commerce TO commerce_migrator, commerce_app;
+SQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname commerce <<'SQL'
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO commerce_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE commerce_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO commerce_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE commerce_migrator IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO commerce_app;
 SQL
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname relaypay <<'SQL'

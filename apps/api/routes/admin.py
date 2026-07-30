@@ -6,6 +6,12 @@ from fastapi import APIRouter, Depends, File, Form, Header, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.config import Settings
+from relaypay.connectors.adapters import BankConnectorAdapter, PaymentConnectorAdapter
+from relaypay.connectors.service import (
+    activate_connector_version,
+    create_connector_version,
+    verify_connector_version,
+)
 from relaypay.contracts import EmptyCommand
 from relaypay.demo_scenarios.service import (
     ScenarioFaultController,
@@ -115,6 +121,23 @@ class PayoutCreate(BaseModel):
     beneficiary_id: str = Field(alias="beneficiaryId", min_length=1, max_length=64)
     amount: int = Field(strict=True, gt=0)
     currency: Literal["INR"]
+
+
+class ConnectorVersionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reference: str = Field(min_length=1, max_length=128)
+    kind: Literal["PAYMENT", "BANK", "COMMERCE"]
+    base_url: str = Field(alias="baseUrl", min_length=1, max_length=512)
+    capabilities: list[str] = Field(min_length=1, max_length=16)
+    timeout_ms: int = Field(alias="timeoutMs", ge=100, le=30000)
+    credential_name: str = Field(
+        default="api_secret", alias="credentialName", min_length=1, max_length=64
+    )
+
+
+class ConnectorVerify(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    kind: Literal["PAYMENT", "BANK"]
 
 
 def build_admin_router(
@@ -753,5 +776,88 @@ def build_admin_router(
             delivery_public_id=delivery_id,
         )
         return {"deliveryId": replay_id, "status": "PENDING"}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/connector-versions",
+        status_code=201,
+    )
+    def post_connector_version(
+        environment_id: str,
+        payload: ConnectorVersionCreate,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            issued = create_connector_version(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                reference=payload.reference,
+                kind=payload.kind,
+                base_url=payload.base_url,
+                capabilities=payload.capabilities,
+                timeout_ms=payload.timeout_ms,
+                encryption_key=settings.CONNECTOR_CREDENTIAL_ENCRYPTION_KEY.get_secret_value(),
+                credential_name=payload.credential_name,
+            )
+        return {
+            "connectorId": issued.connector_public_id,
+            "versionId": issued.version_public_id,
+            "version": issued.version,
+            "credential": issued.credential,
+        }
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/connector-versions/{version_id}/verify",
+        status_code=204,
+    )
+    def post_connector_verify(
+        environment_id: str,
+        version_id: str,
+        payload: ConnectorVerify,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> None:
+        require_csrf(principal, csrf_token)
+        adapter = (
+            PaymentConnectorAdapter(
+                base_url=settings.PROVIDER_BASE_URL,
+                signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
+                timeout_seconds=2,
+            )
+            if payload.kind == "PAYMENT"
+            else BankConnectorAdapter(
+                base_url=settings.BANK_BASE_URL,
+                signing_secret=settings.BANK_SIGNING_SECRET.get_secret_value(),
+                timeout_seconds=2,
+            )
+        )
+        verify_connector_version(
+            session_factory,
+            principal=principal,
+            environment_public_id=environment_id,
+            version_public_id=version_id,
+            adapter=adapter,
+        )
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/connector-versions/{version_id}/activate",
+        status_code=204,
+    )
+    def post_connector_activate(
+        environment_id: str,
+        version_id: str,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> None:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            activate_connector_version(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                version_public_id=version_id,
+            )
 
     return router

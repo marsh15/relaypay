@@ -29,11 +29,15 @@ def reset() -> None:
     assert_reset_allowed(settings, dict(os.environ))
     relay_url = _url(settings.RELAYPAY_MIGRATION_DATABASE_URL, settings.RELAYPAY_DATABASE_URL)
     provider_url = _url(settings.PROVIDER_MIGRATION_DATABASE_URL, settings.PROVIDER_DATABASE_URL)
+    bank_url = _url(settings.BANK_MIGRATION_DATABASE_URL, settings.BANK_DATABASE_URL)
+    commerce_url = _url(settings.COMMERCE_MIGRATION_DATABASE_URL, settings.COMMERCE_DATABASE_URL)
 
     databases = (
         (settings.RECEIVER_DATABASE_URL.get_secret_value(), "TRUNCATE receiver.received_events"),
         (relay_url, "TRUNCATE organisations CASCADE"),
         (provider_url, "TRUNCATE provider_accounts CASCADE"),
+        (bank_url, "TRUNCATE bank_accounts CASCADE"),
+        (commerce_url, "TRUNCATE commerce_accounts CASCADE"),
     )
     for database_url, statement in databases:
         engine = create_engine(database_url)

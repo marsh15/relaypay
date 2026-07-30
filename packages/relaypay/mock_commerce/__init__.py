@@ -1,0 +1,1 @@
+"""Synthetic commerce ownership boundary."""

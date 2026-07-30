@@ -20,6 +20,7 @@ from relaypay.identity.security import hash_password, issue_api_key
 from relaypay.ids import new_public_id
 from relaypay.ledger.models import LedgerAccount
 from relaypay.mock_bank.models import BankAccount
+from relaypay.mock_commerce.models import CommerceAccount
 from relaypay.mock_provider.models import ProviderAccount
 from sqlalchemy import select
 
@@ -179,6 +180,7 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
     engine.dispose()
     _seed_provider_account(settings)
     _seed_bank_account(settings)
+    _seed_commerce_account(settings)
     return issued_keys
 
 
@@ -220,6 +222,29 @@ def _seed_bank_account(settings: Settings) -> None:
                     name="RelayPay deterministic synthetic bank account",
                     signing_secret_digest=hashlib.sha256(
                         settings.BANK_SIGNING_SECRET.get_secret_value().encode()
+                    ).digest(),
+                )
+            )
+    engine.dispose()
+
+
+def _seed_commerce_account(settings: Settings) -> None:
+    engine = build_engine(
+        settings.COMMERCE_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-commerce-seed",
+    )
+    factory = build_session_factory(engine)
+    with factory() as session, session.begin():
+        existing = session.scalar(
+            select(CommerceAccount).where(CommerceAccount.public_id == settings.COMMERCE_ACCOUNT_ID)
+        )
+        if existing is None:
+            session.add(
+                CommerceAccount(
+                    public_id=settings.COMMERCE_ACCOUNT_ID,
+                    name="RelayPay deterministic synthetic commerce account",
+                    signing_secret_digest=hashlib.sha256(
+                        settings.COMMERCE_CONTROL_SECRET.get_secret_value().encode()
                     ).digest(),
                 )
             )

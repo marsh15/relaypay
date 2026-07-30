@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck unit test infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo console-install console-check console-e2e check
+.PHONY: install lint format typecheck unit test infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -29,6 +29,7 @@ migrate:
 	uv run alembic -c migrations/provider/alembic.ini upgrade head
 	uv run alembic -c migrations/receiver/alembic.ini upgrade head
 	uv run alembic -c migrations/bank/alembic.ini upgrade head
+	uv run alembic -c migrations/commerce/alembic.ini upgrade head
 
 seed:
 	uv run python -m scripts.seed
@@ -44,6 +45,9 @@ reconciliation-demo:
 
 merchant-balance-demo:
 	uv run python -m scripts.merchant_balance_demo
+
+connector-demo:
+	uv run python -m scripts.connector_demo
 
 console-install:
 	cd apps/console && npm ci

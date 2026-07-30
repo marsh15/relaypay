@@ -1,5 +1,13 @@
 """Import all RelayPay ORM models so Alembic sees one complete metadata graph."""
 
+from relaypay.connectors.models import (
+    Connector,
+    ConnectorCredentialVersion,
+    ConnectorHealthObservation,
+    ConnectorVersion,
+    InboundWebhookAttempt,
+    InboundWebhookEvent,
+)
 from relaypay.demo_scenarios.models import ScenarioRun
 from relaypay.event_delivery.models import (
     EventRecipient,
@@ -49,9 +57,15 @@ __all__ = [
     "BalanceTransaction",
     "Beneficiary",
     "Capture",
+    "Connector",
+    "ConnectorCredentialVersion",
+    "ConnectorHealthObservation",
+    "ConnectorVersion",
     "Customer",
     "EventRecipient",
     "IdempotencyRecord",
+    "InboundWebhookAttempt",
+    "InboundWebhookEvent",
     "Journal",
     "LedgerAccount",
     "MerchantAccount",

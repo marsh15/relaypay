@@ -1,0 +1,1 @@
+"""Synthetic commerce ASGI service."""
