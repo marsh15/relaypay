@@ -52,6 +52,9 @@ jobs:
       - name: Prove v0.5 connector upgrade preserves historical evidence
         run: uv run python -m scripts.verify_m5_upgrade
 
+      - name: Prove v0.6 API-only upgrade preserves database state
+        run: uv run python -m scripts.verify_m6_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
@@ -65,7 +68,11 @@ jobs:
       - name: Backend correctness gate
         run: |
           make lint
+          make format-check
           make typecheck
+          make api-contract
+          make sdk-drift
+          make sdk-example
           make test
           make merchant-balance-demo
 
@@ -76,6 +83,9 @@ jobs:
           npm run typecheck
           npm run build
           npm audit --omit=dev --audit-level=high
+
+      - name: Validate development and production Compose graphs
+        run: make compose-check
 
       - name: Recreate clean release surface
         run: |

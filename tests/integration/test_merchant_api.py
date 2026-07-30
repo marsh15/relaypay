@@ -168,6 +168,64 @@ def test_financial_routes_reject_unknown_fields_without_echoing_values(
     assert marker not in response.text
 
 
+def test_payment_collection_uses_stable_filter_bound_cursors(
+    client: TestClient, merchant_keys: tuple[str, str]
+) -> None:
+    first_key, second_key = merchant_keys
+    customer = client.post(
+        "/api/v1/customers",
+        headers=_authorization(first_key),
+        json={
+            "merchant_customer_reference": f"page-customer-{uuid.uuid4().hex}",
+            "display_name": "Pagination customer",
+        },
+    )
+    assert customer.status_code == 201
+
+    created_ids: list[str] = []
+    for index in range(3):
+        created = client.post(
+            "/api/v1/payment_intents",
+            headers={
+                **_authorization(first_key),
+                "Idempotency-Key": f"page-{uuid.uuid4().hex}",
+            },
+            json={
+                "customer_id": customer.json()["id"],
+                "merchant_reference": f"page-order-{index}-{uuid.uuid4().hex}",
+                "amount": 1_000 + index,
+                "currency": "INR",
+            },
+        )
+        assert created.status_code == 201
+        created_ids.append(created.json()["id"])
+
+    first_page = client.get("/api/v1/payment_intents?limit=2", headers=_authorization(first_key))
+    assert first_page.status_code == 200
+    assert len(first_page.json()["data"]) == 2
+    cursor = first_page.json()["nextCursor"]
+    assert isinstance(cursor, str)
+
+    second_page = client.get(
+        f"/api/v1/payment_intents?limit=2&after={cursor}",
+        headers=_authorization(first_key),
+    )
+    assert second_page.status_code == 200
+    returned = {item["id"] for item in first_page.json()["data"] + second_page.json()["data"]}
+    assert set(created_ids).issubset(returned)
+
+    incompatible = client.get(
+        f"/api/v1/payment_intents?limit=2&merchantReference=different&after={cursor}",
+        headers=_authorization(first_key),
+    )
+    assert incompatible.status_code == 400
+    assert incompatible.json()["error"]["code"] == "INVALID_CURSOR"
+
+    isolated = client.get("/api/v1/payment_intents?limit=100", headers=_authorization(second_key))
+    assert isolated.status_code == 200
+    assert not set(created_ids).intersection(item["id"] for item in isolated.json()["data"])
+
+
 def test_merchant_api_key_cannot_call_administrative_retry_lookup(
     client: TestClient, merchant_keys: tuple[str, str]
 ) -> None:

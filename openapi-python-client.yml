@@ -1,0 +1,5 @@
+project_name_override: relaypay-generated-client
+package_name_override: _relaypay_generated
+package_version_override: 0.7.0
+post_hooks: []
+use_path_prefixes_for_title_model_names: false

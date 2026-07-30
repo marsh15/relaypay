@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "INVALID_CURSOR",
+    "details": null,
+    "message": "The pagination cursor is invalid or incompatible with these filters"
+  }
+}

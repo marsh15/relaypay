@@ -40,3 +40,18 @@ class RefundCreate(StrictRequest):
     amount: PositivePaise
     currency: Currency = "INR"
     merchant_refund_reference: Annotated[str, Field(min_length=1, max_length=128)] | None = None
+
+
+class PaymentIntentSummary(BaseModel):
+    id: str
+    merchantReference: str
+    amount: int
+    currency: Currency
+    authorizationStatus: str | None
+    captureStatus: str | None
+    createdAt: str
+
+
+class PaymentIntentPage(BaseModel):
+    data: list[PaymentIntentSummary]
+    nextCursor: str | None
