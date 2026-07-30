@@ -57,9 +57,9 @@ Integration tests use PostgreSQL and Redis at the development ports from `.env.e
 them with `make infra-up`, then run `make migrate` and `make seed` when not using the complete
 Compose stack.
 
-Upgrading an existing v0.4 database adds reserved payouts and the separately credentialed
-synthetic bank without rewriting historical financial evidence. See the
-[v0.5.0 migration guide](docs/migrations/v0.5.0.md) before applying the migration.
+Upgrading an existing v0.5 database adds versioned connectors, signed inbound webhook evidence,
+and an isolated synthetic commerce database without rewriting historical evidence. See the
+[v0.6.0 migration guide](docs/migrations/v0.6.0.md) before applying the migration.
 
 With the complete stack running, export a synthetic provider statement, import it into TEST,
 and process its reconciliation run with:
@@ -72,6 +72,12 @@ Run the permanent lost-response proof and settle its capture into available merc
 
 ```bash
 make merchant-balance-demo
+```
+
+Run the versioned connector, inbound webhook, and commerce synchronization proof:
+
+```bash
+make connector-demo
 ```
 
 To restore only synthetic state, stop application processes and use the explicit destructive
@@ -98,6 +104,8 @@ flowchart LR
     API --> Provider["Deterministic provider"]
     Worker --> Bank["Deterministic synthetic bank"]
     Bank --> BankDB[("Bank PostgreSQL")]
+    Worker --> Commerce["Synthetic commerce"]
+    Commerce --> CommerceDB[("Commerce PostgreSQL")]
     Provider --> ProviderDB[("Provider PostgreSQL")]
     Poller["Recovery / delivery poller"] --> RelayDB
     Poller --> Reconcile["Leased reconciliation runs"]
@@ -128,6 +136,7 @@ ledger history, immutable event bytes, and delivery progress.
 - [v0.3.0 release notes](docs/releases/v0.3.0.md)
 - [v0.4.0 release notes](docs/releases/v0.4.0.md)
 - [v0.5.0 release notes](docs/releases/v0.5.0.md)
+- [v0.6.0 release notes](docs/releases/v0.6.0.md)
 
 ## Technology
 

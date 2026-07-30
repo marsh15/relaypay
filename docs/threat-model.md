@@ -19,6 +19,8 @@ is synthetic, but the sandbox preserves production-style integrity properties.
 | Tenant → evidence | cross-tenant records or secret leakage | organisation predicate on reads, admin-only session surface, `404` for foreign IDs, bounded collections, redacted key hints and safe error codes |
 | Administrator → settlement | duplicate movement, cross-environment account, stale balance | session+CSRF, route-aware idempotency, composite tenant keys, merchant/capture row locks, unique immutable settlement item per capture |
 | RelayPay → synthetic bank | duplicate transfer, forged result, ambiguous timeout | committed send evidence, one stable key per numbered attempt, lookup-only recovery, exact signed response validation, reservation retained under ambiguity |
+| Provider → inbound webhook | forged payload, replay, duplicate event, processing outage | signature before parsing, bounded timestamp window, exact immutable bytes/digest, provider-event deduplication, leased attempts and dead letter |
+| Connector credentials | plaintext disclosure, unsafe rotation, cross-environment use | AES-GCM ciphertext, digest-only comparison, show-once issuance, pending verification, explicit activation, composite tenant keys |
 | Database roles | cross-database/schema access | distinct app/migrator roles, revoked public connect/create, isolated receiver schema, composite tenant foreign keys |
 
 ## Abuse resistance

@@ -28,6 +28,12 @@ PublicIdPrefix = Literal[
     "bnf",
     "pot",
     "pat",
+    "con",
+    "cnv",
+    "crd",
+    "iwe",
+    "iwa",
+    "ord",
 ]
 
 _PUBLIC_ID_SEPARATOR: Final = "_"

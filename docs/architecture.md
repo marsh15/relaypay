@@ -66,6 +66,12 @@ sent, workers may only look up that key. Ambiguity retains the reservation; veri
 releases it; verified success atomically consumes it with one payout journal, balance transaction,
 terminal response, history record, and event.
 
+Connector configuration is environment scoped and versioned. Credential ciphertext and digests are
+immutable; a pending version is health-verified before explicit activation. Circuit and rate-limit
+observations remain durable in PostgreSQL. Inbound webhook bytes are authenticated before parsing,
+stored exactly once, then claimed in short transactions; commerce synchronization occurs outside
+the RelayPay transaction against its separately credentialed database.
+
 ## Public surface
 
 Caddy exposes the console, `/api/*`, `/health/*`, and the bundled `/webhooks/relaypay` receiver.

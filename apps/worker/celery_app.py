@@ -35,5 +35,9 @@ app.conf.update(
             "task": "relaypay.dispatch_payouts",
             "schedule": 1.0,
         },
+        "process-inbound-webhooks": {
+            "task": "relaypay.process_inbound_webhooks",
+            "schedule": 2.0,
+        },
     },
 )

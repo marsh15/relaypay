@@ -1,7 +1,9 @@
 from relaypay.config import get_settings
+from relaypay.connectors.service import claim_inbound_webhook, process_inbound_claim
 from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_batch
 from relaypay.event_delivery.materializer import materialize_deliveries
+from relaypay.mock_commerce.service import synchronize_event
 from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
@@ -88,3 +90,33 @@ def dispatch_payouts() -> int:
         )
     finally:
         engine.dispose()
+
+
+@app.task(name="relaypay.process_inbound_webhooks")  # type: ignore[untyped-decorator]
+def process_inbound_webhooks() -> int:
+    settings = get_settings()
+    relay_engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-inbound-worker",
+    )
+    commerce_engine = build_engine(
+        settings.COMMERCE_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-inbound-commerce",
+    )
+    relay_factory = build_session_factory(relay_engine)
+    commerce_factory = build_session_factory(commerce_engine)
+    processed = 0
+    try:
+        while (claim := claim_inbound_webhook(relay_factory)) is not None:
+            process_inbound_claim(
+                relay_factory,
+                claim,
+                handler=lambda payload, event_id: synchronize_event(
+                    commerce_factory, payload, event_id
+                ),
+            )
+            processed += 1
+        return processed
+    finally:
+        commerce_engine.dispose()
+        relay_engine.dispose()

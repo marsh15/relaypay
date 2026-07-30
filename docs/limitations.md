@@ -10,6 +10,8 @@
 - Single-capture and bounded evidence assumptions are deliberate demonstration constraints.
 - Merchant settlement and payout administration are API-first. The synthetic bank is a
   deterministic test boundary, not a real transfer rail.
+- Connector and commerce integrations are deterministic synthetic boundaries. Commerce excludes
+  inventory, fulfillment, taxes, distributed sagas, and real merchant credentials.
 - No multi-region operation, automatic failover, point-in-time recovery, managed KMS, WAF, or
   production observability backend.
 - In-process login rate limiting is per API process; a distributed limiter is required before

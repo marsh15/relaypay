@@ -33,6 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.routes.admin import build_admin_router
+from apps.api.routes.inbound import build_inbound_router
 from apps.api.routes.payments import build_payments_router
 
 logger = logging.getLogger("relaypay.api")
@@ -96,7 +97,7 @@ def create_app(
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay API", version="0.5.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay API", version="0.6.0", lifespan=lifespan)
     app.state.settings = resolved
     app.state.engine = engine
     app.state.session_factory = session_factory
@@ -113,6 +114,7 @@ def create_app(
             provider_transport=transport,
         )
     )
+    app.include_router(build_inbound_router(settings=resolved, session_factory=session_factory))
 
     @app.exception_handler(RelayPayError)
     async def handle_relaypay_error(_: Request, error: RelayPayError) -> JSONResponse:

@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     BANK_ACCOUNT_ID: str = "bank_relaypay_demo"
     BANK_SIGNING_SECRET: SecretStr = SecretStr("dev-bank-signing-secret-change-me")
     BANK_CONTROL_SECRET: SecretStr = SecretStr("dev-bank-control-secret-change-me")
+    COMMERCE_DATABASE_URL: SecretStr = SecretStr(
+        "postgresql+psycopg://commerce_app:commerce_app_dev@localhost:55432/commerce"
+    )
+    COMMERCE_MIGRATION_DATABASE_URL: SecretStr | None = None
+    COMMERCE_BASE_URL: str = "http://localhost:8004"
+    COMMERCE_ACCOUNT_ID: str = "commerce_relaypay_demo"
+    COMMERCE_CONTROL_SECRET: SecretStr = SecretStr("dev-commerce-control-secret-change-me")
+    CONNECTOR_CREDENTIAL_ENCRYPTION_KEY: SecretStr = SecretStr(
+        "dev-connector-credential-encryption-key"
+    )
+    INBOUND_WEBHOOK_REPLAY_SECONDS: int = 300
     RECEIVER_BASE_URL: str = "http://localhost:8002"
     RECEIVER_WEBHOOK_SECRET: SecretStr = Field(min_length=16)
 
