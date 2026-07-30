@@ -315,3 +315,21 @@ passed:
 - The first PR gate, run `30475533458`, failed because the permanent M3 proof advanced through
   future M4 DDL. The fix pins that proof to its `0009_merchant_balances` release boundary; the
   independent M4 upgrade proof remains responsible for `0010_payouts`.
+## v0.6.0 release evidence
+
+- M5 pull request: [#11](https://github.com/marsh15/relaypay/pull/11).
+- Passing PR gate: [run 30546524532](https://github.com/marsh15/relaypay/actions/runs/30546524532),
+  completed in 3m21s.
+- Passing canonical main gate:
+  [run 30546815526](https://github.com/marsh15/relaypay/actions/runs/30546815526) on exact
+  merge commit `cd3c9384b18f211a434b7df0dd7bcc3b83bac86e`.
+- Annotated tag object: `d8085ee2b89e48c911ace1fde4986233650436cb`; dereferenced commit:
+  `cd3c9384b18f211a434b7df0dd7bcc3b83bac86e`.
+- Public final release:
+  [v0.6.0](https://github.com/marsh15/relaypay/releases/tag/v0.6.0).
+- Release-notes SHA-256:
+  `743eb6670682532277f3b2a9e28a7ee2309f91129ec5e9f360556e11895ad294`.
+- No generated binary belongs to M5, so the release intentionally has no binary assets.
+- Local measured gate: Ruff and strict mypy passed, 87 backend tests passed, five migration
+  graphs were drift-free, console lint/type/build passed, and `make connector-demo` synchronized
+  one synthetic commerce order to `PAID`.
