@@ -296,3 +296,22 @@ passed:
 - M3 intentionally has no generated binary attachment. GitHub reports an empty asset list; the
   tag-pinned checked-in release-note source has SHA-256
   `a3c3322643ca4a44324d8e4971930d194f1592c5e7f292d82bd8e4437ebc6a25`.
+## v0.5.0 release evidence
+
+- M4 pull request: [#9](https://github.com/marsh15/relaypay/pull/9).
+- Passing PR release gate: [run 30475790231](https://github.com/marsh15/relaypay/actions/runs/30475790231),
+  completed in 3m19s.
+- Passing canonical `main` release gate:
+  [run 30476082141](https://github.com/marsh15/relaypay/actions/runs/30476082141), completed
+  in 2m53s on exact merge commit `1a75f4d14d07f7b66fab2824df570e697777f0e3`.
+- Annotated tag object: `a89c1656d0bc7c7a3612cdc7b4f109811aa3e1ca`; dereferenced commit:
+  `1a75f4d14d07f7b66fab2824df570e697777f0e3`.
+- Public final release:
+  [v0.5.0](https://github.com/marsh15/relaypay/releases/tag/v0.5.0).
+- Corrected release-notes SHA-256:
+  `78070e3212d0f3ffa641a6d789fdbcd5373d0786ac3c10c0797c169c7be4546d`.
+- No generated binary belongs to M4, so the release intentionally has no binary assets.
+- Verification confirmed the synthetic-data/no-hosting warning and repository MIT license.
+- The first PR gate, run `30475533458`, failed because the permanent M3 proof advanced through
+  future M4 DDL. The fix pins that proof to its `0009_merchant_balances` release boundary; the
+  independent M4 upgrade proof remains responsible for `0010_payouts`.
