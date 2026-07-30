@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,6 +14,7 @@ from relaypay.idempotency import Fingerprint, canonical_json_bytes, digest_secre
 from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.merchant_balances.service import default_merchant_account_id
+from relaypay.pagination import CursorPosition, decode_cursor, encode_cursor
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
 
@@ -34,6 +35,12 @@ class CreatedCustomer:
 
 
 CommandKind = Literal["AUTHORIZE", "CAPTURE", "REFUND"]
+
+
+@dataclass(frozen=True, slots=True)
+class PaymentPage:
+    data: list[dict[str, object]]
+    next_cursor: str | None
 
 
 def _terminal_result(record: IdempotencyRecord, *, replayed: bool) -> HTTPResult:
@@ -782,6 +789,92 @@ def read_payment(
             }
         )
         return HTTPResult(200, body, {"Content-Type": "application/json"})
+
+
+def list_payments(
+    factory: sessionmaker[Session],
+    *,
+    organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None,
+    limit: int,
+    after: str | None,
+    merchant_reference: str | None,
+    cursor_secret: str,
+) -> PaymentPage:
+    filters: dict[str, object] = {"merchantReference": merchant_reference}
+    position = (
+        decode_cursor(after, filters=filters, secret=cursor_secret) if after is not None else None
+    )
+    with factory() as session, session.begin():
+        resolved_environment_id = resolve_environment_id(
+            session, organisation_id=organisation_id, environment_id=environment_id
+        )
+        statement = select(PaymentIntent).where(
+            PaymentIntent.organisation_id == organisation_id,
+            PaymentIntent.environment_id == resolved_environment_id,
+        )
+        if merchant_reference is not None:
+            statement = statement.where(PaymentIntent.merchant_reference == merchant_reference)
+        if position is not None:
+            try:
+                position_id = uuid.UUID(position.identifier)
+            except ValueError as error:
+                from relaypay.pagination import invalid_cursor
+
+                raise invalid_cursor() from error
+            statement = statement.where(
+                or_(
+                    PaymentIntent.created_at < position.created_at,
+                    and_(
+                        PaymentIntent.created_at == position.created_at,
+                        PaymentIntent.id < position_id,
+                    ),
+                )
+            )
+        payments = list(
+            session.scalars(
+                statement.order_by(PaymentIntent.created_at.desc(), PaymentIntent.id.desc()).limit(
+                    limit + 1
+                )
+            )
+        )
+        page_items = payments[:limit]
+        data: list[dict[str, object]] = []
+        for payment in page_items:
+            authorization = session.scalar(
+                select(Authorization).where(
+                    Authorization.organisation_id == organisation_id,
+                    Authorization.environment_id == resolved_environment_id,
+                    Authorization.payment_intent_id == payment.id,
+                )
+            )
+            capture = session.scalar(
+                select(Capture).where(
+                    Capture.organisation_id == organisation_id,
+                    Capture.environment_id == resolved_environment_id,
+                    Capture.payment_intent_id == payment.id,
+                )
+            )
+            data.append(
+                {
+                    "id": payment.public_id,
+                    "merchantReference": payment.merchant_reference,
+                    "amount": payment.amount,
+                    "currency": payment.currency,
+                    "authorizationStatus": authorization.status if authorization else None,
+                    "captureStatus": capture.status if capture else None,
+                    "createdAt": payment.created_at.isoformat(),
+                }
+            )
+        next_cursor = None
+        if len(payments) > limit and page_items:
+            last = page_items[-1]
+            next_cursor = encode_cursor(
+                CursorPosition(last.created_at, str(last.id)),
+                filters=filters,
+                secret=cursor_secret,
+            )
+        return PaymentPage(data=data, next_cursor=next_cursor)
 
 
 def read_operation(

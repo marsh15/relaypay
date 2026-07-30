@@ -1,0 +1,4635 @@
+{
+  "components": {
+    "schemas": {
+      "APIKeyCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "title": "APIKeyCreate",
+        "type": "object"
+      },
+      "APIKeyScopesUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scopes"
+        ],
+        "title": "APIKeyScopesUpdate",
+        "type": "object"
+      },
+      "BeneficiaryCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "bankAccountReference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Bankaccountreference",
+            "type": "string"
+          },
+          "displayName": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Displayname",
+            "type": "string"
+          },
+          "reference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "displayName",
+          "bankAccountReference"
+        ],
+        "title": "BeneficiaryCreate",
+        "type": "object"
+      },
+      "Body_post_statement_import_api_admin_v1_environments__environment_id__statement_imports_post": {
+        "properties": {
+          "periodEnd": {
+            "format": "date-time",
+            "title": "Periodend",
+            "type": "string"
+          },
+          "periodStart": {
+            "format": "date-time",
+            "title": "Periodstart",
+            "type": "string"
+          },
+          "provider": {
+            "const": "PAYMENT_PROVIDER",
+            "title": "Provider",
+            "type": "string"
+          },
+          "sourceFormat": {
+            "enum": [
+              "CSV",
+              "JSON"
+            ],
+            "title": "Sourceformat",
+            "type": "string"
+          },
+          "sourceReference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Sourcereference",
+            "type": "string"
+          },
+          "statement": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Statement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "sourceReference",
+          "sourceFormat",
+          "periodStart",
+          "periodEnd",
+          "statement"
+        ],
+        "title": "Body_post_statement_import_api_admin_v1_environments__environment_id__statement_imports_post",
+        "type": "object"
+      },
+      "ConnectorVerify": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "PAYMENT",
+              "BANK"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ConnectorVerify",
+        "type": "object"
+      },
+      "ConnectorVersionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "baseUrl": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Baseurl",
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "credentialName": {
+            "default": "api_secret",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Credentialname",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "PAYMENT",
+              "BANK",
+              "COMMERCE"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Reference",
+            "type": "string"
+          },
+          "timeoutMs": {
+            "maximum": 30000.0,
+            "minimum": 100.0,
+            "title": "Timeoutms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reference",
+          "kind",
+          "baseUrl",
+          "capabilities",
+          "timeoutMs"
+        ],
+        "title": "ConnectorVersionCreate",
+        "type": "object"
+      },
+      "CustomerCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "merchant_customer_reference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Merchant Customer Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchant_customer_reference"
+        ],
+        "title": "CustomerCreate",
+        "type": "object"
+      },
+      "EmptyCommand": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "EmptyCommand",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+            "title": "Email",
+            "type": "string"
+          },
+          "organisationId": {
+            "anyOf": [
+              {
+                "pattern": "^org_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organisationid"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "MembershipUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "ORGANISATION_ADMIN",
+              "DEVELOPER",
+              "VIEWER"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "default": "ACTIVE",
+            "enum": [
+              "ACTIVE",
+              "DISABLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "title": "MembershipUpdate",
+        "type": "object"
+      },
+      "MerchantAccountCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference",
+          "name"
+        ],
+        "title": "MerchantAccountCreate",
+        "type": "object"
+      },
+      "MismatchNote": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "MismatchNote",
+        "type": "object"
+      },
+      "MismatchResolution": {
+        "additionalProperties": false,
+        "properties": {
+          "compensatingJournalId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compensatingjournalid"
+          },
+          "note": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "MismatchResolution",
+        "type": "object"
+      },
+      "OrganisationCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OrganisationCreate",
+        "type": "object"
+      },
+      "PaymentIntentCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9.223372036854776e+18,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "INR",
+            "default": "INR",
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_id": {
+            "pattern": "^cus_[0-9a-f]{32}$",
+            "title": "Customer Id",
+            "type": "string"
+          },
+          "merchant_reference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Merchant Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_id",
+          "merchant_reference",
+          "amount"
+        ],
+        "title": "PaymentIntentCreate",
+        "type": "object"
+      },
+      "PaymentIntentPage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentIntentSummary"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "data",
+          "nextCursor"
+        ],
+        "title": "PaymentIntentPage",
+        "type": "object"
+      },
+      "PaymentIntentSummary": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "integer"
+          },
+          "authorizationStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorizationstatus"
+          },
+          "captureStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capturestatus"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "currency": {
+            "const": "INR",
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "merchantReference": {
+            "title": "Merchantreference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "merchantReference",
+          "amount",
+          "currency",
+          "authorizationStatus",
+          "captureStatus",
+          "createdAt"
+        ],
+        "title": "PaymentIntentSummary",
+        "type": "object"
+      },
+      "PayoutCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "exclusiveMinimum": 0.0,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "beneficiaryId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Beneficiaryid",
+            "type": "string"
+          },
+          "currency": {
+            "const": "INR",
+            "title": "Currency",
+            "type": "string"
+          },
+          "merchantAccountId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Merchantaccountid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchantAccountId",
+          "beneficiaryId",
+          "amount",
+          "currency"
+        ],
+        "title": "PayoutCreate",
+        "type": "object"
+      },
+      "RefundCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9.223372036854776e+18,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "INR",
+            "default": "INR",
+            "title": "Currency",
+            "type": "string"
+          },
+          "merchant_refund_reference": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Refund Reference"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "title": "RefundCreate",
+        "type": "object"
+      },
+      "ScenarioCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "scenarioType": {
+            "const": "LOST_CAPTURE_RESPONSE",
+            "title": "Scenariotype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenarioType"
+        ],
+        "title": "ScenarioCreate",
+        "type": "object"
+      },
+      "SessionResponse": {
+        "properties": {
+          "csrfToken": {
+            "title": "Csrftoken",
+            "type": "string"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiresat"
+          },
+          "organisationId": {
+            "title": "Organisationid",
+            "type": "string"
+          },
+          "organisationRole": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organisationrole"
+          },
+          "platformRole": {
+            "title": "Platformrole",
+            "type": "string"
+          },
+          "userId": {
+            "title": "Userid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "displayName",
+          "organisationId",
+          "organisationRole",
+          "platformRole",
+          "csrfToken"
+        ],
+        "title": "SessionResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Synthetic-data-only RelayPay merchant and operator API. Never submit real payment, bank-account, identity, or customer data.",
+    "title": "RelayPay API",
+    "version": "0.6.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/admin/v1/environments": {
+      "get": {
+        "operationId": "get_environments_api_admin_v1_environments_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "title": "Response Get Environments Api Admin V1 Environments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Environments",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/api-keys": {
+      "post": {
+        "operationId": "post_api_key_api_admin_v1_environments__environment_id__api_keys_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/APIKeyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Api Key Api Admin V1 Environments  Environment Id  Api Keys Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Api Key",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/api-keys/{key_id}/revoke": {
+      "post": {
+        "operationId": "post_api_key_revocation_api_admin_v1_environments__environment_id__api_keys__key_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Api Key Revocation Api Admin V1 Environments  Environment Id  Api Keys  Key Id  Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Api Key Revocation",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/api-keys/{key_id}/rotate": {
+      "post": {
+        "operationId": "post_api_key_rotation_api_admin_v1_environments__environment_id__api_keys__key_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Api Key Rotation Api Admin V1 Environments  Environment Id  Api Keys  Key Id  Rotate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Api Key Rotation",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/api-keys/{key_id}/scopes": {
+      "patch": {
+        "operationId": "patch_api_key_scopes_api_admin_v1_environments__environment_id__api_keys__key_id__scopes_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/APIKeyScopesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Api Key Scopes Api Admin V1 Environments  Environment Id  Api Keys  Key Id  Scopes Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Api Key Scopes",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/api-keys/{key_id}/versions/{version}/activate": {
+      "post": {
+        "operationId": "post_api_key_activation_api_admin_v1_environments__environment_id__api_keys__key_id__versions__version__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "title": "Key Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Api Key Activation Api Admin V1 Environments  Environment Id  Api Keys  Key Id  Versions  Version  Activate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Api Key Activation",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/beneficiaries": {
+      "get": {
+        "operationId": "get_beneficiaries_api_admin_v1_environments__environment_id__beneficiaries_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get Beneficiaries Api Admin V1 Environments  Environment Id  Beneficiaries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Beneficiaries",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "post_beneficiary_api_admin_v1_environments__environment_id__beneficiaries_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeneficiaryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Beneficiary Api Admin V1 Environments  Environment Id  Beneficiaries Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Beneficiary",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/connector-versions": {
+      "post": {
+        "operationId": "post_connector_version_api_admin_v1_environments__environment_id__connector_versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorVersionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Connector Version Api Admin V1 Environments  Environment Id  Connector Versions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Connector Version",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/connector-versions/{version_id}/activate": {
+      "post": {
+        "operationId": "post_connector_activate_api_admin_v1_environments__environment_id__connector_versions__version_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Connector Activate",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/connector-versions/{version_id}/verify": {
+      "post": {
+        "operationId": "post_connector_verify_api_admin_v1_environments__environment_id__connector_versions__version_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Connector Verify",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/merchant-accounts": {
+      "get": {
+        "operationId": "get_merchant_accounts_api_admin_v1_environments__environment_id__merchant_accounts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get Merchant Accounts Api Admin V1 Environments  Environment Id  Merchant Accounts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Merchant Accounts",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "post_merchant_account_api_admin_v1_environments__environment_id__merchant_accounts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MerchantAccountCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Merchant Account Api Admin V1 Environments  Environment Id  Merchant Accounts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Merchant Account",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/merchant-accounts/{merchant_account_id}/balance-transactions": {
+      "get": {
+        "operationId": "get_merchant_account_balance_transactions_api_admin_v1_environments__environment_id__merchant_accounts__merchant_account_id__balance_transactions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "merchant_account_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get Merchant Account Balance Transactions Api Admin V1 Environments  Environment Id  Merchant Accounts  Merchant Account Id  Balance Transactions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Merchant Account Balance Transactions",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/merchant-accounts/{merchant_account_id}/balances": {
+      "get": {
+        "operationId": "get_merchant_account_balances_api_admin_v1_environments__environment_id__merchant_accounts__merchant_account_id__balances_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "merchant_account_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Merchant Account Balances Api Admin V1 Environments  Environment Id  Merchant Accounts  Merchant Account Id  Balances Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Merchant Account Balances",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/merchant-accounts/{merchant_account_id}/settlements": {
+      "post": {
+        "operationId": "post_merchant_account_settlement_api_admin_v1_environments__environment_id__merchant_accounts__merchant_account_id__settlements_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "merchant_account_id",
+            "required": true,
+            "schema": {
+              "title": "Merchant Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Merchant Account Settlement",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/payouts": {
+      "get": {
+        "operationId": "get_payouts_api_admin_v1_environments__environment_id__payouts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get Payouts Api Admin V1 Environments  Environment Id  Payouts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Payouts",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "post_payout_api_admin_v1_environments__environment_id__payouts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Payout",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/payouts/{payout_id}/attempts": {
+      "post": {
+        "operationId": "post_payout_retry_api_admin_v1_environments__environment_id__payouts__payout_id__attempts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "payout_id",
+            "required": true,
+            "schema": {
+              "title": "Payout Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Payout Retry",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/reconciliation-mismatches": {
+      "get": {
+        "operationId": "get_reconciliation_mismatches_api_admin_v1_environments__environment_id__reconciliation_mismatches_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "OPEN",
+                    "ACKNOWLEDGED",
+                    "RESOLVED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get Reconciliation Mismatches Api Admin V1 Environments  Environment Id  Reconciliation Mismatches Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Reconciliation Mismatches",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/reconciliation-mismatches/{mismatch_id}/acknowledge": {
+      "post": {
+        "operationId": "post_mismatch_acknowledgement_api_admin_v1_environments__environment_id__reconciliation_mismatches__mismatch_id__acknowledge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mismatch_id",
+            "required": true,
+            "schema": {
+              "title": "Mismatch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MismatchNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Mismatch Acknowledgement Api Admin V1 Environments  Environment Id  Reconciliation Mismatches  Mismatch Id  Acknowledge Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Mismatch Acknowledgement",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/reconciliation-mismatches/{mismatch_id}/evidence-versions": {
+      "post": {
+        "operationId": "post_mismatch_evidence_version_api_admin_v1_environments__environment_id__reconciliation_mismatches__mismatch_id__evidence_versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mismatch_id",
+            "required": true,
+            "schema": {
+              "title": "Mismatch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Mismatch Evidence Version Api Admin V1 Environments  Environment Id  Reconciliation Mismatches  Mismatch Id  Evidence Versions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Mismatch Evidence Version",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/reconciliation-mismatches/{mismatch_id}/resolve": {
+      "post": {
+        "operationId": "post_mismatch_resolution_api_admin_v1_environments__environment_id__reconciliation_mismatches__mismatch_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mismatch_id",
+            "required": true,
+            "schema": {
+              "title": "Mismatch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MismatchResolution"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Mismatch Resolution Api Admin V1 Environments  Environment Id  Reconciliation Mismatches  Mismatch Id  Resolve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Mismatch Resolution",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/environments/{environment_id}/statement-imports": {
+      "post": {
+        "operationId": "post_statement_import_api_admin_v1_environments__environment_id__statement_imports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_statement_import_api_admin_v1_environments__environment_id__statement_imports_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Statement Import",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/memberships": {
+      "get": {
+        "operationId": "get_memberships_api_admin_v1_memberships_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "title": "Response Get Memberships Api Admin V1 Memberships Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Memberships",
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "put_membership_api_admin_v1_memberships_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Put Membership Api Admin V1 Memberships Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Membership",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/v1/organisations": {
+      "post": {
+        "operationId": "post_organisation_api_admin_v1_organisations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganisationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Organisation Api Admin V1 Organisations Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Organisation",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/demo/scenarios": {
+      "post": {
+        "operationId": "create_scenario_api_demo_scenarios_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Scenario Api Demo Scenarios Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Scenario",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/demo/scenarios/{scenario_run_id}": {
+      "get": {
+        "operationId": "get_scenario_api_demo_scenarios__scenario_run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_run_id",
+            "required": true,
+            "schema": {
+              "title": "Scenario Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Scenario Api Demo Scenarios  Scenario Run Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Scenario",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/inbound/v1/connectors/{connector_id}/events": {
+      "post": {
+        "operationId": "post_event_api_inbound_v1_connectors__connector_id__events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connector_id",
+            "required": true,
+            "schema": {
+              "title": "Connector Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Provider-Event-ID",
+            "required": true,
+            "schema": {
+              "title": "X-Provider-Event-Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Provider-Timestamp",
+            "required": true,
+            "schema": {
+              "title": "X-Provider-Timestamp",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Provider-Signature",
+            "required": true,
+            "schema": {
+              "title": "X-Provider-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Event",
+        "tags": [
+          "inbound-webhooks"
+        ]
+      }
+    },
+    "/api/session/login": {
+      "post": {
+        "operationId": "login_api_session_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login"
+      }
+    },
+    "/api/session/logout": {
+      "post": {
+        "operationId": "logout_api_session_logout_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Logout Api Session Logout Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Logout"
+      }
+    },
+    "/api/session/me": {
+      "get": {
+        "operationId": "me_api_session_me_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Me"
+      }
+    },
+    "/api/v1/customers": {
+      "post": {
+        "operationId": "post_customer_api_v1_customers_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Customer",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/operations/{operation_id}": {
+      "get": {
+        "operationId": "get_operation_api_v1_operations__operation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Operation",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/operations/{operation_id}/retry_lookup": {
+      "post": {
+        "operationId": "retry_provider_lookup_api_v1_operations__operation_id__retry_lookup_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "title": "Operation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Provider Lookup"
+      }
+    },
+    "/api/v1/payment_intents": {
+      "post": {
+        "operationId": "post_payment_intent_api_v1_payment_intents_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentIntentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Payment Intent",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/payment_intents/{payment_id}/evidence": {
+      "get": {
+        "operationId": "get_payment_evidence_api_v1_payment_intents__payment_id__evidence_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Payment Evidence Api V1 Payment Intents  Payment Id  Evidence Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Payment Evidence"
+      }
+    },
+    "/api/v1/payment_intents/{payment_intent_id}": {
+      "get": {
+        "operationId": "get_payment_intent_api_v1_payment_intents__payment_intent_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Payment Intent",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/payment_intents/{payment_intent_id}/authorize": {
+      "post": {
+        "operationId": "post_authorize_api_v1_payment_intents__payment_intent_id__authorize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Authorize",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/payment_intents/{payment_intent_id}/capture": {
+      "post": {
+        "operationId": "post_capture_api_v1_payment_intents__payment_intent_id__capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Capture",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/payment_intents/{payment_intent_id}/refunds": {
+      "post": {
+        "operationId": "post_refund_api_v1_payment_intents__payment_intent_id__refunds_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Refund",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/api/v1/webhook_deliveries/{delivery_id}": {
+      "get": {
+        "operationId": "get_delivery_api_v1_webhook_deliveries__delivery_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "title": "Delivery Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Delivery Api V1 Webhook Deliveries  Delivery Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Delivery",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/webhook_deliveries/{delivery_id}/replay": {
+      "post": {
+        "operationId": "post_delivery_replay_api_v1_webhook_deliveries__delivery_id__replay_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "title": "Delivery Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Post Delivery Replay Api V1 Webhook Deliveries  Delivery Id  Replay Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Delivery Replay",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "live_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Live Health Live Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live"
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Ready Health Ready Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready"
+      }
+    }
+  }
+}

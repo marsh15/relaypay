@@ -1,10 +1,16 @@
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import Response
 from relaypay.config import Settings
-from relaypay.contracts import CustomerCreate, EmptyCommand, PaymentIntentCreate, RefundCreate
+from relaypay.contracts import (
+    CustomerCreate,
+    EmptyCommand,
+    PaymentIntentCreate,
+    PaymentIntentPage,
+    RefundCreate,
+)
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import build_fingerprint, canonical_json_bytes
 from relaypay.identity.security import Principal, authenticate_api_key, require_scopes
@@ -15,6 +21,7 @@ from relaypay.payments.service import (
     initiate_authorization,
     initiate_capture,
     initiate_refund,
+    list_payments,
     read_operation,
     read_payment,
 )
@@ -136,6 +143,27 @@ def build_payments_router(
                 key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
             )
         )
+
+    @router.get("/payment_intents", response_model=PaymentIntentPage)
+    def get_payment_intents(
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+        after: str | None = None,
+        merchant_reference: Annotated[
+            str | None, Query(alias="merchantReference", min_length=1, max_length=128)
+        ] = None,
+    ) -> PaymentIntentPage:
+        require_scopes(principal, "payments:read")
+        page = list_payments(
+            session_factory,
+            organisation_id=principal.organisation_id,
+            environment_id=principal.environment_id,
+            limit=limit,
+            after=after,
+            merchant_reference=merchant_reference,
+            cursor_secret=settings.API_KEY_PEPPER.get_secret_value(),
+        )
+        return PaymentIntentPage(data=page.data, nextCursor=page.next_cursor)
 
     @router.get("/payment_intents/{payment_intent_id}")
     def get_payment_intent(payment_intent_id: str, principal: PrincipalDep) -> Response:

@@ -107,6 +107,15 @@ wheels = [
 ]
 
 [[package]]
+name = "attrs"
+version = "26.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
+]
+
+[[package]]
 name = "billiard"
 version = "4.2.4"
 source = { registry = "https://pypi.org/simple" }
@@ -870,6 +879,26 @@ wheels = [
 ]
 
 [[package]]
+name = "openapi-python-client"
+version = "0.29.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "httpx" },
+    { name = "jinja2" },
+    { name = "pydantic" },
+    { name = "ruamel-yaml" },
+    { name = "ruff" },
+    { name = "shellingham" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/f6/67dfe73b5073251b6e2aba3d67191819798dd33dd09fcb2d12242662a960/openapi_python_client-0.29.0.tar.gz", hash = "sha256:4ff439a63765aaef548e69c4eedd86dfad57891dc322709450af0c2c9a72a23e", size = 125697, upload-time = "2026-05-30T20:32:10.533Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/d1/7391a205622c40b8e9d1b79b892b4944d6e3637674b47a56196e2c96c5d1/openapi_python_client-0.29.0-py3-none-any.whl", hash = "sha256:1085864c1e0a42fb50e1f5eb84363b19de07ebfb8a3f82a146c8529b948b8f12", size = 182954, upload-time = "2026-05-30T20:32:09.037Z" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1246,14 +1275,16 @@ wheels = [
 
 [[package]]
 name = "relaypay"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "argon2-cffi" },
+    { name = "attrs" },
     { name = "celery", extra = ["redis"] },
     { name = "cryptography" },
     { name = "fastapi", extra = ["standard-no-fastapi-cloud-cli"] },
+    { name = "httpx" },
     { name = "httpx2" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic-settings" },
@@ -1263,6 +1294,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "openapi-python-client" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
@@ -1273,9 +1305,11 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = "==1.18.5" },
     { name = "argon2-cffi", specifier = ">=25.1.0,<26" },
+    { name = "attrs", specifier = "==26.1.0" },
     { name = "celery", extras = ["redis"], specifier = ">=5.6.0,<6" },
     { name = "cryptography", specifier = ">=46.0.0,<47" },
     { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = "==0.139.0" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "httpx2", specifier = "==2.7.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.0,<4" },
     { name = "pydantic-settings", specifier = ">=2.10.0,<3" },
@@ -1285,6 +1319,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.17.0,<2" },
+    { name = "openapi-python-client", specifier = "==0.29.0" },
     { name = "pytest", specifier = ">=8.4.0,<9" },
     { name = "pytest-cov", specifier = ">=6.2.0,<7" },
     { name = "pytest-xdist", specifier = ">=3.8.0,<4" },
@@ -1316,6 +1351,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e4/3a/a258c2fbc6c6bdf428611388f5698ba5d57ffdf0755e1cab474d9cc47813/rich_toolkit-0.20.3.tar.gz", hash = "sha256:223dd2cfba325ed55e94933b9e53f3aca13e9fdf76622bd564c18109a2273c1b", size = 205355, upload-time = "2026-07-13T14:38:06.837Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e2/ce/639d0d0ce3d25c5edbd1afecd308bb35dc04883a45ac9f0855c8aee4e919/rich_toolkit-0.20.3-py3-none-any.whl", hash = "sha256:419aa87516d5f3849cca553c6dcf707c02a36d508fcf996946606725d34a3002", size = 36195, upload-time = "2026-07-13T14:38:05.687Z" },
+]
+
+[[package]]
+name = "ruamel-yaml"
+version = "0.19.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/3b/ebda527b56beb90cb7652cb1c7e4f91f48649fbcd8d2eb2fb6e77cd3329b/ruamel_yaml-0.19.1.tar.gz", hash = "sha256:53eb66cd27849eff968ebf8f0bf61f46cdac2da1d1f3576dd4ccee9b25c31993", size = 142709, upload-time = "2026-01-02T16:50:31.84Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/0c/51f6841f1d84f404f92463fc2b1ba0da357ca1e3db6b7fbda26956c3b82a/ruamel_yaml-0.19.1-py3-none-any.whl", hash = "sha256:27592957fedf6e0b62f281e96effd28043345e0e66001f97683aa9a40c667c93", size = 118102, upload-time = "2026-01-02T16:50:29.201Z" },
 ]
 
 [[package]]
@@ -1427,7 +1471,7 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.27.0"
+version = "0.26.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -1435,9 +1479,9 @@ dependencies = [
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/37/78/fda3361b56efc27944f24225f6ecd13d96d6fcfe37bd0eb34e2f4c63f9fc/typer-0.27.0.tar.gz", hash = "sha256:629bd12ea5d13a17148125d9a264f949eb171fb3f120f9b04d85873cab054fa5", size = 203430, upload-time = "2026-07-15T19:21:07.007Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/f7/68adc395201b20b872d68e975386832e8005ffeacedd43a1d837a32815be/typer-0.26.8.tar.gz", hash = "sha256:c244a6bd558886fe3f8780efb6bdd28bb9aff005a94eedebaa5cb32926fe2f7e", size = 202097, upload-time = "2026-06-26T09:22:45.705Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/03/26a383c9e58c213199d1aad1c3d353cfc22d4444ec6d2c0bf8ad02523843/typer-0.27.0-py3-none-any.whl", hash = "sha256:6f4b27631e47f077871b7dc30e933ec0131c1390fbe0e387ea5574b5bac9ccf1", size = 122716, upload-time = "2026-07-15T19:21:05.553Z" },
+    { url = "https://files.pythonhosted.org/packages/80/87/b9fd69c92c6102a066e1b86a35243f53e70bd4c709f2a26d9f4fee4f4dc0/typer-0.26.8-py3-none-any.whl", hash = "sha256:3512ca79ac5c11113414b36e80281b872884477722440691c89d1112e321a49c", size = 122564, upload-time = "2026-06-26T09:22:44.72Z" },
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck unit test infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
+.PHONY: install lint format format-check typecheck unit test api-contract sdk-drift sdk-example compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -9,6 +9,9 @@ lint:
 format:
 	uv run ruff format .
 
+format-check:
+	uv run ruff format --check .
+
 typecheck:
 	uv run mypy packages apps scripts
 
@@ -17,6 +20,21 @@ unit:
 
 test:
 	uv run pytest
+
+api-contract:
+	uv run python -m scripts.generate_openapi --baseline --check
+	uv run python -m scripts.generate_openapi --check
+	uv run python -m scripts.check_api_compatibility
+
+sdk-drift:
+	uv run python -m scripts.check_sdk_generation
+
+sdk-example:
+	uv run python examples/python/verify_webhook.py
+
+compose-check:
+	docker compose --env-file .env.example config --quiet
+	docker compose --env-file .env.example -f compose.yaml -f compose.production.yaml config --quiet
 
 infra-up:
 	docker compose up -d postgres redis
@@ -58,4 +76,4 @@ console-check:
 console-e2e:
 	cd apps/console && npm run test:e2e
 
-check: lint typecheck test console-check
+check: lint format-check typecheck api-contract sdk-drift sdk-example test console-check compose-check

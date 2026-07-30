@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "amount": 125000,
+      "authorizationStatus": "SUCCEEDED",
+      "captureStatus": null,
+      "createdAt": "2026-07-30T12:00:00+00:00",
+      "currency": "INR",
+      "id": "pay_11111111111111111111111111111111",
+      "merchantReference": "synthetic-order-1001"
+    }
+  ],
+  "nextCursor": "opaque-url-safe-cursor"
+}

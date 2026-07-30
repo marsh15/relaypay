@@ -97,7 +97,15 @@ def create_app(
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay API", version="0.6.0", lifespan=lifespan)
+    app = FastAPI(
+        title="RelayPay API",
+        version="0.7.0",
+        description=(
+            "Synthetic-data-only RelayPay merchant and operator API. "
+            "Never submit real payment, bank-account, identity, or customer data."
+        ),
+        lifespan=lifespan,
+    )
     app.state.settings = resolved
     app.state.engine = engine
     app.state.session_factory = session_factory
