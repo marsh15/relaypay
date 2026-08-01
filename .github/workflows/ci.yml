@@ -130,10 +130,10 @@ jobs:
           for attempt in {1..15}; do
             docker compose --profile observability logs --no-color otel-collector \
               > output/m7/otel-collector.log
-            rg -q "Traces" output/m7/otel-collector.log && break
+            grep -q "Traces" output/m7/otel-collector.log && break
             sleep 2
           done
-          rg -q "Traces" output/m7/otel-collector.log
+          grep -q "Traces" output/m7/otel-collector.log
 
       - name: Upload measured M7 evidence
         uses: actions/upload-artifact@v4
