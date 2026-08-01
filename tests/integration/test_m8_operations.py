@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from relaypay.database import build_engine, build_session_factory
@@ -42,6 +43,8 @@ def _scope(label: str) -> tuple[Principal, Environment]:
         )
         default_merchant.reference = f"{label}-one"
         default_merchant.name = f"{label} one"
+        now = datetime.now(UTC)
+        default_merchant.created_at = now - timedelta(seconds=1)
         session.add(
             MerchantAccount(
                 public_id=new_public_id("mac"),
@@ -52,6 +55,7 @@ def _scope(label: str) -> tuple[Principal, Environment]:
                 currency="INR",
                 is_default=False,
                 status="ACTIVE",
+                created_at=now,
             )
         )
         principal = Principal(
