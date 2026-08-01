@@ -31,29 +31,28 @@ def _scope(label: str) -> tuple[Principal, Environment]:
             )
             .one()
         )
-        session.add_all(
-            [
-                MerchantAccount(
-                    public_id=new_public_id("mac"),
-                    organisation_id=organisation.id,
-                    environment_id=environment.id,
-                    reference=f"{label}-one",
-                    name=f"{label} one",
-                    currency="INR",
-                    is_default=True,
-                    status="ACTIVE",
-                ),
-                MerchantAccount(
-                    public_id=new_public_id("mac"),
-                    organisation_id=organisation.id,
-                    environment_id=environment.id,
-                    reference=f"{label}-two",
-                    name=f"{label} two",
-                    currency="INR",
-                    is_default=False,
-                    status="ACTIVE",
-                ),
-            ]
+        default_merchant = (
+            session.query(MerchantAccount)
+            .filter_by(
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                is_default=True,
+            )
+            .one()
+        )
+        default_merchant.reference = f"{label}-one"
+        default_merchant.name = f"{label} one"
+        session.add(
+            MerchantAccount(
+                public_id=new_public_id("mac"),
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                reference=f"{label}-two",
+                name=f"{label} two",
+                currency="INR",
+                is_default=False,
+                status="ACTIVE",
+            )
         )
         principal = Principal(
             kind="SESSION",
