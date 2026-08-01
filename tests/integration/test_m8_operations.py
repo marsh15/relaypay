@@ -110,7 +110,7 @@ def test_operations_pages_are_cursor_bound_and_tenant_isolated() -> None:
                 after=None,
                 cursor_secret="m8-cursor-secret",
             )
-        assert wrong_tenant.value.code == "NOT_FOUND"
+        assert wrong_tenant.value.code == "RESOURCE_NOT_FOUND"
 
         with pytest.raises(RelayPayError) as rebound_cursor:
             list_operations_resource(
