@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "relaypay-edge-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": false,
+  "vars": {
+    "ORIGIN_BASE_URL": "http://127.0.0.1:8000",
+    "EDGE_RATE_LIMIT": "60",
+    "EDGE_REPLAY_SECONDS": "300"
+  },
+  "secrets": { "required": ["ORIGIN_SIGNING_SECRET"] },
+  "r2_buckets": [{ "binding": "WEBHOOK_ARCHIVE", "bucket_name": "relaypay-webhook-archive-local" }],
+  "queues": {
+    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "relaypay-webhook-forward-local" }],
+    "consumers": [{ "queue": "relaypay-webhook-forward-local", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 3 }]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "TENANT_COORDINATOR", "class_name": "TenantCoordinator" }]
+  },
+  "exports": {
+    "TenantCoordinator": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "observability": { "enabled": true }
+}

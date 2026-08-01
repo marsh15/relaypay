@@ -60,11 +60,20 @@ class Settings(BaseSettings):
     OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://otel-collector:4318"
     PROMETHEUS_WORKER_PORT: int = Field(default=9100, ge=1024, le=65_535)
     REQUEST_LOG_RETENTION: int = Field(default=10_000, ge=100, le=1_000_000)
+    EDGE_ORIGIN_SIGNATURE_REQUIRED: bool = False
+    EDGE_ORIGIN_SIGNING_SECRET: SecretStr = SecretStr("dev-edge-origin-signing-secret-change-me")
+    EDGE_ORIGIN_REPLAY_SECONDS: int = Field(default=300, ge=30, le=900)
 
     @model_validator(mode="after")
     def require_https_in_production(self) -> Self:
         if self.APP_ENV == "production" and not self.PUBLIC_BASE_URL.startswith("https://"):
             raise ValueError("PUBLIC_BASE_URL must use HTTPS in production")
+        if (
+            self.EDGE_ORIGIN_SIGNATURE_REQUIRED
+            and self.EDGE_ORIGIN_SIGNING_SECRET.get_secret_value()
+            == "dev-edge-origin-signing-secret-change-me"
+        ):
+            raise ValueError("EDGE_ORIGIN_SIGNING_SECRET must be replaced when enforcement is on")
         return self
 
 

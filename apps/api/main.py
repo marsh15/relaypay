@@ -13,6 +13,7 @@ from relaypay.config import Settings, get_settings
 from relaypay.contracts import EmptyCommand
 from relaypay.database import build_engine, build_session_factory
 from relaypay.demo_scenarios.service import HTTPScenarioFaultController, ScenarioFaultController
+from relaypay.edge.origin import install_edge_origin_boundary
 from relaypay.errors import RelayPayError
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, WebhookTransport
 from relaypay.evidence.service import payment_evidence
@@ -114,6 +115,7 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.login_limiter = FixedWindowRateLimiter(limit=5, window_seconds=60)
     app.state.operations_metrics = operations_metrics()
+    install_edge_origin_boundary(app, resolved)
     transport = provider_transport or HTTPProviderTransport(base_url=resolved.PROVIDER_BASE_URL)
     scenario_transport = provider_transport or HTTPProviderTransport(
         base_url=resolved.PROVIDER_BASE_URL,

@@ -1,4 +1,4 @@
-.PHONY: install lint format format-check typecheck unit test api-contract sdk-drift sdk-example m7-evidence compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
+.PHONY: install lint format format-check typecheck unit test api-contract sdk-drift sdk-example m7-evidence edge-install edge-check compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -36,6 +36,12 @@ m7-evidence:
 	uv run python -m scripts.capture_m7_query_plans --output output/m7/query-plans.json
 	uv run python -m scripts.measure_m7_performance --output output/m7/performance.json
 	uv run python -m scripts.verify_m7_evidence output/m7/performance.json output/m7/query-plans.json
+
+edge-install:
+	npm ci --prefix apps/edge
+
+edge-check:
+	npm run check --prefix apps/edge
 
 compose-check:
 	docker compose --env-file .env.example config --quiet
@@ -82,4 +88,4 @@ console-check:
 console-e2e:
 	cd apps/console && npm run test:e2e
 
-check: lint format-check typecheck api-contract sdk-drift sdk-example test console-check compose-check
+check: lint format-check typecheck api-contract sdk-drift sdk-example test console-check edge-check compose-check
