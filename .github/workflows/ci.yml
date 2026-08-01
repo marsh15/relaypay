@@ -58,6 +58,9 @@ jobs:
       - name: Prove v0.7 operations upgrade preserves historical evidence
         run: uv run python -m scripts.verify_m7_upgrade
 
+      - name: Prove v0.8 console upgrade preserves storage
+        run: uv run python -m scripts.verify_m8_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate

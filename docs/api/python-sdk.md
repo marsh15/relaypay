@@ -1,7 +1,7 @@
 # RelayPay Python SDK
 
 The public `relaypay_sdk` package is a stable hand-written facade over the private client generated
-from `contracts/openapi/v0.8.0.json`. Generation uses pinned `openapi-python-client==0.29.0`;
+from `contracts/openapi/v0.9.0.json`. Generation uses pinned `openapi-python-client==0.29.0`;
 CI rejects OpenAPI or generated-code drift.
 
 ```python
