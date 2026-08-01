@@ -399,3 +399,22 @@ and Docker Compose `5.3.1`.
 - CI artifact `relaypay-m7-measured-evidence` has archive digest
   `sha256:6bdd6a04298ec2fb6fb2635d7dce5902ac5a4c687c71bad07c4d32e8c82e9e5e`.
   Its component SHA-256 values are recorded in [the v0.8 evidence manifest](evidence/v0.8.0.md).
+
+## v0.8.0 final publication evidence
+
+- M7 pull request: [#15](https://github.com/marsh15/relaypay/pull/15).
+- Passing integrated PR gate:
+  [run 30701079126](https://github.com/marsh15/relaypay/actions/runs/30701079126), completed in
+  `3m59s`.
+- Passing canonical `main` gate:
+  [run 30701236294](https://github.com/marsh15/relaypay/actions/runs/30701236294), completed in
+  `4m28s` on exact merge commit `67d66abee91dedc1349d870ea69af4fe90a35e37`.
+- Annotated tag object: `8017d1f5bf85b98f659f0cf66d2b0d2fd1226ab3`; dereferenced commit:
+  `67d66abee91dedc1349d870ea69af4fe90a35e37`.
+- Public final release:
+  [v0.8.0](https://github.com/marsh15/relaypay/releases/tag/v0.8.0).
+- Release-notes SHA-256:
+  `aa138a88093839e1a3761cfcf3e257780cb07574fe206c324084c4980261555e`.
+- GitHub reports the repository as public and MIT-licensed, the release as final rather than a
+  draft or prerelease, and an empty asset list. The notes retain the synthetic-data and
+  no-hosting warning.
