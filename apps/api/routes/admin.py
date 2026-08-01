@@ -2,7 +2,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, Header, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.config import Settings
@@ -41,6 +41,7 @@ from relaypay.merchant_balances.service import (
     read_admin_balances,
     run_settlement,
 )
+from relaypay.operations.service import list_operations_resource
 from relaypay.payouts.service import (
     create_beneficiary,
     create_payout,
@@ -173,6 +174,26 @@ def build_admin_router(
                 }
                 for item in list_environments(session, principal)
             ]
+
+    @router.get("/admin/v1/environments/{environment_id}/operations/{resource}")
+    def get_operations_resource(
+        environment_id: str,
+        resource: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 25,
+        after: str | None = None,
+    ) -> JSONResponse:
+        with session_factory() as session, session.begin():
+            page = list_operations_resource(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                resource=resource,
+                limit=limit,
+                after=after,
+                cursor_secret=settings.API_KEY_PEPPER.get_secret_value(),
+            )
+        return JSONResponse(content={"data": page.data, "nextCursor": page.next_cursor})
 
     @router.get("/admin/v1/environments/{environment_id}/merchant-accounts")
     def get_merchant_accounts(

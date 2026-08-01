@@ -12,6 +12,9 @@ export function ConsoleShell({ session, children }: { session: Session; children
             RelayPay
           </Link>
           <nav aria-label="Primary navigation">
+            <Link className="nav-link" href="/operations">
+              Operations
+            </Link>
             <Link className="nav-link" href="/lab">
               Scenario Lab
             </Link>

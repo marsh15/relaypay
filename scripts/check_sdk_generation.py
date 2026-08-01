@@ -26,7 +26,7 @@ def main() -> None:
                 "openapi_python_client",
                 "generate",
                 "--path",
-                str(ROOT / "contracts/openapi/v0.8.0.json"),
+                str(ROOT / "contracts/openapi/v0.9.0.json"),
                 "--config",
                 str(ROOT / "openapi-python-client.yml"),
                 "--output-path",

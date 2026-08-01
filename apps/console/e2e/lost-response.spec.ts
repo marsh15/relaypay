@@ -25,3 +25,25 @@ test("administrator proves and inspects one lost capture response", async ({ pag
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations).toEqual([]);
 });
+
+test("administrator navigates every scoped operations view accessibly", async ({ page }) => {
+  await page.goto("/login?next=/operations");
+  await page.getByLabel("Administrator email").fill("admin@northstar.test");
+  await page.getByLabel("Password").fill("RelayPay-Northstar-2026!");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/operations/);
+
+  for (const name of [
+    "Merchant accounts", "Settlements", "Beneficiaries", "Payouts", "Connectors",
+    "Inbound webhooks", "Outbound webhooks", "Dead letters", "Reconciliation", "API keys",
+    "Audit logs", "Usage", "Operational metrics",
+  ]) {
+    await page.getByRole("link", { name, exact: true }).click();
+    await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  }
+
+  await page.setViewportSize({ width: 320, height: 900 });
+  await expect(page.getByRole("heading", { name: "Operational metrics" })).toBeVisible();
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations).toEqual([]);
+});
