@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -171,6 +172,8 @@ def apply_effect(
 
     if selected_fault == "LOSE_RESPONSE":
         return ProviderReply(599, b"", {})
+    if selected_fault == "SLOW_RESPONSE":
+        time.sleep(3)
     if selected_fault == "MALFORMED":
         malformed = b'{"outcome":'
         return _reply(malformed, signing_secret)

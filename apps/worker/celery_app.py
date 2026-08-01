@@ -1,5 +1,14 @@
 from celery import Celery  # type: ignore[import-untyped]
+from celery.signals import (  # type: ignore[import-untyped]
+    worker_process_init,
+    worker_process_shutdown,
+)
+from opentelemetry import trace
+from opentelemetry.instrumentation.celery import CeleryInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
 from relaypay.config import get_settings
+from relaypay.observability.metrics import start_worker_metrics_server
+from relaypay.observability.telemetry import configure_tracing
 
 settings = get_settings()
 
@@ -41,3 +50,19 @@ app.conf.update(
         },
     },
 )
+
+
+@worker_process_init.connect(weak=False)  # type: ignore[untyped-decorator]
+def initialize_worker_telemetry(**_: object) -> None:
+    resolved = get_settings()
+    provider = configure_tracing(resolved, service_name="relaypay-worker")
+    if provider is not None:
+        CeleryInstrumentor().instrument(tracer_provider=provider)  # type: ignore[no-untyped-call]
+        start_worker_metrics_server(resolved.PROMETHEUS_WORKER_PORT)
+
+
+@worker_process_shutdown.connect(weak=False)  # type: ignore[untyped-decorator]
+def flush_worker_telemetry(**_: object) -> None:
+    provider = trace.get_tracer_provider()
+    if isinstance(provider, TracerProvider):
+        provider.force_flush(timeout_millis=5_000)

@@ -25,6 +25,7 @@ from relaypay.merchant_balances.models import (
     SettlementItem,
     SettlementRun,
 )
+from relaypay.observability.models import RequestLog, UsageRollup
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
 from relaypay.payouts.models import (
     Beneficiary,
@@ -88,12 +89,14 @@ __all__ = [
     "ReconciliationMismatch",
     "ReconciliationRun",
     "Refund",
+    "RequestLog",
     "ScenarioRun",
     "SessionRecord",
     "SettlementItem",
     "SettlementRun",
     "StatementImport",
     "StatementItem",
+    "UsageRollup",
     "User",
     "WebhookDelivery",
     "WebhookDeliveryAttempt",

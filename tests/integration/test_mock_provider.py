@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import time
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -139,6 +140,33 @@ def test_lost_response_still_persists_one_lookupable_effect(
 
     lookup = client.get(f"/v1/effects/{stable_key}", params={"account_id": provider_account})
     assert lookup.status_code == 200
+
+
+def test_slow_provider_fault_is_bounded_and_commits_effect_before_response(
+    client: TestClient, settings: Settings, provider_account: str
+) -> None:
+    stable_key = f"slow:pay_{uuid.uuid4().hex}"
+    configured = client.post(
+        "/control/faults",
+        json={
+            "accountId": provider_account,
+            "stableKey": stable_key,
+            "faultType": "SLOW_RESPONSE",
+        },
+        headers={"X-Provider-Control": settings.PROVIDER_CONTROL_SECRET.get_secret_value()},
+    )
+    assert configured.status_code == 204
+    started = time.perf_counter()
+    response = client.post("/v1/effects", json=_command(provider_account, stable_key))
+    elapsed = time.perf_counter() - started
+    assert response.status_code == 200
+    assert 2.9 <= elapsed < 5
+    lookup = client.get(
+        f"/v1/effects/{stable_key}",
+        params={"account_id": provider_account},
+    )
+    assert lookup.status_code == 200
+
     assert lookup.json()["outcome"] == "SUCCEEDED"
     assert "X-Provider-Signature" in lookup.headers
 

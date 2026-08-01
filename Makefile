@@ -1,4 +1,4 @@
-.PHONY: install lint format format-check typecheck unit test api-contract sdk-drift sdk-example compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
+.PHONY: install lint format format-check typecheck unit test api-contract sdk-drift sdk-example m7-evidence compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -32,8 +32,14 @@ sdk-drift:
 sdk-example:
 	uv run python examples/python/verify_webhook.py
 
+m7-evidence:
+	uv run python -m scripts.capture_m7_query_plans --output output/m7/query-plans.json
+	uv run python -m scripts.measure_m7_performance --output output/m7/performance.json
+	uv run python -m scripts.verify_m7_evidence output/m7/performance.json output/m7/query-plans.json
+
 compose-check:
 	docker compose --env-file .env.example config --quiet
+	docker compose --env-file .env.example --profile observability config --quiet
 	docker compose --env-file .env.example -f compose.yaml -f compose.production.yaml config --quiet
 
 infra-up:

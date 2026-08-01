@@ -17,11 +17,15 @@ class RelayPaySession(Session):
 
 
 def build_engine(database_url: str, *, application_name: str) -> Engine:
-    return create_engine(
+    engine = create_engine(
         database_url,
         connect_args={"application_name": application_name},
         pool_pre_ping=True,
     )
+    from relaypay.observability.telemetry import instrument_sqlalchemy_engine
+
+    instrument_sqlalchemy_engine(engine)
+    return engine
 
 
 def build_session_factory(engine: Engine) -> sessionmaker[Session]:

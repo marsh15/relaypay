@@ -5,6 +5,7 @@ from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_batch
 from relaypay.event_delivery.materializer import materialize_deliveries
+from relaypay.observability.telemetry import configure_tracing
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
 from relaypay.reconciliation.service import run_reconciliation_batch
@@ -45,6 +46,7 @@ def poll_once(settings: Settings) -> dict[str, int]:
 
 def main() -> None:
     settings = get_settings()
+    configure_tracing(settings, service_name="relaypay-poller")
     while True:
         try:
             poll_once(settings)

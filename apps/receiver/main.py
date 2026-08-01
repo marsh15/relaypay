@@ -5,6 +5,8 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
+from relaypay.observability.metrics import install_asgi_metrics
+from relaypay.observability.telemetry import instrument_fastapi
 from relaypay.receiver.service import (
     ReceiverContradictionError,
     ReceiverValidationError,
@@ -25,7 +27,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay Receiver", version="0.7.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay Receiver", version="0.8.0", lifespan=lifespan)
 
     @app.get("/health/live")
     def live() -> dict[str, str]:
@@ -80,4 +82,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    install_asgi_metrics(app, resolved, service="receiver")
+    instrument_fastapi(app, resolved, service_name="relaypay-receiver", engine=engine)
     return app

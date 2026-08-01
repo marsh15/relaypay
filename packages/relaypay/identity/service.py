@@ -16,6 +16,7 @@ from relaypay.identity.models import (
 )
 from relaypay.identity.security import IssuedAPIKey, Principal, issue_api_key
 from relaypay.ids import new_public_id
+from relaypay.observability.service import emit_structured_audit
 
 
 def require_organisation_admin(principal: Principal) -> None:
@@ -64,18 +65,27 @@ def append_audit(
     environment_id: uuid.UUID | None = None,
     details: dict[str, object] | None = None,
 ) -> None:
-    session.add(
-        AuditRecord(
-            public_id=new_public_id("aud"),
-            organisation_id=principal.organisation_id,
-            environment_id=environment_id,
-            actor_type="USER",
-            actor_id=principal.user_id,
-            action=action,
-            target_type=target_type,
-            target_id=target_id,
-            details=details or {},
-        )
+    audit = AuditRecord(
+        public_id=new_public_id("aud"),
+        organisation_id=principal.organisation_id,
+        environment_id=environment_id,
+        actor_type="API_KEY" if principal.kind == "API_KEY" else "USER",
+        actor_id=principal.api_key_id if principal.kind == "API_KEY" else principal.user_id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        details=details or {},
+    )
+    session.add(audit)
+    emit_structured_audit(
+        audit_id=audit.public_id,
+        action=action,
+        actor_type=audit.actor_type,
+        actor_id=audit.actor_id,
+        organisation_id=audit.organisation_id,
+        environment_id=environment_id,
+        target_type=target_type,
+        target_id=target_id,
     )
 
 

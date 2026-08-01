@@ -18,6 +18,7 @@ from relaypay.event_delivery.models import (
     WebhookEndpointVersion,
 )
 from relaypay.ids import new_uuid
+from relaypay.observability.metrics import operations_metrics
 
 MAX_ATTEMPTS = 5
 
@@ -156,6 +157,7 @@ def _record_attempt(
     safe_error_code: str | None,
 ) -> bool:
     now = datetime.now(UTC)
+    metric_outcome = ""
     with factory() as session, session.begin():
         delivery = session.scalar(
             select(WebhookDelivery)
@@ -192,13 +194,17 @@ def _record_attempt(
         if result == "ACKNOWLEDGED":
             delivery.status = "DELIVERED"
             delivery.delivered_at = now
+            metric_outcome = "success"
         elif result == "PERMANENT" or sequence >= MAX_ATTEMPTS:
             delivery.status = "DEAD_LETTER"
             delivery.dead_lettered_at = now
+            metric_outcome = "dead_letter"
         else:
             delivery.status = "RETRY_WAIT"
             delivery.next_attempt_at = now + timedelta(seconds=min(60, 2 ** (sequence - 1)))
-        return True
+            metric_outcome = "retry"
+    operations_metrics().webhooks.labels(metric_outcome).inc()
+    return True
 
 
 def deliver_claim(

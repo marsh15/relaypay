@@ -10,6 +10,8 @@ from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
 from relaypay.mock_commerce.service import create_order, link_payment, synchronize_event
+from relaypay.observability.metrics import install_asgi_metrics
+from relaypay.observability.telemetry import instrument_fastapi
 
 
 class OrderCreate(BaseModel):
@@ -39,7 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay Synthetic Commerce", version="0.7.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay Synthetic Commerce", version="0.8.0", lifespan=lifespan)
 
     @app.exception_handler(RelayPayError)
     async def handle_error(_, error: RelayPayError):  # type: ignore[no-untyped-def]
@@ -118,4 +120,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         authenticate(control)
         return {"sha256": hashlib.sha256(control.encode()).hexdigest() if control else ""}
 
+    install_asgi_metrics(app, resolved, service="commerce")
+    instrument_fastapi(app, resolved, service_name="relaypay-commerce", engine=engine)
     return app
