@@ -1,0 +1,69 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "HTTP latency p50 / p95 / p99",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C"}
+      ]
+    },
+    {
+      "title": "Payment and payout throughput",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {"expr": "sum by (kind, outcome) (rate(relaypay_payments_processed_total[5m]))", "legendFormat": "payment {{kind}} {{outcome}}", "refId": "A"},
+        {"expr": "sum by (outcome) (rate(relaypay_payouts_processed_total[5m]))", "legendFormat": "payout {{outcome}}", "refId": "B"}
+      ]
+    },
+    {
+      "title": "Webhook outcomes",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "targets": [
+        {"expr": "sum by (outcome) (rate(relaypay_webhook_deliveries_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Mismatch and claim depth",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "targets": [
+        {"expr": "relaypay_reconciliation_mismatches", "legendFormat": "mismatch {{status}}", "refId": "A"},
+        {"expr": "relaypay_claim_depth", "legendFormat": "queue {{queue}}", "refId": "B"}
+      ]
+    },
+    {
+      "title": "Worker latency and recovery",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (task, le) (rate(relaypay_worker_processing_seconds_bucket[5m])))", "legendFormat": "p95 {{task}}", "refId": "A"},
+        {"expr": "sum by (kind) (rate(relaypay_recoveries_total[5m]))", "legendFormat": "recovery {{kind}}", "refId": "B"}
+      ]
+    },
+    {
+      "title": "Connector circuit state",
+      "type": "state-timeline",
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 16},
+      "targets": [
+        {"expr": "relaypay_connector_circuit_state == 1", "legendFormat": "{{connector}} {{state}}", "refId": "A"}
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 41,
+  "tags": ["relaypay", "operations"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "timezone": "browser",
+  "title": "RelayPay Operations Evidence",
+  "uid": "relaypay-operations",
+  "version": 1
+}

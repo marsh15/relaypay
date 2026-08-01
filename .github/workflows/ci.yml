@@ -55,6 +55,9 @@ jobs:
       - name: Prove v0.6 API-only upgrade preserves database state
         run: uv run python -m scripts.verify_m6_upgrade
 
+      - name: Prove v0.7 operations upgrade preserves historical evidence
+        run: uv run python -m scripts.verify_m7_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
@@ -76,6 +79,21 @@ jobs:
           make test
           make merchant-balance-demo
 
+      - name: Measure M7 failure behavior and database query plans
+        run: |
+          mkdir -p output/m7
+          uv run pytest \
+            tests/unit/test_recovery_worker_config.py \
+            tests/unit/test_m7_failure_contracts.py \
+            tests/integration/test_mock_provider.py::test_slow_provider_fault_is_bounded_and_commits_effect_before_response \
+            tests/integration/test_week3_provider_recovery.py::test_crash_after_lookup_response_persistence_recovers_without_mutation_retry \
+            tests/integration/test_week4_delivery.py::test_retry_budget_ends_in_dead_letter \
+            --junitxml=output/m7/failure-tests.xml
+          uv run python -m scripts.build_m7_failure_report \
+            output/m7/failure-tests.xml --output output/m7/failure-report.json
+          uv run python -m scripts.capture_m7_query_plans \
+            --output output/m7/query-plans.json
+
       - name: Console quality and dependency gate
         working-directory: apps/console
         run: |
@@ -88,18 +106,49 @@ jobs:
         run: make compose-check
 
       - name: Recreate clean release surface
+        env:
+          OBSERVABILITY_ENABLED: "true"
         run: |
           docker compose down --volumes
-          docker compose up -d --build --wait provider bank commerce receiver api console
+          docker compose --profile observability up -d --build --wait \
+            provider bank commerce receiver api console worker \
+            otel-collector prometheus grafana
 
       - name: One primary browser journey
         working-directory: apps/console
         run: npm run test:e2e
 
+      - name: Measure M7 HTTP and observability surface
+        run: |
+          uv run python -m scripts.measure_m7_performance \
+            --requests 200 --concurrency 8 --output output/m7/performance.json
+          curl --fail --silent http://localhost:8000/metrics > output/m7/metrics.txt
+          curl --fail --silent http://localhost:9090/-/ready
+          curl --fail --silent http://localhost:3001/api/health
+          uv run python -m scripts.verify_m7_evidence \
+            output/m7/performance.json output/m7/query-plans.json
+          for attempt in {1..15}; do
+            docker compose --profile observability logs --no-color otel-collector \
+              > output/m7/otel-collector.log
+            grep -q "Traces" output/m7/otel-collector.log && break
+            sleep 2
+          done
+          grep -q "Traces" output/m7/otel-collector.log
+
+      - name: Upload measured M7 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: relaypay-m7-measured-evidence
+          path: output/m7
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Container diagnostics
         if: failure()
-        run: docker compose ps && docker compose logs --no-color --tail=200
+        run: |
+          docker compose --profile observability ps
+          docker compose --profile observability logs --no-color --tail=200
 
       - name: Stop stack
         if: always()
-        run: docker compose down --volumes
+        run: docker compose --profile observability down --volumes

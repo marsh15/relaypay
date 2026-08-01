@@ -15,6 +15,8 @@ from relaypay.mock_bank.service import (
     configure_fault,
     lookup_transfer,
 )
+from relaypay.observability.metrics import install_asgi_metrics
+from relaypay.observability.telemetry import instrument_fastapi
 
 
 class TransferRequest(BaseModel):
@@ -46,7 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay Synthetic Bank", version="0.7.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay Synthetic Bank", version="0.8.0", lifespan=lifespan)
 
     @app.exception_handler(RelayPayError)
     async def handle_error(_, error: RelayPayError):  # type: ignore[no-untyped-def]
@@ -120,4 +122,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ).hexdigest()
         }
 
+    install_asgi_metrics(app, resolved, service="bank")
+    instrument_fastapi(app, resolved, service_name="relaypay-bank", engine=engine)
     return app

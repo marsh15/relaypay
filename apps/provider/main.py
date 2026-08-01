@@ -17,6 +17,8 @@ from relaypay.mock_provider.service import (
     export_statement,
     lookup_effect,
 )
+from relaypay.observability.metrics import install_asgi_metrics
+from relaypay.observability.telemetry import instrument_fastapi
 from sqlalchemy import func, select
 
 
@@ -37,7 +39,13 @@ class FaultRequest(BaseModel):
     account_id: str = Field(alias="accountId", min_length=1, max_length=64)
     stable_key: str = Field(alias="stableKey", min_length=1, max_length=128)
     fault_type: Literal[
-        "LOSE_RESPONSE", "DECLINE", "MALFORMED", "UNSIGNED", "MISMATCHED", "PENDING"
+        "LOSE_RESPONSE",
+        "DECLINE",
+        "MALFORMED",
+        "UNSIGNED",
+        "MISMATCHED",
+        "PENDING",
+        "SLOW_RESPONSE",
     ] = Field(alias="faultType")
 
 
@@ -69,7 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay Mock Provider", version="0.7.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay Mock Provider", version="0.8.0", lifespan=lifespan)
 
     @app.exception_handler(RelayPayError)
     async def handle_relaypay_error(_, error: RelayPayError):  # type: ignore[no-untyped-def]
@@ -189,4 +197,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    install_asgi_metrics(app, resolved, service="provider")
+    instrument_fastapi(app, resolved, service_name="relaypay-provider", engine=engine)
     return app

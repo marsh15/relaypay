@@ -13,6 +13,8 @@ from relaypay.event_delivery.models import (
     WebhookDeliveryAttempt,
     WebhookEndpointVersion,
 )
+from relaypay.identity.security import Principal
+from relaypay.identity.service import append_audit
 from relaypay.ids import new_public_id
 
 
@@ -88,14 +90,14 @@ def read_delivery(
 def replay_delivery(
     factory: sessionmaker[Session],
     *,
-    organisation_id: uuid.UUID,
+    principal: Principal,
     delivery_public_id: str,
 ) -> str:
     with factory() as session, session.begin():
         original = session.scalar(
             select(WebhookDelivery)
             .where(
-                WebhookDelivery.organisation_id == organisation_id,
+                WebhookDelivery.organisation_id == principal.organisation_id,
                 WebhookDelivery.public_id == delivery_public_id,
             )
             .with_for_update()
@@ -110,7 +112,7 @@ def replay_delivery(
             )
         replay = WebhookDelivery(
             public_id=new_public_id("del"),
-            organisation_id=organisation_id,
+            organisation_id=principal.organisation_id,
             environment_id=original.environment_id,
             event_recipient_id=original.event_recipient_id,
             replay_of_delivery_id=original.id,
@@ -120,4 +122,13 @@ def replay_delivery(
         )
         session.add(replay)
         session.flush()
+        append_audit(
+            session,
+            principal=principal,
+            environment_id=original.environment_id,
+            action="WEBHOOK_DELIVERY_REPLAYED",
+            target_type="WEBHOOK_DELIVERY",
+            target_id=replay.public_id,
+            details={"originalDeliveryId": original.public_id},
+        )
         return replay.public_id

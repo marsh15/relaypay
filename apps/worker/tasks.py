@@ -4,6 +4,7 @@ from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_batch
 from relaypay.event_delivery.materializer import materialize_deliveries
 from relaypay.mock_commerce.service import synchronize_event
+from relaypay.observability.metrics import observe_worker_task
 from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
@@ -13,6 +14,7 @@ from apps.worker.celery_app import app
 
 
 @app.task(name="relaypay.recover_provider_operations")  # type: ignore[untyped-decorator]
+@observe_worker_task("recover_provider_operations")
 def recover_provider_operations() -> int:
     settings = get_settings()
     engine = build_engine(
@@ -31,6 +33,7 @@ def recover_provider_operations() -> int:
 
 
 @app.task(name="relaypay.materialize_webhook_deliveries")  # type: ignore[untyped-decorator]
+@observe_worker_task("materialize_webhook_deliveries")
 def materialize_webhook_deliveries() -> int:
     settings = get_settings()
     engine = build_engine(
@@ -44,6 +47,7 @@ def materialize_webhook_deliveries() -> int:
 
 
 @app.task(name="relaypay.deliver_webhooks")  # type: ignore[untyped-decorator]
+@observe_worker_task("deliver_webhooks")
 def deliver_webhooks() -> int:
     settings = get_settings()
     engine = build_engine(
@@ -62,6 +66,7 @@ def deliver_webhooks() -> int:
 
 
 @app.task(name="relaypay.reconcile_statements")  # type: ignore[untyped-decorator]
+@observe_worker_task("reconcile_statements")
 def reconcile_statements() -> int:
     settings = get_settings()
     engine = build_engine(
@@ -75,6 +80,7 @@ def reconcile_statements() -> int:
 
 
 @app.task(name="relaypay.dispatch_payouts")  # type: ignore[untyped-decorator]
+@observe_worker_task("dispatch_payouts")
 def dispatch_payouts() -> int:
     settings = get_settings()
     engine = build_engine(
@@ -93,6 +99,7 @@ def dispatch_payouts() -> int:
 
 
 @app.task(name="relaypay.process_inbound_webhooks")  # type: ignore[untyped-decorator]
+@observe_worker_task("process_inbound_webhooks")
 def process_inbound_webhooks() -> int:
     settings = get_settings()
     relay_engine = build_engine(

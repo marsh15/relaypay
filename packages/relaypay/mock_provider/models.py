@@ -77,7 +77,7 @@ class ProviderFaultDirective(ProviderBase):
         CheckConstraint("remaining_uses >= 0"),
         CheckConstraint(
             "fault_type IN ('LOSE_RESPONSE', 'DECLINE', 'MALFORMED', 'UNSIGNED', "
-            "'MISMATCHED', 'PENDING')"
+            "'MISMATCHED', 'PENDING', 'SLOW_RESPONSE')"
         ),
     )
 

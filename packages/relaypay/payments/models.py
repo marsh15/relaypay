@@ -67,6 +67,13 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),
         Index("ix_payment_intents_organisation_created", "organisation_id", "created_at"),
+        Index(
+            "ix_payment_intents_scope_created_id",
+            "organisation_id",
+            "environment_id",
+            "created_at",
+            "id",
+        ),
     )
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)

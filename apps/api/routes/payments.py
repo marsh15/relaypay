@@ -1,7 +1,7 @@
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import Response
 from relaypay.config import Settings
 from relaypay.contracts import (
@@ -42,6 +42,7 @@ def build_payments_router(
     router = APIRouter(prefix="/api/v1", tags=["payments"])
 
     def merchant_principal(
+        request: Request,
         authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     ) -> Principal:
         if authorization is None or not authorization.startswith("Bearer "):
@@ -50,11 +51,13 @@ def build_payments_router(
             )
         plaintext = authorization.removeprefix("Bearer ").strip()
         with session_factory() as session, session.begin():
-            return authenticate_api_key(
+            principal = authenticate_api_key(
                 session,
                 plaintext=plaintext,
                 pepper=settings.API_KEY_PEPPER.get_secret_value(),
             )
+        request.state.principal = principal
+        return principal
 
     def required_idempotency_key(
         value: Annotated[str | None, Header(alias="Idempotency-Key")] = None,

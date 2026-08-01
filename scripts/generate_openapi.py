@@ -8,7 +8,7 @@ from relaypay.config import Settings
 from apps.api.main import create_app
 
 ROOT = Path(__file__).resolve().parents[1]
-CURRENT = ROOT / "contracts/openapi/v0.7.0.json"
+CURRENT = ROOT / "contracts/openapi/v0.8.0.json"
 BASELINE = ROOT / "contracts/openapi/api-v1-v0.6.0.json"
 
 

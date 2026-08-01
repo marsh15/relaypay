@@ -33,6 +33,8 @@ x-app-environment: &app-environment
   CONNECTOR_CREDENTIAL_ENCRYPTION_KEY: ${CONNECTOR_CREDENTIAL_ENCRYPTION_KEY:-dev-connector-credential-encryption-key}
   RECEIVER_BASE_URL: http://receiver:8002
   RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:-dev-receiver-secret-change-me}
+  OBSERVABILITY_ENABLED: ${OBSERVABILITY_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
 
 x-service-defaults: &service-defaults
   init: true
@@ -240,7 +242,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.python
-    command: ["celery", "-A", "apps.worker.celery_app:app", "worker", "--beat", "--loglevel=INFO"]
+    command:
+      ["celery", "-A", "apps.worker.celery_app:app", "worker", "--beat", "--pool=solo", "--loglevel=INFO"]
     environment: *app-environment
     depends_on:
       migrate:
@@ -284,6 +287,47 @@ services:
       - caddy_config:/config
     depends_on:
       console:
+        condition: service_started
+
+  otel-collector:
+    <<: *service-defaults
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
+  prometheus:
+    <<: *service-defaults
+    image: prom/prometheus:v3.12.0
+    profiles: ["observability"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./infra/observability/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  grafana:
+    <<: *service-defaults
+    image: grafana/grafana:13.1.0
+    profiles: ["observability"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      prometheus:
         condition: service_started
 
 volumes:

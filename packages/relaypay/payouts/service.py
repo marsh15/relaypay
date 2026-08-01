@@ -20,6 +20,7 @@ from relaypay.ids import new_public_id, new_uuid
 from relaypay.ledger.service import account, add_balance_transaction, post_journal
 from relaypay.merchant_balances.models import MerchantAccount
 from relaypay.merchant_balances.service import derive_balances
+from relaypay.observability.metrics import operations_metrics
 from relaypay.payouts.models import (
     Beneficiary,
     Payout,
@@ -933,4 +934,6 @@ def run_payout_batch(
             bank_signing_secret=bank_signing_secret,
             transport=transport,
         )
+    if payout_ids:
+        operations_metrics().payouts.labels("attempted").inc(len(payout_ids))
     return len(payout_ids)

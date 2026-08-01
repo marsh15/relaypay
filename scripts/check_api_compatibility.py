@@ -4,7 +4,7 @@ from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "contracts/openapi/api-v1-v0.6.0.json"
-CURRENT = ROOT / "contracts/openapi/v0.7.0.json"
+CURRENT = ROOT / "contracts/openapi/v0.8.0.json"
 METHODS = {"get", "post", "put", "patch", "delete"}
 
 

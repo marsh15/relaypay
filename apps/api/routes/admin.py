@@ -772,7 +772,7 @@ def build_admin_router(
         require_organisation_admin(principal)
         replay_id = replay_delivery(
             session_factory,
-            organisation_id=principal.organisation_id,
+            principal=principal,
             delivery_public_id=delivery_id,
         )
         return {"deliveryId": replay_id, "status": "PENDING"}

@@ -6,6 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.errors import RelayPayError, not_found
+from relaypay.observability.metrics import operations_metrics
 from relaypay.provider_operations.finalizer import ActorType
 from relaypay.provider_operations.models import ProviderOperation
 from relaypay.provider_operations.service import (
@@ -32,6 +33,7 @@ def claim_due_operations(
 ) -> list[RecoveryClaim]:
     now = datetime.now(UTC)
     claims: list[RecoveryClaim] = []
+    reclaimed = 0
     with factory() as session, session.begin():
         operations = list(
             session.scalars(
@@ -51,6 +53,11 @@ def claim_due_operations(
             )
         )
         for operation in operations:
+            if (
+                operation.lookup_lease_expires_at is not None
+                and operation.lookup_lease_expires_at <= now
+            ):
+                reclaimed += 1
             token = uuid.uuid4()
             operation.lookup_lease_token = token
             operation.lookup_lease_expires_at = now + timedelta(seconds=lease_seconds)
@@ -63,6 +70,8 @@ def claim_due_operations(
                     token,
                 )
             )
+    if reclaimed:
+        operations_metrics().recoveries.labels("expired_lease_reclaimed").inc(reclaimed)
     return claims
 
 
@@ -175,4 +184,6 @@ def run_recovery_batch(
             provider_signing_secret=provider_signing_secret,
             transport=transport,
         )
+    if claims:
+        operations_metrics().recoveries.labels("provider_lookup").inc(len(claims))
     return len(claims)

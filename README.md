@@ -57,9 +57,9 @@ Integration tests use PostgreSQL and Redis at the development ports from `.env.e
 them with `make infra-up`, then run `make migrate` and `make seed` when not using the complete
 Compose stack.
 
-Upgrading an existing v0.6 installation to v0.7 requires no schema change. The release freezes
-the existing merchant API, adds stable opaque pagination, and commits a reproducible Python SDK.
-See the [v0.7.0 migration guide](docs/migrations/v0.7.0.md).
+Upgrading an existing v0.7 installation to v0.8 adds bounded operations storage, opt-in
+OpenTelemetry/Prometheus/Grafana, and reproducible performance and failure evidence. The frozen
+merchant API remains compatible. See the [v0.8.0 migration guide](docs/migrations/v0.8.0.md).
 
 With the complete stack running, export a synthetic provider statement, import it into TEST,
 and process its reconciliation run with:
@@ -138,6 +138,8 @@ ledger history, immutable event bytes, and delivery progress.
 - [v0.5.0 release notes](docs/releases/v0.5.0.md)
 - [v0.6.0 release notes](docs/releases/v0.6.0.md)
 - [v0.7.0 release notes](docs/releases/v0.7.0.md)
+- [v0.8.0 release notes](docs/releases/v0.8.0.md)
+- [Operations telemetry](docs/operations/observability.md)
 - [Python SDK](docs/api/python-sdk.md)
 - [API error catalog](docs/api/error-catalog.md)
 

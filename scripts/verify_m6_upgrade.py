@@ -18,16 +18,18 @@ from scripts.verify_m2_upgrade import (
 )
 
 
-def _counts(database_url: str) -> dict[str, int]:
+def _counts(database_url: str, tables: set[str] | None = None) -> dict[str, int]:
     engine = create_engine(database_url)
     try:
         with engine.begin() as connection:
+            existing_tables = set(inspect(connection).get_table_names())
+            owned_tables = existing_tables if tables is None else tables
             return {
                 table: int(
                     connection.scalar(text(f'SELECT count(*) FROM "{table}"'))  # noqa: S608
                     or 0
                 )
-                for table in inspect(connection).get_table_names()
+                for table in sorted(owned_tables)
                 if table != "alembic_version"
             }
     finally:
@@ -46,7 +48,7 @@ def main() -> None:
         command.upgrade(config, "0011_connectors")
         before = _counts(database_url)
         command.upgrade(config, "head")
-        assert _counts(database_url) == before
+        assert _counts(database_url, set(before)) == before
     finally:
         if original_url is None:
             os.environ.pop("RELAYPAY_MIGRATION_DATABASE_URL", None)

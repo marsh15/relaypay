@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     INBOUND_WEBHOOK_REPLAY_SECONDS: int = 300
     RECEIVER_BASE_URL: str = "http://localhost:8002"
     RECEIVER_WEBHOOK_SECRET: SecretStr = Field(min_length=16)
+    OBSERVABILITY_ENABLED: bool = False
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://otel-collector:4318"
+    PROMETHEUS_WORKER_PORT: int = Field(default=9100, ge=1024, le=65_535)
+    REQUEST_LOG_RETENTION: int = Field(default=10_000, ge=100, le=1_000_000)
 
     @model_validator(mode="after")
     def require_https_in_production(self) -> Self:

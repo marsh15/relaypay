@@ -25,7 +25,10 @@ from relaypay.identity.security import (
     rotate_csrf,
     verify_csrf,
 )
-from relaypay.identity.service import require_organisation_admin
+from relaypay.identity.service import append_audit, require_organisation_admin
+from relaypay.observability.metrics import operations_metrics
+from relaypay.observability.service import record_request, refresh_operational_gauges
+from relaypay.observability.telemetry import instrument_fastapi
 from relaypay.payments.service import read_operation
 from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import HTTPProviderTransport, ProviderTransport
@@ -99,7 +102,7 @@ def create_app(
 
     app = FastAPI(
         title="RelayPay API",
-        version="0.7.0",
+        version="0.8.0",
         description=(
             "Synthetic-data-only RelayPay merchant and operator API. "
             "Never submit real payment, bank-account, identity, or customer data."
@@ -110,6 +113,7 @@ def create_app(
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.login_limiter = FixedWindowRateLimiter(limit=5, window_seconds=60)
+    app.state.operations_metrics = operations_metrics()
     transport = provider_transport or HTTPProviderTransport(base_url=resolved.PROVIDER_BASE_URL)
     scenario_transport = provider_transport or HTTPProviderTransport(
         base_url=resolved.PROVIDER_BASE_URL,
@@ -158,6 +162,25 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
         response.headers["Server-Timing"] = f"app;dur={(time.monotonic() - started) * 1000:.1f}"
+        elapsed_seconds = time.monotonic() - started
+        route_object = request.scope.get("route")
+        route = getattr(route_object, "path", request.url.path)
+        app.state.operations_metrics.observe_http(
+            service="api",
+            method=request.method,
+            route=route,
+            status_code=response.status_code,
+            duration_seconds=elapsed_seconds,
+        )
+        if response.status_code < 400 and request.method == "POST":
+            if route == "/api/v1/payment_intents":
+                app.state.operations_metrics.payments.labels("create", "accepted").inc()
+            elif route.endswith("/authorize"):
+                app.state.operations_metrics.payments.labels("authorize", "accepted").inc()
+            elif route.endswith("/capture"):
+                app.state.operations_metrics.payments.labels("capture", "accepted").inc()
+            elif route.endswith("/refunds"):
+                app.state.operations_metrics.payments.labels("refund", "accepted").inc()
         logger.info(
             json.dumps(
                 {
@@ -166,11 +189,27 @@ def create_app(
                     "method": request.method,
                     "path": request.url.path,
                     "status": response.status_code,
-                    "durationMs": round((time.monotonic() - started) * 1000, 1),
+                    "durationMs": round(elapsed_seconds * 1000, 1),
                 },
                 separators=(",", ":"),
             )
         )
+        if request.url.path not in {"/health/live", "/health/ready", "/metrics"}:
+            principal = getattr(request.state, "principal", None)
+            try:
+                record_request(
+                    session_factory,
+                    request_id=request_id,
+                    organisation_id=principal.organisation_id if principal else None,
+                    environment_id=principal.environment_id if principal else None,
+                    method=request.method,
+                    route=route,
+                    status_code=response.status_code,
+                    duration_ms=round(elapsed_seconds * 1000),
+                    retention=resolved.REQUEST_LOG_RETENTION,
+                )
+            except Exception:
+                logger.exception("request_metadata_persistence_failed request_id=%s", request_id)
         return response
 
     def get_session_factory(request: Request) -> sessionmaker[Session]:
@@ -193,11 +232,13 @@ def create_app(
             )
         factory: sessionmaker[Session] = request.app.state.session_factory
         with factory() as session, session.begin():
-            return authenticate_session(
+            principal = authenticate_session(
                 session,
                 token=token,
                 session_secret=resolved.SESSION_SECRET.get_secret_value(),
             )
+        request.state.principal = principal
+        return principal
 
     receiver_url = f"{resolved.RECEIVER_BASE_URL.rstrip('/')}/webhooks/relaypay"
     app.include_router(
@@ -233,6 +274,17 @@ def create_app(
             ) from exc
         return {"status": "ready", "database": "available"}
 
+    @app.get("/metrics", include_in_schema=False)
+    def metrics() -> Response:
+        if not resolved.OBSERVABILITY_ENABLED:
+            raise RelayPayError(code="NOT_FOUND", message="Resource not found", http_status=404)
+        with session_factory() as session, session.begin():
+            refresh_operational_gauges(session, app.state.operations_metrics)
+        return Response(
+            content=app.state.operations_metrics.render(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
+
     @app.get("/api/v1/payment_intents/{payment_id}/evidence")
     def get_payment_evidence(
         payment_id: str,
@@ -262,6 +314,14 @@ def create_app(
                 session_secret=resolved.SESSION_SECRET.get_secret_value(),
                 csrf_secret=resolved.CSRF_SECRET.get_secret_value(),
                 organisation_public_id=payload.organisation_id,
+            )
+            append_audit(
+                session,
+                principal=issued.principal,
+                action="SESSION_LOGIN",
+                target_type="SESSION",
+                target_id=str(issued.principal.session_id),
+                environment_id=issued.principal.environment_id,
             )
         response.set_cookie(
             key=resolved.SESSION_COOKIE_NAME,
@@ -310,6 +370,14 @@ def create_app(
                 csrf_secret=resolved.CSRF_SECRET.get_secret_value(),
             )
             revoke_session(session, principal)
+            append_audit(
+                session,
+                principal=principal,
+                action="SESSION_LOGOUT",
+                target_type="SESSION",
+                target_id=str(principal.session_id),
+                environment_id=principal.environment_id,
+            )
         response.delete_cookie(
             resolved.SESSION_COOKIE_NAME,
             path="/",
@@ -355,4 +423,5 @@ def create_app(
         )
         return Response(content=result.body, status_code=result.status_code, headers=result.headers)
 
+    instrument_fastapi(app, resolved, service_name="relaypay-api", engine=engine)
     return app
