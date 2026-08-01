@@ -333,3 +333,23 @@ passed:
 - Local measured gate: Ruff and strict mypy passed, 87 backend tests passed, five migration
   graphs were drift-free, console lint/type/build passed, and `make connector-demo` synchronized
   one synthetic commerce order to `PAID`.
+
+## v0.8.0 measured release-candidate evidence
+
+- Pull request: [#15](https://github.com/marsh15/relaypay/pull/15).
+- Passing release gate: [run 30700821255](https://github.com/marsh15/relaypay/actions/runs/30700821255),
+  completed on exact head commit `31068be884170b23dd14a24914b0343b2e8196ef`.
+- The clean CI graph passed all five upgrade histories, the complete backend suite, API and SDK
+  drift checks, console lint/type/build/audit, Compose validation, Playwright/axe, failure
+  fixtures, observability health, bounded performance, and PostgreSQL query-plan checks.
+- Bounded `/health/live` workload: 200 requests at concurrency 8, zero failures, p50 `9.001 ms`,
+  p95 `23.449 ms`, p99 `118.655 ms`, and `593.631 requests/second`. These are CI observations,
+  not production SLOs.
+- The indexed request-log query returned the newest 100 of 5,000 synthetic rows using
+  `ix_request_logs_created`; measured execution changed from `1.373 ms` before the index to
+  `0.062 ms` after it. The proof transaction was rolled back.
+- Failure fixtures passed for Redis loss, queue-notification loss, worker shutdown,
+  commit-then-crash recovery, bounded slow-provider response, and retry exhaustion.
+- CI artifact `relaypay-m7-measured-evidence` has archive digest
+  `sha256:6bdd6a04298ec2fb6fb2635d7dce5902ac5a4c687c71bad07c4d32e8c82e9e5e`.
+  Its component SHA-256 values are recorded in [the v0.8 evidence manifest](evidence/v0.8.0.md).
