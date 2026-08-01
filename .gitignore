@@ -3,6 +3,8 @@
 .env.production
 .env.local
 .env.*.local
+.dev.vars*
+.wrangler/
 .venv/
 .pytest_cache/
 .mypy_cache/

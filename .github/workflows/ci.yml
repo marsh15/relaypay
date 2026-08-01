@@ -25,13 +25,16 @@ jobs:
         with:
           node-version: "24.12.0"
           cache: npm
-          cache-dependency-path: apps/console/package-lock.json
+          cache-dependency-path: |
+            apps/console/package-lock.json
+            apps/edge/package-lock.json
 
       - name: Install locked dependencies
         run: |
           cp .env.example .env
           uv sync --frozen
           npm ci --prefix apps/console
+          npm ci --prefix apps/edge
           npx --prefix apps/console playwright install --with-deps chromium
 
       - name: Start clean dependencies
@@ -104,6 +107,9 @@ jobs:
           npm run typecheck
           npm run build
           npm audit --omit=dev --audit-level=high
+
+      - name: Cloudflare edge trust-boundary gate
+        run: npm run check --prefix apps/edge
 
       - name: Validate development and production Compose graphs
         run: make compose-check
