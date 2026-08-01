@@ -20,7 +20,7 @@ test("administrator proves and inspects one lost capture response", async ({ pag
   await expect(page.getByRole("heading", { name: "Verified: one provider capture effect" })).toBeVisible();
   await expect(page.getByText("Capture terminal response digests are byte-identical.")).toBeVisible();
   await expect(page.getByText("Debits equal credits")).toBeVisible();
-  await expect(page.locator(".state-badge", { hasText: "DELIVERED" })).toBeVisible();
+  await expect(page.locator(".state-badge", { hasText: "DELIVERED" }).first()).toBeVisible();
 
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations).toEqual([]);
@@ -43,7 +43,7 @@ test("administrator navigates every scoped operations view accessibly", async ({
   }
 
   await page.setViewportSize({ width: 320, height: 900 });
-  await expect(page.getByRole("heading", { name: "Operational metrics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Operational metrics", exact: true })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations).toEqual([]);
 });
