@@ -14,6 +14,7 @@ x-app-environment: &app-environment
   RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}@postgres:5432/relaypay
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/0
+  REDPANDA_BROKERS: redpanda:9092
   SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me-32-bytes}
   CSRF_SECRET: ${CSRF_SECRET:-dev-csrf-secret-change-me-32-bytes}
   API_KEY_PEPPER: ${API_KEY_PEPPER:-dev-api-key-pepper-change-me-32-bytes}
@@ -91,6 +92,28 @@ services:
         limits:
           cpus: "0.5"
           memory: 128M
+
+  redpanda:
+    <<: *service-defaults
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.14
+    command:
+      - redpanda
+      - start
+      - --mode
+      - dev-container
+      - --smp
+      - "1"
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   migrate:
     <<: *service-defaults
@@ -235,6 +258,8 @@ services:
       commerce:
         condition: service_healthy
       receiver:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
 
   worker:

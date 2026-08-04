@@ -77,3 +77,11 @@ the RelayPay transaction against its separately credentialed database.
 Caddy exposes the console, `/api/*`, `/health/*`, and the bundled `/webhooks/relaypay` receiver.
 PostgreSQL, Redis, provider control routes, workers, and internal service ports are not published by
 the production overlay.
+## v0.11 agent runtime boundary
+
+Business commands append immutable outbox rows in their PostgreSQL transaction. A lease publisher
+commits its claim before Redpanda I/O and records acknowledgement in a second transaction. Consumers
+deduplicate by `eventId`; workflow steps use reclaimable database leases, so broker or worker loss
+cannot change truth. Model and tool calls likewise occur outside transactions, then write digest,
+usage, pricing-version, and trace evidence under the exact lease token. See
+[ADR-005](adr/005-postgresql-authoritative-agent-runtime.md).

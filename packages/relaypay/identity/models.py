@@ -71,7 +71,10 @@ class OrganisationMembership(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "organisation_memberships"
     __table_args__ = (
         UniqueConstraint("organisation_id", "user_id"),
-        CheckConstraint("role IN ('ORGANISATION_ADMIN', 'DEVELOPER', 'VIEWER')"),
+        CheckConstraint(
+            "role IN ('ORGANISATION_ADMIN', 'DEVELOPER', 'VIEWER', "
+            "'OPERATIONS_ANALYST', 'APPROVER')"
+        ),
         CheckConstraint("status IN ('ACTIVE', 'DISABLED')"),
     )
 

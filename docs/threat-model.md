@@ -35,3 +35,10 @@ This project does not provide a WAF, managed secret store, hardware-backed keys,
 multi-region consensus, disaster-recovery automation, audit-log export, malware scanning, or real
 payment-network certification. Docker secrets and a managed database should replace environment
 variables for any environment beyond a disposable portfolio sandbox. See [limitations](limitations.md).
+## v0.11 agent safety additions
+
+Agent-specific threats include cross-tenant tool arguments, prompt injection in evidence, raw PII in
+streams or prompts, unbounded tool/model output, provider fallback after policy refusal, self-approval,
+budget bypass, and duplicate broker effects. Controls are tenant scope injection, Pydantic-validated
+read-only allowlists, PII tokens, explicit untrusted-data delimiters, byte/token/cost ceilings,
+transport-only fallback, artifact-hash maker-checker constraints, PostgreSQL leases, and event dedupe.
