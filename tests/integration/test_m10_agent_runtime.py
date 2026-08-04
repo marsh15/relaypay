@@ -34,7 +34,11 @@ class RecordingPublisher:
 
 
 def test_broker_loss_dedupe_lease_reclaim_version_pin_and_budget_gate() -> None:
-    engine = build_engine(os.environ["RELAYPAY_DATABASE_URL"], application_name="m10-agent-runtime")
+    database_url = os.getenv(
+        "RELAYPAY_DATABASE_URL",
+        "postgresql+psycopg://relaypay_app:relaypay_app_dev@localhost:55432/relaypay",
+    )
+    engine = build_engine(database_url, application_name="m10-agent-runtime")
     factory = build_session_factory(engine)
     organisation_id, environment_id = new_uuid(), new_uuid()
     organisation_public_id, environment_public_id = new_public_id("org"), new_public_id("env")
