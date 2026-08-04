@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from relaypay.agent_runtime.workflows import decide_approval, list_runs, read_run
 from relaypay.config import Settings
 from relaypay.connectors.adapters import BankConnectorAdapter, PaymentConnectorAdapter
 from relaypay.connectors.service import (
@@ -81,7 +82,7 @@ class OrganisationCreate(BaseModel):
 class MembershipUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     email: str = Field(min_length=3, max_length=320)
-    role: Literal["ORGANISATION_ADMIN", "DEVELOPER", "VIEWER"]
+    role: Literal["ORGANISATION_ADMIN", "DEVELOPER", "VIEWER", "OPERATIONS_ANALYST", "APPROVER"]
     status: Literal["ACTIVE", "DISABLED"] = "ACTIVE"
 
 
@@ -139,6 +140,12 @@ class ConnectorVersionCreate(BaseModel):
 class ConnectorVerify(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     kind: Literal["PAYMENT", "BANK"]
+
+
+class ApprovalDecisionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    decision: Literal["APPROVED", "REJECTED"]
+    note: str | None = Field(default=None, max_length=1000)
 
 
 def build_admin_router(
@@ -880,5 +887,115 @@ def build_admin_router(
                 environment_public_id=environment_id,
                 version_public_id=version_id,
             )
+
+    @router.get("/admin/v1/environments/{environment_id}/workflow-runs")
+    def get_workflow_runs(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            items = list_runs(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                limit=limit,
+            )
+            return [
+                {
+                    "id": item.public_id,
+                    "status": item.status,
+                    "route": item.route,
+                    "tokensUsed": item.tokens_used,
+                    "tokenBudget": item.token_budget,
+                    "costUsedUsdMicros": item.cost_used_usd_micros,
+                    "costBudgetUsdMicros": item.cost_budget_usd_micros,
+                    "createdAt": item.created_at.isoformat(),
+                }
+                for item in items
+            ]
+
+    @router.get("/admin/v1/environments/{environment_id}/workflow-runs/{run_id}")
+    def get_workflow_run(
+        environment_id: str, run_id: str, principal: PrincipalDep
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            run, steps, artifacts, approvals, dead_letters = read_run(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                run_public_id=run_id,
+            )
+            return {
+                "id": run.public_id,
+                "status": run.status,
+                "route": run.route,
+                "steps": [
+                    {
+                        "id": item.public_id,
+                        "key": item.step_key,
+                        "kind": item.step_kind,
+                        "status": item.status,
+                        "attemptCount": item.attempt_count,
+                        "safeErrorCode": item.safe_error_code,
+                    }
+                    for item in steps
+                ],
+                "artifacts": [
+                    {
+                        "id": item.public_id,
+                        "type": item.artifact_type,
+                        "version": item.version,
+                        "mediaType": item.media_type,
+                        "sha256": item.content_sha256.hex(),
+                        "byteLength": item.byte_length,
+                    }
+                    for item in artifacts
+                ],
+                "approvals": [
+                    {
+                        "id": item.public_id,
+                        "artifactSha256": item.artifact_sha256.hex(),
+                        "status": item.status,
+                    }
+                    for item in approvals
+                ],
+                "deadLetters": [
+                    {
+                        "id": item.public_id,
+                        "reasonCode": item.reason_code,
+                        "replayCount": item.replay_count,
+                        "evidence": item.evidence,
+                    }
+                    for item in dead_letters
+                ],
+            }
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/approval-requests/{request_id}/decisions",
+        status_code=201,
+    )
+    def post_approval_decision(
+        environment_id: str,
+        request_id: str,
+        payload: ApprovalDecisionCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, str]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            item = decide_approval(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                request_public_id=request_id,
+                decision=payload.decision,
+                note=payload.note,
+            )
+            return {"id": item.public_id, "decision": item.decision}
 
     return router

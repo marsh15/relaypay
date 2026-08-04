@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     RECEIVER_DATABASE_URL: SecretStr
     REDIS_URL: SecretStr = SecretStr("redis://localhost:6379/0")
     CELERY_BROKER_URL: SecretStr = SecretStr("redis://localhost:6379/0")
+    REDPANDA_BROKERS: str = "localhost:19092"
+    AGENT_MODEL_PROVIDER: Literal["fake", "live"] = "fake"
+    OPENAI_MODEL_ID: str = "gpt-5-mini-2025-08-07"
+    CLAUDE_MODEL_ID: str = "claude-sonnet-4-20250514"
+    GEMINI_MODEL_ID: str = "gemini-2.5-flash"
     SESSION_COOKIE_NAME: str = "relaypay_session"
     SESSION_SECRET: SecretStr = Field(min_length=32)
     CSRF_SECRET: SecretStr = Field(min_length=32)

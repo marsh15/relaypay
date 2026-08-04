@@ -315,6 +315,10 @@ def _membership_scopes(role: str) -> frozenset[str]:
         return frozenset({"admin", "members:write", "keys:write", "operations:write"})
     if role == "DEVELOPER":
         return frozenset({"technical:read", "financial:read"})
+    if role == "OPERATIONS_ANALYST":
+        return frozenset({"technical:read", "financial:read", "workflows:write"})
+    if role == "APPROVER":
+        return frozenset({"technical:read", "financial:read", "approvals:write"})
     return frozenset({"technical:read", "financial:read"})
 
 

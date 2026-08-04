@@ -46,7 +46,8 @@ def _prove_relaypay() -> None:
         config = _configuration(RELAYPAY_CONFIG_PATH, database_url)
         command.upgrade(config, "0011_connectors")
         before = _table_counts(database_url)
-        command.upgrade(config, "head")
+        # Historical proofs stop at their release boundary; later milestones may add storage.
+        command.upgrade(config, "0012_observability")
         assert _table_counts(database_url) == before
         engine = create_engine(database_url)
         with engine.begin() as connection:

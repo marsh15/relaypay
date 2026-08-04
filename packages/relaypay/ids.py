@@ -34,6 +34,20 @@ PublicIdPrefix = Literal[
     "iwe",
     "iwa",
     "ord",
+    "bev",
+    "wdf",
+    "wfr",
+    "wfs",
+    "art",
+    "dlq",
+    "apr",
+    "apd",
+    "mdl",
+    "tol",
+    "prm",
+    "prc",
+    "evd",
+    "evr",
 ]
 
 _PUBLIC_ID_SEPARATOR: Final = "_"

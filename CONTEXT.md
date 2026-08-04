@@ -85,3 +85,30 @@ _Avoid_: Balance, counter
 One deterministic journal per default Merchant Account and environment that transfers the net
 legacy merchant-payable position into Pending Payable without changing old journals or postings.
 _Avoid_: Backfill rewrite
+
+## Agent operations
+
+**Business Event**:
+An immutable tenant-scoped fact recorded transactionally in PostgreSQL and published at least once
+to derived streams.
+_Avoid_: Kafka message, task
+
+**Workflow Definition**:
+An immutable code-reviewed description of allowed steps, retry policy, approvals, and budgets.
+_Avoid_: Prompt, editable automation
+
+**Workflow Run**:
+The durable execution record for one activated Workflow Definition and trigger event.
+_Avoid_: Celery task, agent session
+
+**Workflow Step**:
+One leased, retryable unit of a Workflow Run whose state is authoritative in PostgreSQL.
+_Avoid_: Network request, queue message
+
+**Artifact**:
+Bounded immutable synthetic bytes or canonical JSON produced or selected by a Workflow Run.
+_Avoid_: Model response, mutable document
+
+**Dead Letter**:
+Immutable evidence that event publication, consumption, or a Workflow Step exhausted its policy.
+_Avoid_: Error log, failed queue item

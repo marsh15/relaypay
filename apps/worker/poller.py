@@ -1,6 +1,8 @@
 import logging
 import time
+from datetime import UTC, datetime
 
+from relaypay.agent_runtime.events import RedpandaPublisher, publish_one
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_batch
@@ -19,6 +21,7 @@ def poll_once(settings: Settings) -> dict[str, int]:
         application_name="relaypay-postgres-poller",
     )
     factory = build_session_factory(engine)
+    event_publisher: RedpandaPublisher | None = None
     try:
         recovered = run_recovery_batch(
             factory,
@@ -34,13 +37,18 @@ def poll_once(settings: Settings) -> dict[str, int]:
             transport=HTTPWebhookTransport(allowed_url=receiver_url),
         )
         reconciled = run_reconciliation_batch(factory)
+        event_publisher = RedpandaPublisher(settings.REDPANDA_BROKERS)
+        published = int(publish_one(factory, event_publisher, now=datetime.now(UTC)))
         return {
             "recovered": recovered,
             "materialized": materialized,
             "delivered": delivered,
             "reconciled": reconciled,
+            "published": published,
         }
     finally:
+        if event_publisher is not None:
+            event_publisher.close()
         engine.dispose()
 
 
