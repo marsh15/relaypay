@@ -418,3 +418,20 @@ and Docker Compose `5.3.1`.
 - GitHub reports the repository as public and MIT-licensed, the release as final rather than a
   draft or prerelease, and an empty asset list. The notes retain the synthetic-data and
   no-hosting warning.
+
+## v0.11.0 final publication evidence
+
+- Release PR: [#21](https://github.com/marsh15/relaypay/pull/21).
+- Passing integrated PR gate:
+  [run 30940589393](https://github.com/marsh15/relaypay/actions/runs/30940589393), completed in
+  `4m32s` on exact head `49544d1450d0decb0b5157446f4ccd9bb798d0ce`.
+- Passing canonical `main` gate:
+  [run 30940962122](https://github.com/marsh15/relaypay/actions/runs/30940962122), completed in
+  `4m40s` on exact merge commit `2252f320c12ac938a4bb74ac78d318be6ebe3a23`.
+- Annotated tag object: `3baf27d0ad19b265d1571758e8cbbe4d40a418e1`; dereferenced commit:
+  `2252f320c12ac938a4bb74ac78d318be6ebe3a23`.
+- Public final release: [v0.11.0](https://github.com/marsh15/relaypay/releases/tag/v0.11.0).
+- Release-notes SHA-256:
+  `832fb08141a5bd2e5fe7a77025498661daa869f3cc9c4e38ae25b3fe655c76ae`.
+- GitHub reports a public MIT repository and a final release with an intentionally empty asset
+  list. The notes retain synthetic-data, no-real-money, and no-hosting warnings.
