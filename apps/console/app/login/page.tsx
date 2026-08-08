@@ -7,7 +7,15 @@ export const metadata: Metadata = { title: "Sign in" };
 
 function safeNext(value: string | undefined): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/lab";
-  if (value === "/lab" || value === "/operations" || value.startsWith("/payments/")) return value;
+  if (
+    value === "/lab" ||
+    value === "/operations" ||
+    value === "/disputes" ||
+    value === "/agents" ||
+    value.startsWith("/payments/") ||
+    value.startsWith("/disputes/") ||
+    value.startsWith("/agents/")
+  ) return value;
   return "/lab";
 }
 

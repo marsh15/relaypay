@@ -112,3 +112,23 @@ _Avoid_: Model response, mutable document
 **Dead Letter**:
 Immutable evidence that event publication, consumption, or a Workflow Step exhausted its policy.
 _Avoid_: Error log, failed queue item
+
+## Dispute response
+
+**Dispute Case**:
+A tenant-scoped synthetic network claim against one payment whose source snapshot and terminal
+submission identity never change.
+_Avoid_: Workflow run, refund
+
+**Dispute Draft**:
+An immutable analyst- or agent-authored response version; an edit creates a successor and
+invalidates approval of every earlier package.
+_Avoid_: Mutable response, model output
+
+**Dispute Package**:
+Exact canonical manifest, response, and attachment bytes bound to one draft and one digest.
+_Avoid_: Draft, regenerated ZIP
+
+**Dispute Submission**:
+One externally visible synthetic-network effect keyed by the immutable package identity.
+_Avoid_: HTTP attempt, retry

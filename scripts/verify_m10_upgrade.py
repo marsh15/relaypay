@@ -60,7 +60,7 @@ def main() -> None:
         config = _configuration(RELAYPAY_CONFIG_PATH, database_url)
         command.upgrade(config, "0012_observability")
         before = _counts(database_url)
-        command.upgrade(config, "head")
+        command.upgrade(config, "0013_agent_runtime")
         assert _counts(database_url) == before
         engine = create_engine(database_url)
         with engine.begin() as connection:

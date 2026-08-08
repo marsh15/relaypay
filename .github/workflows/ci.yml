@@ -67,6 +67,9 @@ jobs:
       - name: Prove v0.10 agent-runtime upgrade preserves evidence
         run: uv run python -m scripts.verify_m10_upgrade
 
+      - name: Prove v0.11 dispute upgrade preserves evidence
+        run: uv run python -m scripts.verify_m11_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
@@ -92,6 +95,11 @@ jobs:
         run: |
           docker compose exec -T redpanda rpk cluster info
           uv run pytest tests/integration/test_m10_agent_runtime.py
+
+      - name: Dispute response immutable package and recovery gate
+        run: |
+          uv run pytest tests/unit/test_dispute_package.py tests/unit/test_dispute_evaluation.py
+          uv run pytest tests/integration/test_m11_disputes.py
 
       - name: Measure M7 failure behavior and database query plans
         run: |
@@ -128,7 +136,7 @@ jobs:
         run: |
           docker compose down --volumes
           docker compose --profile observability up -d --build --wait \
-            provider bank commerce receiver api console worker \
+            provider bank commerce receiver dispute-network api console worker \
             otel-collector prometheus grafana
 
       - name: One primary browser journey

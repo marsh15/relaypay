@@ -41,7 +41,7 @@ def _require_scope(principal: Principal, permission: str) -> tuple[uuid.UUID, uu
 def resolve_admin_scope(
     session: Session, *, principal: Principal, environment_public_id: str, permission: str
 ) -> tuple[uuid.UUID, uuid.UUID]:
-    if permission not in principal.scopes:
+    if permission not in principal.scopes and "admin" not in principal.scopes:
         raise RelayPayError(code="FORBIDDEN", message="Permission denied", http_status=403)
     environment_id = session.scalar(
         select(Environment.id).where(

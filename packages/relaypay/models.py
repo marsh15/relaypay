@@ -26,6 +26,12 @@ from relaypay.connectors.models import (
     InboundWebhookEvent,
 )
 from relaypay.demo_scenarios.models import ScenarioRun
+from relaypay.disputes.models import (
+    DisputeCase,
+    DisputeDraftVersion,
+    DisputePackageVersion,
+    DisputeSubmissionAttempt,
+)
 from relaypay.event_delivery.models import (
     EventRecipient,
     MerchantEvent,
@@ -85,6 +91,10 @@ __all__ = [
     "ConsumedBusinessEvent",
     "Customer",
     "DeadLetter",
+    "DisputeCase",
+    "DisputeDraftVersion",
+    "DisputePackageVersion",
+    "DisputeSubmissionAttempt",
     "EvaluationDataset",
     "EvaluationRun",
     "EventRecipient",

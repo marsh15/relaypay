@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from relaypay.agent_runtime.models import ApprovalRequest
 from relaypay.agent_runtime.workflows import decide_approval, list_runs, read_run
 from relaypay.config import Settings
 from relaypay.connectors.adapters import BankConnectorAdapter, PaymentConnectorAdapter
@@ -19,12 +20,28 @@ from relaypay.demo_scenarios.service import (
     read_scenario_run,
     run_lost_capture_scenario,
 )
+from relaypay.disputes.evidence import draft_from_allowlisted_evidence
+from relaypay.disputes.models import DisputePackageVersion
+from relaypay.disputes.network import DeterministicDisputeNetwork
+from relaypay.disputes.service import (
+    DisputeNetwork,
+    StructuredDisputeDraft,
+    create_draft,
+    freeze_draft,
+    latest_draft_for_admin,
+    list_cases,
+    mark_package_approved,
+    read_case,
+    read_package_for_admin,
+    submit_approved_package,
+)
 from relaypay.event_delivery.admin import read_delivery, replay_delivery
 from relaypay.event_delivery.delivery import WebhookTransport
 from relaypay.idempotency import build_fingerprint
 from relaypay.identity.security import Principal, verify_csrf
 from relaypay.identity.service import (
     activate_api_key_version,
+    append_audit,
     create_api_key,
     list_environments,
     list_memberships,
@@ -59,6 +76,7 @@ from relaypay.reconciliation.service import (
     refresh_mismatch_evidence,
     resolve_mismatch,
 )
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -156,9 +174,11 @@ def build_admin_router(
     fault_controller: ScenarioFaultController,
     webhook_transport: WebhookTransport,
     principal_dependency: Callable[..., Principal],
+    dispute_network: DisputeNetwork | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["admin"])
     PrincipalDep = Annotated[Principal, Depends(principal_dependency)]
+    resolved_dispute_network = dispute_network or DeterministicDisputeNetwork()
 
     def require_csrf(principal: Principal, csrf_token: str | None) -> None:
         with session_factory() as session, session.begin():
@@ -996,6 +1016,279 @@ def build_admin_router(
                 decision=payload.decision,
                 note=payload.note,
             )
+            if payload.decision == "APPROVED":
+                approval = session.get(ApprovalRequest, item.approval_request_id)
+                if approval is not None:
+                    package = session.scalar(
+                        select(DisputePackageVersion).where(
+                            DisputePackageVersion.workflow_artifact_id == approval.artifact_id,
+                            DisputePackageVersion.status == "FROZEN",
+                        )
+                    )
+                    if package is not None:
+                        mark_package_approved(
+                            session, package_public_id=package.public_id, approval=approval
+                        )
             return {"id": item.public_id, "decision": item.decision}
+
+    @router.get("/admin/v1/environments/{environment_id}/disputes")
+    def get_disputes(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "id": case.public_id,
+                    "networkDisputeId": case.network_dispute_id,
+                    "reasonCode": case.reason_code,
+                    "amount": case.amount,
+                    "currency": case.currency,
+                    "status": case.status,
+                    "dueAt": case.due_at.isoformat(),
+                    "createdAt": case.created_at.isoformat(),
+                }
+                for case in list_cases(
+                    session,
+                    principal=principal,
+                    environment_public_id=environment_id,
+                    limit=limit,
+                )
+            ]
+
+    @router.get("/admin/v1/environments/{environment_id}/disputes/{case_id}")
+    def get_dispute(
+        environment_id: str, case_id: str, principal: PrincipalDep
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            case, drafts, packages = read_case(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                case_public_id=case_id,
+            )
+            approvals = {
+                item.artifact_id: item
+                for item in session.scalars(
+                    select(ApprovalRequest).where(
+                        ApprovalRequest.workflow_run_id == case.workflow_run_id
+                    )
+                ).all()
+            }
+            return {
+                "id": case.public_id,
+                "networkDisputeId": case.network_dispute_id,
+                "reasonCode": case.reason_code,
+                "amount": case.amount,
+                "currency": case.currency,
+                "status": case.status,
+                "dueAt": case.due_at.isoformat(),
+                "sourceSha256": case.source_sha256.hex(),
+                "drafts": [
+                    {
+                        "id": draft.public_id,
+                        "version": draft.version,
+                        "authorType": draft.author_type,
+                        "classification": draft.classification,
+                        "confidence": draft.confidence,
+                        "responseText": draft.response_text,
+                        "selectedEvidence": draft.selected_evidence,
+                        "missingEvidence": draft.missing_evidence,
+                        "sha256": draft.content_sha256.hex(),
+                    }
+                    for draft in drafts
+                ],
+                "packages": [
+                    {
+                        "id": package.public_id,
+                        "version": package.version,
+                        "status": package.status,
+                        "sha256": package.package_sha256.hex(),
+                        "byteLength": package.byte_length,
+                        "approvalRequestId": (
+                            approvals[package.workflow_artifact_id].public_id
+                            if package.workflow_artifact_id in approvals
+                            else None
+                        ),
+                        "approvalStatus": (
+                            approvals[package.workflow_artifact_id].status
+                            if package.workflow_artifact_id in approvals
+                            else None
+                        ),
+                    }
+                    for package in packages
+                ],
+            }
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/disputes/{case_id}/agent-drafts",
+        status_code=201,
+    )
+    def post_agent_dispute_draft(
+        environment_id: str,
+        case_id: str,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            case, _, _ = read_case(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                case_public_id=case_id,
+                permission="workflows:write",
+            )
+            item = create_draft(
+                session,
+                case=case,
+                draft=draft_from_allowlisted_evidence(case),
+                author_type="AGENT",
+                author_user_id=None,
+            )
+            append_audit(
+                session,
+                principal=principal,
+                environment_id=case.environment_id,
+                action="DISPUTE_DRAFT_CREATED",
+                target_type="DISPUTE_DRAFT",
+                target_id=item.public_id,
+            )
+            return {"id": item.public_id, "version": item.version}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/disputes/{case_id}/drafts",
+        status_code=201,
+    )
+    def post_analyst_dispute_draft(
+        environment_id: str,
+        case_id: str,
+        payload: StructuredDisputeDraft,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        if principal.user_id is None:
+            raise ValueError("session user required")
+        with session_factory() as session, session.begin():
+            case, _ = latest_draft_for_admin(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                case_public_id=case_id,
+            )
+            item = create_draft(
+                session,
+                case=case,
+                draft=payload,
+                author_type="ANALYST",
+                author_user_id=principal.user_id,
+            )
+            append_audit(
+                session,
+                principal=principal,
+                environment_id=case.environment_id,
+                action="DISPUTE_DRAFT_EDITED",
+                target_type="DISPUTE_DRAFT",
+                target_id=item.public_id,
+            )
+            return {"id": item.public_id, "version": item.version}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/disputes/{case_id}/packages",
+        status_code=201,
+    )
+    def post_dispute_package(
+        environment_id: str,
+        case_id: str,
+        principal: PrincipalDep,
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        if principal.user_id is None:
+            raise ValueError("session user required")
+        with session_factory() as session, session.begin():
+            case, draft = latest_draft_for_admin(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                case_public_id=case_id,
+            )
+            package, approval = freeze_draft(
+                session,
+                case=case,
+                draft=draft,
+                attachments=(),
+                signing_secret=settings.DISPUTE_PACKAGE_SIGNING_SECRET.get_secret_value().encode(),
+                maker_user_id=principal.user_id,
+            )
+            append_audit(
+                session,
+                principal=principal,
+                environment_id=case.environment_id,
+                action="DISPUTE_PACKAGE_FROZEN",
+                target_type="DISPUTE_PACKAGE",
+                target_id=package.public_id,
+                details={"sha256": package.package_sha256.hex()},
+            )
+            return {
+                "id": package.public_id,
+                "sha256": package.package_sha256.hex(),
+                "approvalRequestId": approval.public_id,
+            }
+
+    @router.get("/admin/v1/environments/{environment_id}/dispute-packages/{package_id}/download")
+    def get_dispute_package(
+        environment_id: str, package_id: str, principal: PrincipalDep
+    ) -> Response:
+        with session_factory() as session, session.begin():
+            package = read_package_for_admin(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                package_public_id=package_id,
+            )
+            content = bytes(package.package_bytes)
+            digest = package.package_sha256.hex()
+        return Response(
+            content=content,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{package_id}.zip"',
+                "X-Content-SHA256": digest,
+            },
+        )
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/dispute-packages/{package_id}/submit",
+        status_code=202,
+    )
+    def post_dispute_submission(
+        environment_id: str,
+        package_id: str,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            package = read_package_for_admin(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                package_public_id=package_id,
+                permission="workflows:write",
+            )
+            resolved_package_id = package.public_id
+        attempt = submit_approved_package(
+            session_factory,
+            package_public_id=resolved_package_id,
+            network=resolved_dispute_network,
+        )
+        return {"id": attempt.public_id, "status": attempt.status}
 
     return router

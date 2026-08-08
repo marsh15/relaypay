@@ -38,8 +38,39 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
+}
+
+.dispute-actions {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+.dispute-actions form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dispute-actions label {
+  font-weight: 700;
+}
+
+.dispute-actions textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #8b8e93;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: var(--surface);
+  resize: vertical;
+}
+
+.dispute-actions .button,
+.dispute-actions a.button {
+  width: fit-content;
 }
 
 a {
