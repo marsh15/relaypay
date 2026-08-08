@@ -48,6 +48,10 @@ PublicIdPrefix = Literal[
     "prc",
     "evd",
     "evr",
+    "dpc",
+    "dpd",
+    "dpp",
+    "dps",
 ]
 
 _PUBLIC_ID_SEPARATOR: Final = "_"
