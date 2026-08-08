@@ -1,4 +1,4 @@
-"""Prove v0.10 upgrades to v0.11 without rewriting payment or evidence rows."""
+"""Prove v0.11 upgrades to v0.12 without rewriting authoritative rows."""
 
 from __future__ import annotations
 
@@ -17,22 +17,11 @@ from scripts.verify_m2_upgrade import (
     _schema_url,
 )
 
-AGENT_TABLES = {
-    "approval_decisions",
-    "approval_requests",
-    "business_event_outbox",
-    "consumed_business_events",
-    "evaluation_datasets",
-    "evaluation_runs",
-    "model_invocations",
-    "pricing_versions",
-    "prompt_versions",
-    "tool_invocations",
-    "workflow_artifacts",
-    "workflow_dead_letters",
-    "workflow_definitions",
-    "workflow_runs",
-    "workflow_steps",
+DISPUTE_TABLES = {
+    "dispute_cases",
+    "dispute_draft_versions",
+    "dispute_package_versions",
+    "dispute_submission_attempts",
 }
 
 
@@ -41,16 +30,18 @@ def _counts(database_url: str) -> dict[str, int]:
     try:
         with engine.begin() as connection:
             return {
-                table: int(connection.scalar(text(f'SELECT count(*) FROM "{table}"')) or 0)  # noqa: S608
+                table: int(
+                    connection.scalar(text(f'SELECT count(*) FROM "{table}"')) or 0  # noqa: S608
+                )
                 for table in inspect(connection).get_table_names()
-                if table not in AGENT_TABLES | {"alembic_version"}
+                if table not in DISPUTE_TABLES | {"alembic_version"}
             }
     finally:
         engine.dispose()
 
 
 def main() -> None:
-    schema = f"m10_upgrade_{uuid.uuid4().hex}"
+    schema = f"m11_upgrade_{uuid.uuid4().hex}"
     base_url = _base_url(RELAYPAY_CONFIG_PATH, "RELAYPAY_MIGRATION_DATABASE_URL")
     _create_schema(base_url, schema)
     original = os.environ.get("RELAYPAY_MIGRATION_DATABASE_URL")
@@ -58,21 +49,14 @@ def main() -> None:
         database_url = _schema_url(base_url, schema)
         os.environ["RELAYPAY_MIGRATION_DATABASE_URL"] = database_url
         config = _configuration(RELAYPAY_CONFIG_PATH, database_url)
-        command.upgrade(config, "0012_observability")
-        before = _counts(database_url)
         command.upgrade(config, "0013_agent_runtime")
+        before = _counts(database_url)
+        command.upgrade(config, "0014_disputes")
         assert _counts(database_url) == before
         engine = create_engine(database_url)
         with engine.begin() as connection:
-            for table in AGENT_TABLES:
+            for table in DISPUTE_TABLES:
                 assert connection.scalar(text(f'SELECT count(*) FROM "{table}"')) == 0  # noqa: S608
-            role_constraint = connection.scalar(
-                text(
-                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
-                    "WHERE conname = 'organisation_memberships_role_check'"
-                )
-            )
-            assert role_constraint is not None and "APPROVER" in role_constraint
         engine.dispose()
     finally:
         if original is None:
@@ -80,7 +64,7 @@ def main() -> None:
         else:
             os.environ["RELAYPAY_MIGRATION_DATABASE_URL"] = original
         _drop_schema(base_url, schema)
-    print("M10 upgrade proof passed: v0.10 evidence preserved; v0.11 runtime starts empty")
+    print("M11 upgrade proof passed: v0.11 evidence preserved; v0.12 disputes start empty")
 
 
 if __name__ == "__main__":

@@ -108,6 +108,7 @@ class DisputePackageVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     workflow_artifact_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     manifest: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    package_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     package_sha256: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     byte_length: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)

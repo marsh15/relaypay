@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     CONNECTOR_CREDENTIAL_ENCRYPTION_KEY: SecretStr = SecretStr(
         "dev-connector-credential-encryption-key"
     )
+    DISPUTE_PACKAGE_SIGNING_SECRET: SecretStr = SecretStr(
+        "dev-dispute-package-signing-secret-change-me"
+    )
+    DISPUTE_NETWORK_BASE_URL: str = "http://localhost:8005"
     INBOUND_WEBHOOK_REPLAY_SECONDS: int = 300
     RECEIVER_BASE_URL: str = "http://localhost:8002"
     RECEIVER_WEBHOOK_SECRET: SecretStr = Field(min_length=16)

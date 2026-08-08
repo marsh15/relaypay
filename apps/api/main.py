@@ -13,6 +13,7 @@ from relaypay.config import Settings, get_settings
 from relaypay.contracts import EmptyCommand
 from relaypay.database import build_engine, build_session_factory
 from relaypay.demo_scenarios.service import HTTPScenarioFaultController, ScenarioFaultController
+from relaypay.disputes.network import HTTPDisputeNetwork
 from relaypay.edge.origin import install_edge_origin_boundary
 from relaypay.errors import RelayPayError
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, WebhookTransport
@@ -103,7 +104,7 @@ def create_app(
 
     app = FastAPI(
         title="RelayPay API",
-        version="0.8.0",
+        version="0.12.0",
         description=(
             "Synthetic-data-only RelayPay merchant and operator API. "
             "Never submit real payment, bank-account, identity, or customer data."
@@ -253,6 +254,7 @@ def create_app(
             webhook_transport=webhook_transport
             or HTTPWebhookTransport(allowed_url=receiver_url, timeout_seconds=30.0),
             principal_dependency=get_principal,
+            dispute_network=HTTPDisputeNetwork(resolved.DISPUTE_NETWORK_BASE_URL),
         )
     )
 

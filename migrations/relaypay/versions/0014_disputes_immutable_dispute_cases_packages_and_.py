@@ -7,8 +7,8 @@ Create Date: 2026-08-08 18:29:09.159334
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0014_disputes"
@@ -121,6 +121,7 @@ def upgrade() -> None:
         sa.Column("workflow_artifact_id", sa.Uuid(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("manifest", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("package_bytes", sa.LargeBinary(), nullable=False),
         sa.Column("package_sha256", sa.LargeBinary(), nullable=False),
         sa.Column("byte_length", sa.Integer(), nullable=False),
         sa.Column("status", sa.String(length=16), nullable=False),
