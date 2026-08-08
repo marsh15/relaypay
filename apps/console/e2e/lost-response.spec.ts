@@ -53,7 +53,7 @@ test("administrator opens the dispute response queue accessibly", async ({ page 
   await page.getByLabel("Administrator email").fill("admin@northstar.test");
   await page.getByLabel("Password").fill("RelayPay-Northstar-2026!");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/disputes/);
+  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/disputes(?:\?.*)?$/);
   await expect(page.getByRole("heading", { name: "Dispute response" })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 900 });
   const accessibility = await new AxeBuilder({ page }).analyze();
