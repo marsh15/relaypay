@@ -22,6 +22,8 @@ from relaypay.mock_provider.service import (
     configure_fault,
     lookup_effect,
 )
+from relaypay.provider_operations.models import ProviderOperation
+from relaypay.provider_operations.recovery import claim_specific_operation
 from relaypay.provider_operations.service import ProviderTransport
 from relaypay.provider_operations.service_types import ProviderObservation
 from relaypay.receiver.service import receive_event
@@ -42,9 +44,20 @@ ENCRYPTION_KEY = "scenario-encryption-key"
 
 
 class LocalProvider(ProviderTransport):
-    def __init__(self, factory: sessionmaker[Session], account_id: str) -> None:
+    def __init__(
+        self,
+        factory: sessionmaker[Session],
+        account_id: str,
+        *,
+        relay_factory: sessionmaker[Session] | None = None,
+        lose_first_mutation_response: bool = False,
+        claim_lost_capture_lookup: bool = False,
+    ) -> None:
         self.factory = factory
         self.account_id = account_id
+        self.relay_factory = relay_factory
+        self.lose_first_mutation_response = lose_first_mutation_response
+        self.claim_lost_capture_lookup = claim_lost_capture_lookup
 
     def mutate(self, request_bytes: bytes) -> ProviderObservation:
         payload = json.loads(request_bytes)
@@ -60,6 +73,25 @@ class LocalProvider(ProviderTransport):
             ),
             signing_secret=SIGNING_SECRET,
         )
+        if self.lose_first_mutation_response:
+            self.lose_first_mutation_response = False
+            raise TimeoutError("synthetic authorization response loss")
+        if reply.status_code == 599 and self.claim_lost_capture_lookup:
+            assert self.relay_factory is not None
+            with self.relay_factory() as session, session.begin():
+                operation = session.scalar(
+                    select(ProviderOperation).where(
+                        ProviderOperation.stable_provider_key == payload["stableKey"]
+                    )
+                )
+                assert operation is not None
+                organisation_id = operation.organisation_id
+                operation_public_id = operation.public_id
+            claim_specific_operation(
+                self.relay_factory,
+                organisation_id=organisation_id,
+                operation_public_id=operation_public_id,
+            )
         return ProviderObservation(reply.status_code, reply.body, reply.headers)
 
     def lookup(self, *, account_id: str, stable_key: str) -> ProviderObservation:
@@ -109,8 +141,17 @@ class LocalReceiver:
         return DeliveryResponse(200)
 
 
-@pytest.fixture
-def scenario_client() -> Iterator[tuple[TestClient, str, str]]:
+@pytest.fixture(
+    params=[
+        (False, False),
+        (True, False),
+        (False, True),
+    ],
+    ids=["direct-authorization", "recovered-authorization", "claimed-capture-lookup"],
+)
+def scenario_client(
+    request: pytest.FixtureRequest,
+) -> Iterator[tuple[TestClient, str, str]]:
     relay_engine = build_engine(RELAYPAY_URL, application_name="scenario-api-seed")
     provider_engine = build_engine(PROVIDER_URL, application_name="scenario-provider-seed")
     receiver_engine = build_engine(RECEIVER_URL, application_name="scenario-receiver-seed")
@@ -205,7 +246,13 @@ def scenario_client() -> Iterator[tuple[TestClient, str, str]]:
         RECEIVER_BASE_URL="http://receiver:8002",
         RECEIVER_WEBHOOK_SECRET=WEBHOOK_SECRET,
     )
-    local_provider = LocalProvider(provider, account_id)
+    local_provider = LocalProvider(
+        provider,
+        account_id,
+        relay_factory=relay,
+        lose_first_mutation_response=bool(request.param[0]),
+        claim_lost_capture_lookup=bool(request.param[1]),
+    )
     with TestClient(
         create_app(
             settings,

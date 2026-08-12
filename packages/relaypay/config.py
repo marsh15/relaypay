@@ -62,6 +62,7 @@ class Settings(BaseSettings):
         "dev-dispute-package-signing-secret-change-me"
     )
     DISPUTE_NETWORK_BASE_URL: str = "http://localhost:8005"
+    RECOVERY_NETWORK_BASE_URL: str = "http://localhost:8006"
     INBOUND_WEBHOOK_REPLAY_SECONDS: int = 300
     RECEIVER_BASE_URL: str = "http://localhost:8002"
     RECEIVER_WEBHOOK_SECRET: SecretStr = Field(min_length=16)

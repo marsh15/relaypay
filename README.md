@@ -102,6 +102,7 @@ flowchart LR
     Merchant["Synthetic merchant client"] --> API
     API --> RelayDB[("RelayPay PostgreSQL")]
     API --> Provider["Deterministic provider"]
+    API --> RecoveryNetwork["Synthetic recovery network"]
     Worker --> Bank["Deterministic synthetic bank"]
     Bank --> BankDB[("Bank PostgreSQL")]
     Worker --> Commerce["Synthetic commerce"]
@@ -114,6 +115,7 @@ flowchart LR
     Poller --> Receiver["Bundled allowlisted receiver"]
     Worker["Celery worker + beat"] --> Redis[("Redis acceleration")]
     Worker --> RelayDB
+    Worker --> RecoveryNetwork
     Receiver --> ReceiverSchema[("Isolated receiver schema")]
 ```
 

@@ -48,6 +48,10 @@ app.conf.update(
             "task": "relaypay.process_inbound_webhooks",
             "schedule": 2.0,
         },
+        "run-subscription-recovery": {
+            "task": "relaypay.run_subscription_recovery",
+            "schedule": 1.0,
+        },
     },
 )
 

@@ -4,9 +4,10 @@ import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from relaypay.agent_runtime.models import WorkflowDefinition, WorkflowRun
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
-from relaypay.event_delivery.crypto import encrypt_webhook_secret
+from relaypay.event_delivery.crypto import decrypt_webhook_secret, encrypt_webhook_secret
 from relaypay.event_delivery.models import WebhookEndpoint, WebhookEndpointVersion
 from relaypay.identity.models import (
     APIKey,
@@ -22,6 +23,15 @@ from relaypay.ledger.models import LedgerAccount
 from relaypay.mock_bank.models import BankAccount
 from relaypay.mock_commerce.models import CommerceAccount
 from relaypay.mock_provider.models import ProviderAccount
+from relaypay.payments.models import Customer
+from relaypay.subscriptions.models import RecoveryCase, Subscription
+from relaypay.subscriptions.service import (
+    create_invoice,
+    create_subscription,
+    ensure_default_policy,
+    open_recovery_case,
+    record_payment_attempt,
+)
 from sqlalchemy import select
 
 
@@ -147,6 +157,13 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
                 )
             )
             if endpoint is not None:
+                _ensure_current_webhook_endpoint_version(
+                    session,
+                    endpoint=endpoint,
+                    environment=existing_test_environment,
+                    settings=settings,
+                )
+                _seed_subscription_recovery(session, organisation, existing_test_environment)
                 continue
             endpoint = WebhookEndpoint(
                 public_id=new_public_id("wh"),
@@ -177,11 +194,185 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
                     active_from=datetime.now(UTC),
                 )
             )
+            _seed_subscription_recovery(session, organisation, existing_test_environment)
     engine.dispose()
     _seed_provider_account(settings)
     _seed_bank_account(settings)
     _seed_commerce_account(settings)
     return issued_keys
+
+
+def _ensure_current_webhook_endpoint_version(
+    session: object,
+    *,
+    endpoint: WebhookEndpoint,
+    environment: Environment,
+    settings: Settings,
+) -> None:
+    from sqlalchemy.orm import Session
+
+    if not isinstance(session, Session):
+        raise TypeError("seed requires a SQLAlchemy session")
+    latest = session.scalar(
+        select(WebhookEndpointVersion)
+        .where(WebhookEndpointVersion.webhook_endpoint_id == endpoint.id)
+        .order_by(WebhookEndpointVersion.version.desc())
+        .limit(1)
+    )
+    expected_url = f"{settings.RECEIVER_BASE_URL.rstrip('/')}/webhooks/relaypay"
+    expected_secret = settings.RECEIVER_WEBHOOK_SECRET.get_secret_value()
+    encryption_key = settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value()
+    current = False
+    if latest is not None and latest.active_until is None:
+        try:
+            current = (
+                decrypt_webhook_secret(latest.encrypted_secret, encryption_key) == expected_secret
+            )
+        except ValueError:
+            current = False
+    if current:
+        return
+
+    activated_at = datetime.now(UTC)
+    if latest is not None and latest.active_until is None:
+        latest.active_until = activated_at
+    session.add(
+        WebhookEndpointVersion(
+            public_id=new_public_id("whv"),
+            organisation_id=endpoint.organisation_id,
+            environment_id=environment.id,
+            webhook_endpoint_id=endpoint.id,
+            version=1 if latest is None else latest.version + 1,
+            url=expected_url if latest is None else latest.url,
+            encrypted_secret=encrypt_webhook_secret(expected_secret, encryption_key),
+            subscribed_event_types=[
+                "payment.authorized.v1",
+                "payment.captured.v1",
+                "refund.succeeded.v1",
+            ],
+            active_from=activated_at,
+        )
+    )
+
+
+def _seed_subscription_recovery(
+    session: object, organisation: Organisation, environment: Environment
+) -> None:
+    from sqlalchemy.orm import Session
+
+    if not isinstance(session, Session):
+        raise TypeError("seed requires a SQLAlchemy session")
+    existing = session.scalar(
+        select(Subscription).where(
+            Subscription.organisation_id == organisation.id,
+            Subscription.environment_id == environment.id,
+            Subscription.external_id == "synthetic-subscription-demo",
+        )
+    )
+    if existing is not None:
+        return
+    definition_value = {"steps": [{"key": "recover", "kind": "SYSTEM"}]}
+    definition = session.scalar(
+        select(WorkflowDefinition).where(
+            WorkflowDefinition.organisation_id == organisation.id,
+            WorkflowDefinition.environment_id == environment.id,
+            WorkflowDefinition.name == "subscription-recovery",
+            WorkflowDefinition.status == "ACTIVE",
+        )
+    )
+    if definition is None:
+        definition = WorkflowDefinition(
+            public_id=new_public_id("wdf"),
+            organisation_id=organisation.id,
+            environment_id=environment.id,
+            name="subscription-recovery",
+            version=1,
+            definition_sha256=hashlib.sha256(
+                b'{"steps":[{"key":"recover","kind":"SYSTEM"}]}'
+            ).digest(),
+            definition=definition_value,
+            status="ACTIVE",
+        )
+        session.add(definition)
+        session.flush([definition])
+    customer = session.scalar(
+        select(Customer).where(
+            Customer.organisation_id == organisation.id,
+            Customer.environment_id == environment.id,
+            Customer.merchant_customer_reference == "subscription-recovery-demo",
+        )
+    )
+    if customer is None:
+        customer = Customer(
+            public_id=new_public_id("cus"),
+            organisation_id=organisation.id,
+            environment_id=environment.id,
+            merchant_customer_reference="subscription-recovery-demo",
+            display_name="Synthetic Subscriber",
+        )
+        session.add(customer)
+        session.flush([customer])
+    subscription = create_subscription(
+        session,
+        organisation_id=organisation.id,
+        environment_id=environment.id,
+        customer_public_id=customer.public_id,
+        external_id="synthetic-subscription-demo",
+        plan_reference="portfolio-monthly",
+        amount=12_500,
+        consent={"channels": ["EMAIL", "IN_APP"], "displayName": "Synthetic Subscriber"},
+    )
+    session.flush([subscription])
+    now = datetime.now(UTC)
+    invoice = create_invoice(
+        session,
+        subscription=subscription,
+        external_id="synthetic-invoice-demo",
+        due_at=now,
+    )
+    session.flush([invoice])
+    attempt = record_payment_attempt(
+        session,
+        invoice=invoice,
+        provider_attempt_id=f"seed-{organisation.public_id}",
+        provider_code="INSUFFICIENT_FUNDS",
+        outcome="VERIFIED_FAILED",
+        occurred_at=now,
+        evidence={"source": "seed", "verified": True},
+    )
+    run = WorkflowRun(
+        public_id=new_public_id("wfr"),
+        organisation_id=organisation.id,
+        environment_id=environment.id,
+        workflow_definition_id=definition.id,
+        trigger_event_id=new_public_id("bev"),
+        route="EVENT:recurring-payment.failed.v1",
+        idempotency_digest=hashlib.sha256(
+            f"seed-subscription-recovery:{organisation.public_id}".encode()
+        ).digest(),
+        status="RUNNING",
+        token_budget=6_000,
+        cost_budget_usd_micros=60_000,
+        tokens_used=0,
+        cost_used_usd_micros=0,
+    )
+    session.add(run)
+    session.flush([attempt, run])
+    policy = ensure_default_policy(
+        session, organisation_id=organisation.id, environment_id=environment.id
+    )
+    session.flush([policy])
+    case = open_recovery_case(
+        session,
+        subscription=subscription,
+        invoice=invoice,
+        trigger_attempt=attempt,
+        workflow_run=run,
+        policy=policy,
+        now=now,
+    )
+    if not isinstance(case, RecoveryCase):
+        raise RuntimeError("subscription recovery seed did not create a case")
 
 
 def _seed_provider_account(settings: Settings) -> None:

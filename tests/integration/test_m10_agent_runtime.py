@@ -112,13 +112,22 @@ def test_broker_loss_dedupe_lease_reclaim_version_pin_and_budget_gate() -> None:
 
         now = datetime.now(UTC)
         with pytest.raises(ConnectionError):
-            publish_one(factory, RecordingPublisher(fail=True), now=now)
+            publish_one(
+                factory,
+                RecordingPublisher(fail=True),
+                now=now,
+                organisation_id=organisation_id,
+            )
         with factory() as session, session.begin():
-            event = session.scalar(select(BusinessEventOutbox))
+            event = session.scalar(
+                select(BusinessEventOutbox).where(
+                    BusinessEventOutbox.organisation_id == organisation_id
+                )
+            )
             assert event is not None and event.published_at is None and event.lease_token is None
             event.next_attempt_at = now
         publisher = RecordingPublisher()
-        assert publish_one(factory, publisher, now=now)
+        assert publish_one(factory, publisher, now=now, organisation_id=organisation_id)
         assert len(publisher.values) == 1
 
         with factory() as session, session.begin():
@@ -141,10 +150,21 @@ def test_broker_loss_dedupe_lease_reclaim_version_pin_and_budget_gate() -> None:
             )
 
         with factory() as session, session.begin():
-            first_lease = claim_step(session, now=now, lease_seconds=1)
+            first_lease = claim_step(
+                session,
+                now=now,
+                lease_seconds=1,
+                organisation_id=organisation_id,
+                environment_id=environment_id,
+            )
             assert first_lease is not None
         with factory() as session, session.begin():
-            reclaimed = claim_step(session, now=now + timedelta(seconds=2))
+            reclaimed = claim_step(
+                session,
+                now=now + timedelta(seconds=2),
+                organisation_id=organisation_id,
+                environment_id=environment_id,
+            )
             assert reclaimed is not None and reclaimed.lease_token != first_lease.lease_token
             step = complete_step(
                 session,

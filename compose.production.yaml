@@ -18,6 +18,7 @@ x-production-environment: &production-environment
   PROVIDER_SIGNING_SECRET: ${PROVIDER_SIGNING_SECRET:?set PROVIDER_SIGNING_SECRET}
   PROVIDER_CONTROL_SECRET: ${PROVIDER_CONTROL_SECRET:?set PROVIDER_CONTROL_SECRET}
   RECEIVER_BASE_URL: http://receiver:8002
+  RECOVERY_NETWORK_BASE_URL: http://recovery-network:8006
   RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:?set RECEIVER_WEBHOOK_SECRET}
 
 services:
@@ -43,6 +44,9 @@ services:
     ports: !reset []
     environment: *production-environment
   receiver:
+    ports: !reset []
+    environment: *production-environment
+  recovery-network:
     ports: !reset []
     environment: *production-environment
   poller:

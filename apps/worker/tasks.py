@@ -9,6 +9,8 @@ from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
 from relaypay.reconciliation.service import run_reconciliation_batch
+from relaypay.subscriptions.execution import run_recovery_action_batch
+from relaypay.subscriptions.network import HTTPCommunicationNetwork, HTTPRecurringPaymentNetwork
 
 from apps.worker.celery_app import app
 
@@ -127,3 +129,21 @@ def process_inbound_webhooks() -> int:
     finally:
         commerce_engine.dispose()
         relay_engine.dispose()
+
+
+@app.task(name="relaypay.run_subscription_recovery")  # type: ignore[untyped-decorator]
+@observe_worker_task("run_subscription_recovery")
+def run_subscription_recovery() -> int:
+    settings = get_settings()
+    engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-subscription-recovery-worker",
+    )
+    try:
+        return run_recovery_action_batch(
+            build_session_factory(engine),
+            communication_network=HTTPCommunicationNetwork(settings.RECOVERY_NETWORK_BASE_URL),
+            payment_network=HTTPRecurringPaymentNetwork(settings.RECOVERY_NETWORK_BASE_URL),
+        )
+    finally:
+        engine.dispose()

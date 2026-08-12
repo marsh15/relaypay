@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from kafka import KafkaProducer  # type: ignore[import-untyped]
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -99,11 +99,20 @@ def _backoff(attempt: int, event_id: str) -> timedelta:
     return timedelta(seconds=base + jitter)
 
 
-def claim_event(session: Session, *, now: datetime, lease_seconds: int = 30) -> ClaimedEvent | None:
+def claim_event(
+    session: Session,
+    *,
+    now: datetime,
+    lease_seconds: int = 30,
+    organisation_id: uuid.UUID | None = None,
+) -> ClaimedEvent | None:
     row = session.scalar(
         select(BusinessEventOutbox)
         .where(
             BusinessEventOutbox.published_at.is_(None),
+            BusinessEventOutbox.organisation_id == organisation_id
+            if organisation_id is not None
+            else true(),
             BusinessEventOutbox.next_attempt_at <= now,
             (BusinessEventOutbox.lease_expires_at.is_(None))
             | (BusinessEventOutbox.lease_expires_at <= now),
@@ -122,10 +131,14 @@ def claim_event(session: Session, *, now: datetime, lease_seconds: int = 30) -> 
 
 
 def publish_one(
-    factory: sessionmaker[Session], publisher: EventPublisher, *, now: datetime
+    factory: sessionmaker[Session],
+    publisher: EventPublisher,
+    *,
+    now: datetime,
+    organisation_id: uuid.UUID | None = None,
 ) -> bool:
     with factory() as session, session.begin():
-        claim = claim_event(session, now=now)
+        claim = claim_event(session, now=now, organisation_id=organisation_id)
     if claim is None:
         return False
     try:

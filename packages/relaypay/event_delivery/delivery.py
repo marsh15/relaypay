@@ -35,7 +35,7 @@ class DeliveryRequest:
     event_id: str
     event_bytes: bytes
     event_sha256: bytes
-    secret: str
+    secret: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,12 +126,16 @@ def _load_request(
         if row is None:
             return None
         _, event, version = row
+        try:
+            secret = decrypt_webhook_secret(version.encrypted_secret, encryption_key)
+        except ValueError:
+            secret = None
         return DeliveryRequest(
             version.url,
             event.public_id,
             event.event_bytes,
             event.event_sha256,
-            decrypt_webhook_secret(version.encrypted_secret, encryption_key),
+            secret,
         )
 
 
@@ -155,6 +159,7 @@ def _record_attempt(
     result: str,
     started_at: datetime,
     safe_error_code: str | None,
+    force_dead_letter: bool = False,
 ) -> bool:
     now = datetime.now(UTC)
     metric_outcome = ""
@@ -195,7 +200,7 @@ def _record_attempt(
             delivery.status = "DELIVERED"
             delivery.delivered_at = now
             metric_outcome = "success"
-        elif result == "PERMANENT" or sequence >= MAX_ATTEMPTS:
+        elif force_dead_letter or result == "PERMANENT" or sequence >= MAX_ATTEMPTS:
             delivery.status = "DEAD_LETTER"
             delivery.dead_lettered_at = now
             metric_outcome = "dead_letter"
@@ -217,6 +222,18 @@ def deliver_claim(
     request = _load_request(factory, claim, encryption_key=encryption_key)
     if request is None:
         return False
+    if request.secret is None:
+        return _record_attempt(
+            factory,
+            claim,
+            request,
+            timestamp=int(datetime.now(UTC).timestamp()),
+            status_code=None,
+            result="TRANSPORT_ERROR",
+            started_at=datetime.now(UTC),
+            safe_error_code="WEBHOOK_SECRET_UNREADABLE",
+            force_dead_letter=True,
+        )
     timestamp = int(datetime.now(UTC).timestamp())
     signature = hmac.new(
         request.secret.encode(), f"{timestamp}.".encode() + request.event_bytes, hashlib.sha256

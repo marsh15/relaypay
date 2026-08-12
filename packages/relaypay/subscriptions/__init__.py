@@ -1,0 +1,1 @@
+"""Synthetic subscription recovery domain."""

@@ -1345,6 +1345,12 @@ dialog::backdrop {
     margin-left: 0;
   }
 
+  nav[aria-label="Primary navigation"] {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
   .environment-badge {
     display: none;
   }

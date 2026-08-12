@@ -78,6 +78,11 @@ def _csrf_digest(session_id: uuid.UUID, token: str, secret: str) -> bytes:
     return digest_secret(f"{session_id}:{token}", secret)
 
 
+def _csrf_token(session_id: uuid.UUID, secret: str) -> str:
+    digest = hmac.new(secret.encode("utf-8"), session_id.bytes, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
 def issue_session(
     session: Session,
     *,
@@ -121,8 +126,8 @@ def issue_session(
     membership, organisation = memberships[0]
 
     token = secrets.token_urlsafe(32)
-    csrf_token = secrets.token_urlsafe(32)
     session_id = new_uuid()
+    csrf_token = _csrf_token(session_id, csrf_secret)
     issued_at = now or datetime.now(UTC)
     expires_at = issued_at + _SESSION_TTL
     session.add(
@@ -215,7 +220,7 @@ def rotate_csrf(session: Session, principal: Principal, csrf_secret: str) -> str
         raise RelayPayError(
             code="UNAUTHENTICATED", message="Authentication required", http_status=401
         )
-    csrf_token = secrets.token_urlsafe(32)
+    csrf_token = _csrf_token(record.id, csrf_secret)
     record.csrf_digest = _csrf_digest(record.id, csrf_token, csrf_secret)
     record.last_seen_at = datetime.now(UTC)
     return csrf_token

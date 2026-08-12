@@ -132,3 +132,33 @@ _Avoid_: Draft, regenerated ZIP
 **Dispute Submission**:
 One externally visible synthetic-network effect keyed by the immutable package identity.
 _Avoid_: HTTP attempt, retry
+
+## Subscription recovery
+
+**Subscription**:
+A synthetic recurring commercial agreement that owns consent and the expected invoice amount.
+_Avoid_: Recurring payment, plan
+
+**Invoice**:
+An immutable request for one subscription payment within a billing period.
+_Avoid_: Charge, bill
+
+**Recurring Payment Attempt**:
+Immutable provider evidence for one numbered attempt to pay an invoice.
+_Avoid_: Retry, transaction
+
+**Recovery Case**:
+The bounded, terminal-safe workflow opened by one verified failed recurring payment attempt.
+_Avoid_: Dunning campaign, retry loop
+
+**Scheduled Action**:
+A policy-authorized payment retry or message that has not yet produced an external effect.
+_Avoid_: Job, timer
+
+**Communication Record**:
+Immutable evidence of one idempotent synthetic message delivery attempt.
+_Avoid_: Notification
+
+**Opt-Out**:
+A customer instruction that terminates the entire recovery case and suppresses every later action.
+_Avoid_: Channel preference, unsubscribe flag
