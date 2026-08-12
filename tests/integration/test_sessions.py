@@ -88,6 +88,9 @@ def test_login_me_csrf_logout_flow(
     me = client.get("/api/session/me")
     assert me.status_code == 200, me.text
     csrf_token = me.json()["csrfToken"]
+    repeated_me = client.get("/api/session/me")
+    assert repeated_me.status_code == 200
+    assert repeated_me.json()["csrfToken"] == csrf_token
 
     missing_csrf = client.post("/api/session/logout")
     assert missing_csrf.status_code == 403

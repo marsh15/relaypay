@@ -59,3 +59,20 @@ test("administrator opens the dispute response queue accessibly", async ({ page 
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations).toEqual([]);
 });
+
+test("administrator inspects terminal-safe subscription recovery accessibly", async ({ page }) => {
+  await page.goto("/login?next=/recovery");
+  await page.getByLabel("Administrator email").fill("admin@northstar.test");
+  await page.getByLabel("Password").fill("RelayPay-Northstar-2026!");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/recovery(?:\?.*)?$/);
+  await expect(page.getByRole("heading", { name: "Subscription recovery" })).toBeVisible();
+  const caseLink = page.getByRole("table").getByRole("link").first();
+  const caseId = await caseLink.textContent();
+  await caseLink.click();
+  await expect(page.getByRole("heading", { name: caseId ?? "" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Scheduled actions" })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 900 });
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations).toEqual([]);
+});

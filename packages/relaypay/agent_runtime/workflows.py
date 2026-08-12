@@ -3,7 +3,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.orm import Session
 
 from relaypay.agent_runtime.models import (
@@ -248,12 +248,23 @@ def start_run(
     return run
 
 
-def claim_step(session: Session, *, now: datetime, lease_seconds: int = 60) -> StepLease | None:
+def claim_step(
+    session: Session,
+    *,
+    now: datetime,
+    lease_seconds: int = 60,
+    organisation_id: uuid.UUID | None = None,
+    environment_id: uuid.UUID | None = None,
+) -> StepLease | None:
     step = session.scalar(
         select(WorkflowStep)
         .join(WorkflowRun, WorkflowRun.id == WorkflowStep.workflow_run_id)
         .where(
             WorkflowStep.status.in_(("QUEUED", "WAITING_UNTIL", "RUNNING")),
+            WorkflowRun.organisation_id == organisation_id
+            if organisation_id is not None
+            else true(),
+            WorkflowRun.environment_id == environment_id if environment_id is not None else true(),
             WorkflowStep.next_attempt_at <= now,
             (WorkflowStep.lease_expires_at.is_(None)) | (WorkflowStep.lease_expires_at <= now),
             WorkflowRun.cancellation_requested_at.is_(None),

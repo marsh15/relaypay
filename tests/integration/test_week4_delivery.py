@@ -63,6 +63,11 @@ class RetryableTransport:
         return DeliveryResponse(503)
 
 
+class UnexpectedTransport:
+    def send(self, *, url: str, body: bytes, headers: dict[str, str]) -> DeliveryResponse:
+        raise AssertionError("unreadable secrets must not reach the network")
+
+
 @pytest.fixture
 def factories() -> tuple[sessionmaker[Session], sessionmaker[Session]]:
     relaypay_engine = build_engine(DATABASE_URL, application_name="week4-delivery-tests")
@@ -243,3 +248,34 @@ def test_retry_budget_ends_in_dead_letter(
         assert delivery is not None
         assert delivery.status == "DEAD_LETTER"
         assert delivery.dead_lettered_at is not None
+
+
+def test_unreadable_secret_is_safely_dead_lettered(
+    factories: tuple[sessionmaker[Session], sessionmaker[Session]],
+) -> None:
+    relaypay, _ = factories
+    organisation_id, _ = _create_event(relaypay)
+    materialize_deliveries(relaypay)
+    claim = claim_delivery(relaypay, organisation_id=organisation_id)
+    assert claim is not None
+
+    assert deliver_claim(
+        relaypay,
+        claim,
+        encryption_key="retired-encryption-key",
+        transport=UnexpectedTransport(),
+    )
+
+    with relaypay() as session, session.begin():
+        delivery = session.get(WebhookDelivery, claim.delivery_id)
+        assert delivery is not None
+        assert delivery.status == "DEAD_LETTER"
+        assert delivery.attempt_count == 1
+        attempt = session.scalar(
+            select(WebhookDeliveryAttempt).where(
+                WebhookDeliveryAttempt.webhook_delivery_id == claim.delivery_id
+            )
+        )
+        assert attempt is not None
+        assert attempt.result == "TRANSPORT_ERROR"
+        assert attempt.safe_error_code == "WEBHOOK_SECRET_UNREADABLE"

@@ -34,6 +34,7 @@ from relaypay.observability.telemetry import instrument_fastapi
 from relaypay.payments.service import read_operation
 from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import HTTPProviderTransport, ProviderTransport
+from relaypay.subscriptions.network import HTTPCommunicationNetwork, HTTPRecurringPaymentNetwork
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -104,7 +105,7 @@ def create_app(
 
     app = FastAPI(
         title="RelayPay API",
-        version="0.12.0",
+        version="0.13.0",
         description=(
             "Synthetic-data-only RelayPay merchant and operator API. "
             "Never submit real payment, bank-account, identity, or customer data."
@@ -255,6 +256,10 @@ def create_app(
             or HTTPWebhookTransport(allowed_url=receiver_url, timeout_seconds=30.0),
             principal_dependency=get_principal,
             dispute_network=HTTPDisputeNetwork(resolved.DISPUTE_NETWORK_BASE_URL),
+            communication_network=HTTPCommunicationNetwork(resolved.RECOVERY_NETWORK_BASE_URL),
+            recurring_payment_network=HTTPRecurringPaymentNetwork(
+                resolved.RECOVERY_NETWORK_BASE_URL
+            ),
         )
     )
 

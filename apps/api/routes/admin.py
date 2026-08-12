@@ -1,12 +1,19 @@
+import hashlib
 from collections.abc import Callable
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.agent_runtime.models import ApprovalRequest
-from relaypay.agent_runtime.workflows import decide_approval, list_runs, read_run
+from relaypay.agent_runtime.workflows import (
+    decide_approval,
+    list_runs,
+    read_run,
+    resolve_admin_scope,
+)
 from relaypay.config import Settings
 from relaypay.connectors.adapters import BankConnectorAdapter, PaymentConnectorAdapter
 from relaypay.connectors.service import (
@@ -35,9 +42,10 @@ from relaypay.disputes.service import (
     read_package_for_admin,
     submit_approved_package,
 )
+from relaypay.errors import not_found
 from relaypay.event_delivery.admin import read_delivery, replay_delivery
 from relaypay.event_delivery.delivery import WebhookTransport
-from relaypay.idempotency import build_fingerprint
+from relaypay.idempotency import build_fingerprint, canonical_json_bytes
 from relaypay.identity.security import Principal, verify_csrf
 from relaypay.identity.service import (
     activate_api_key_version,
@@ -75,6 +83,33 @@ from relaypay.reconciliation.service import (
     list_mismatches,
     refresh_mismatch_evidence,
     resolve_mismatch,
+)
+from relaypay.subscriptions.execution import (
+    CommunicationNetwork,
+    RecurringPaymentNetwork,
+    execute_message_action,
+    execute_payment_action,
+)
+from relaypay.subscriptions.intake import (
+    RecurringPaymentFailedEnvelope,
+    consume_recurring_payment_failed,
+)
+from relaypay.subscriptions.models import (
+    RecoveryCase,
+    ScheduledRecoveryAction,
+    Subscription,
+    SubscriptionInvoice,
+)
+from relaypay.subscriptions.network import (
+    DeterministicCommunicationNetwork,
+    DeterministicRecurringPaymentNetwork,
+)
+from relaypay.subscriptions.service import (
+    create_invoice,
+    create_subscription,
+    list_recovery_cases,
+    read_recovery_case,
+    record_opt_out,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -166,6 +201,42 @@ class ApprovalDecisionCreate(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class SubscriptionConsent(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    channels: list[Literal["EMAIL", "WHATSAPP", "IN_APP"]] = Field(max_length=3)
+    display_name: str = Field(alias="displayName", min_length=1, max_length=128)
+
+
+class SubscriptionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    customer_id: str = Field(alias="customerId", pattern=r"^cus_[0-9a-f]{32}$")
+    external_id: str = Field(alias="externalId", min_length=1, max_length=128)
+    plan_reference: str = Field(alias="planReference", min_length=1, max_length=128)
+    amount: int = Field(gt=0)
+    consent: SubscriptionConsent
+
+
+class SubscriptionInvoiceCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    external_id: str = Field(alias="externalId", min_length=1, max_length=128)
+    due_at: AwareDatetime = Field(alias="dueAt")
+
+
+class RecurringFailureCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    subscription_id: str = Field(alias="subscriptionId", pattern=r"^sub_[0-9a-f]{32}$")
+    provider_attempt_id: str = Field(alias="providerAttemptId", min_length=1, max_length=128)
+    provider_code: str = Field(alias="providerCode", min_length=1, max_length=64)
+    outcome: Literal["VERIFIED_FAILED", "TRANSPORT_UNKNOWN"]
+    evidence: dict[str, object]
+
+
+class RecoveryOptOutCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    source_event_id: str = Field(alias="sourceEventId", pattern=r"^bev_[0-9a-f]{32}$")
+    channel: Literal["ALL", "EMAIL", "WHATSAPP", "IN_APP"] = "ALL"
+
+
 def build_admin_router(
     *,
     settings: Settings,
@@ -175,10 +246,16 @@ def build_admin_router(
     webhook_transport: WebhookTransport,
     principal_dependency: Callable[..., Principal],
     dispute_network: DisputeNetwork | None = None,
+    communication_network: CommunicationNetwork | None = None,
+    recurring_payment_network: RecurringPaymentNetwork | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["admin"])
     PrincipalDep = Annotated[Principal, Depends(principal_dependency)]
     resolved_dispute_network = dispute_network or DeterministicDisputeNetwork()
+    resolved_communication_network = communication_network or DeterministicCommunicationNetwork()
+    resolved_recurring_payment_network = (
+        recurring_payment_network or DeterministicRecurringPaymentNetwork()
+    )
 
     def require_csrf(principal: Principal, csrf_token: str | None) -> None:
         with session_factory() as session, session.begin():
@@ -1290,5 +1367,336 @@ def build_admin_router(
             network=resolved_dispute_network,
         )
         return {"id": attempt.public_id, "status": attempt.status}
+
+    @router.get("/admin/v1/environments/{environment_id}/subscriptions")
+    def get_subscriptions(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="financial:read",
+            )
+            items = session.scalars(
+                select(Subscription)
+                .where(
+                    Subscription.organisation_id == organisation_id,
+                    Subscription.environment_id == resolved_environment_id,
+                )
+                .order_by(Subscription.created_at.desc(), Subscription.id.desc())
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "id": item.public_id,
+                    "externalId": item.external_id,
+                    "planReference": item.plan_reference,
+                    "amount": item.amount,
+                    "currency": item.currency,
+                    "status": item.status,
+                    "consentSha256": item.consent_sha256.hex(),
+                    "createdAt": item.created_at.isoformat(),
+                }
+                for item in items
+            ]
+
+    @router.post("/admin/v1/environments/{environment_id}/subscriptions", status_code=201)
+    def post_subscription(
+        environment_id: str,
+        payload: SubscriptionCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            item = create_subscription(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                customer_public_id=payload.customer_id,
+                external_id=payload.external_id,
+                plan_reference=payload.plan_reference,
+                amount=payload.amount,
+                consent=payload.consent.model_dump(mode="json", by_alias=True),
+            )
+            return {"id": item.public_id, "status": item.status}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/subscriptions/{subscription_id}/invoices",
+        status_code=201,
+    )
+    def post_subscription_invoice(
+        environment_id: str,
+        subscription_id: str,
+        payload: SubscriptionInvoiceCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            subscription = session.scalar(
+                select(Subscription).where(
+                    Subscription.organisation_id == organisation_id,
+                    Subscription.environment_id == resolved_environment_id,
+                    Subscription.public_id == subscription_id,
+                )
+            )
+            if subscription is None:
+                raise not_found("Subscription")
+            item = create_invoice(
+                session,
+                subscription=subscription,
+                external_id=payload.external_id,
+                due_at=datetime.fromisoformat(payload.due_at.isoformat()),
+            )
+            return {"id": item.public_id, "status": item.status}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/subscription-invoices/{invoice_id}/failures",
+        status_code=202,
+    )
+    def post_recurring_failure(
+        environment_id: str,
+        invoice_id: str,
+        payload: RecurringFailureCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        now = datetime.now(UTC)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            invoice = session.scalar(
+                select(SubscriptionInvoice).where(
+                    SubscriptionInvoice.organisation_id == organisation_id,
+                    SubscriptionInvoice.environment_id == resolved_environment_id,
+                    SubscriptionInvoice.public_id == invoice_id,
+                )
+            )
+            if invoice is None:
+                raise not_found("Subscription invoice")
+            event_payload = {
+                "subscriptionId": payload.subscription_id,
+                "invoiceId": invoice.public_id,
+                "providerAttemptId": payload.provider_attempt_id,
+                "providerCode": payload.provider_code,
+                "outcome": payload.outcome,
+                "evidence": payload.evidence,
+            }
+            event_hex = hashlib.sha256(
+                f"{organisation_id}:{resolved_environment_id}:{idempotency_key}".encode()
+            ).hexdigest()[:32]
+            envelope = RecurringPaymentFailedEnvelope.model_validate(
+                {
+                    "eventId": f"bev_{event_hex}",
+                    "eventType": "recurring-payment.failed.v1",
+                    "schemaVersion": 1,
+                    "occurredAt": now.isoformat(),
+                    "organisationId": principal.organisation_public_id,
+                    "environmentId": environment_id,
+                    "resourceType": "subscription_invoice",
+                    "resourceId": invoice.public_id,
+                    "payload": event_payload,
+                    "payloadSha256": hashlib.sha256(
+                        canonical_json_bytes(event_payload)
+                    ).hexdigest(),
+                }
+            )
+            result = consume_recurring_payment_failed(session, envelope)
+            return {
+                "attemptId": result.attempt.public_id,
+                "caseId": None if result.case is None else result.case.public_id,
+                "status": "LOOKUP_REQUIRED" if result.case is None else result.case.status,
+            }
+
+    @router.get("/admin/v1/environments/{environment_id}/recovery-cases")
+    def get_recovery_cases(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            return [
+                {
+                    "id": item.public_id,
+                    "status": item.status,
+                    "classification": item.classification,
+                    "paymentRetryCount": item.payment_retry_count,
+                    "messageCount": item.message_count,
+                    "expiresAt": item.expires_at.isoformat(),
+                    "createdAt": item.created_at.isoformat(),
+                }
+                for item in list_recovery_cases(
+                    session,
+                    principal=principal,
+                    environment_public_id=environment_id,
+                    limit=limit,
+                )
+            ]
+
+    @router.get("/admin/v1/environments/{environment_id}/recovery-cases/{case_id}")
+    def get_recovery_case(
+        environment_id: str, case_id: str, principal: PrincipalDep
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            case, subscription, invoice, actions = read_recovery_case(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                case_public_id=case_id,
+            )
+            return {
+                "id": case.public_id,
+                "status": case.status,
+                "classification": case.classification,
+                "terminationReason": case.termination_reason,
+                "subscription": {
+                    "id": subscription.public_id,
+                    "planReference": subscription.plan_reference,
+                    "consentSha256": subscription.consent_sha256.hex(),
+                },
+                "invoice": {
+                    "id": invoice.public_id,
+                    "amount": invoice.amount,
+                    "currency": invoice.currency,
+                    "status": invoice.status,
+                },
+                "actions": [
+                    {
+                        "id": action.public_id,
+                        "sequence": action.sequence,
+                        "type": action.action_type,
+                        "channel": action.channel,
+                        "status": action.status,
+                        "scheduledFor": action.scheduled_for.isoformat(),
+                        "due": action.scheduled_for <= datetime.now(UTC),
+                        "payloadSha256": action.payload_sha256.hex(),
+                        "responseCode": action.response_code,
+                    }
+                    for action in actions
+                ],
+            }
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/recovery-actions/{action_id}/execute",
+        status_code=202,
+    )
+    def post_recovery_action(
+        environment_id: str,
+        action_id: str,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            action = session.scalar(
+                select(ScheduledRecoveryAction).where(
+                    ScheduledRecoveryAction.organisation_id == organisation_id,
+                    ScheduledRecoveryAction.environment_id == resolved_environment_id,
+                    ScheduledRecoveryAction.public_id == action_id,
+                )
+            )
+            if action is None:
+                raise not_found("Recovery action")
+            action_type = action.action_type
+        item = (
+            execute_message_action(
+                session_factory,
+                action_public_id=action_id,
+                network=resolved_communication_network,
+            )
+            if action_type == "MESSAGE"
+            else execute_payment_action(
+                session_factory,
+                action_public_id=action_id,
+                network=resolved_recurring_payment_network,
+            )
+        )
+        return {"id": item.public_id, "status": item.status}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/recovery-cases/{case_id}/opt-outs",
+        status_code=201,
+    )
+    def post_recovery_opt_out(
+        environment_id: str,
+        case_id: str,
+        payload: RecoveryOptOutCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            case = session.scalar(
+                select(RecoveryCase)
+                .where(
+                    RecoveryCase.organisation_id == organisation_id,
+                    RecoveryCase.environment_id == resolved_environment_id,
+                    RecoveryCase.public_id == case_id,
+                )
+                .with_for_update()
+            )
+            if case is None:
+                raise not_found("Recovery case")
+            item = record_opt_out(
+                session,
+                case=case,
+                source_event_id=payload.source_event_id,
+                channel=payload.channel,
+                received_at=datetime.now(UTC),
+            )
+            return {"id": item.public_id, "caseStatus": case.status}
 
     return router

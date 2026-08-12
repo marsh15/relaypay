@@ -34,6 +34,7 @@ x-app-environment: &app-environment
   CONNECTOR_CREDENTIAL_ENCRYPTION_KEY: ${CONNECTOR_CREDENTIAL_ENCRYPTION_KEY:-dev-connector-credential-encryption-key}
   DISPUTE_PACKAGE_SIGNING_SECRET: ${DISPUTE_PACKAGE_SIGNING_SECRET:-dev-dispute-package-signing-secret-change-me}
   DISPUTE_NETWORK_BASE_URL: http://dispute-network:8005
+  RECOVERY_NETWORK_BASE_URL: http://recovery-network:8006
   RECEIVER_BASE_URL: http://receiver:8002
   RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:-dev-receiver-secret-change-me}
   OBSERVABILITY_ENABLED: ${OBSERVABILITY_ENABLED:-false}
@@ -160,6 +161,8 @@ services:
         condition: service_healthy
       receiver:
         condition: service_healthy
+      recovery-network:
+        condition: service_healthy
       dispute-network:
         condition: service_healthy
     healthcheck:
@@ -261,6 +264,22 @@ services:
       retries: 5
       start_period: 10s
 
+  recovery-network:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["uvicorn", "apps.communication_network.asgi:app", "--host", "0.0.0.0", "--port", "8006", "--no-access-log"]
+    environment: *app-environment
+    ports:
+      - "8006:8006"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health/live')"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+
   poller:
     <<: *service-defaults
     build:
@@ -300,6 +319,8 @@ services:
       bank:
         condition: service_healthy
       receiver:
+        condition: service_healthy
+      recovery-network:
         condition: service_healthy
 
   console:

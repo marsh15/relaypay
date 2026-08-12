@@ -10,9 +10,11 @@ function safeNext(value: string | undefined): string {
   if (
     value === "/lab" ||
     value === "/operations" ||
+    value === "/recovery" ||
     value === "/disputes" ||
     value === "/agents" ||
     value.startsWith("/payments/") ||
+    value.startsWith("/recovery/") ||
     value.startsWith("/disputes/") ||
     value.startsWith("/agents/")
   ) return value;

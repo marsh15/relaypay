@@ -28,7 +28,6 @@ from relaypay.payments.service import (
     initiate_capture,
 )
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
-from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import ProviderTransport, dispatch_operation
 
 logger = logging.getLogger(__name__)
@@ -263,6 +262,15 @@ def _execute_lost_capture(
         provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
         transport=provider_transport,
     )
+    _ensure_operation_succeeded(
+        factory,
+        organisation_id=organisation_id,
+        environment_id=environment_id,
+        operation_public_id=auth_operation_id,
+        provider_account_id=settings.PROVIDER_ACCOUNT_ID,
+        provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
+        transport=provider_transport,
+    )
     capture_operation_ids: list[str] = []
     for suffix in ("a", "b"):
         capture = initiate_capture(
@@ -295,14 +303,11 @@ def _execute_lost_capture(
         provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
         transport=provider_transport,
     )
-    claim = claim_specific_operation(
+    _ensure_operation_succeeded(
         factory,
         organisation_id=organisation_id,
+        environment_id=environment_id,
         operation_public_id=capture_operation_ids[0],
-    )
-    recover_claim(
-        factory,
-        claim=claim,
         provider_account_id=settings.PROVIDER_ACCOUNT_ID,
         provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
         transport=provider_transport,
@@ -322,24 +327,8 @@ def _execute_lost_capture(
         )
     if scenario_delivery_id is None:
         raise RuntimeError("scenario delivery was not materialized")
-    for delivery_attempt in range(3):
-        delivery_claim = claim_delivery(
-            factory,
-            organisation_id=organisation_id,
-            delivery_id=scenario_delivery_id,
-        )
-        if delivery_claim is None:
-            if delivery_attempt < 2:
-                time.sleep(2**delivery_attempt)
-                continue
-            raise RuntimeError("scenario delivery was not claimable")
-        if not deliver_claim(
-            factory,
-            delivery_claim,
-            encryption_key=settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value(),
-            transport=webhook_transport,
-        ):
-            raise RuntimeError("scenario delivery lease was lost")
+    delivery_deadline = time.monotonic() + 35
+    while True:
         with factory() as session, session.begin():
             delivery_status = session.scalar(
                 select(WebhookDelivery.status).where(WebhookDelivery.id == scenario_delivery_id)
@@ -348,10 +337,22 @@ def _execute_lost_capture(
             break
         if delivery_status == "DEAD_LETTER":
             raise RuntimeError("scenario delivery was dead-lettered")
-        if delivery_attempt < 2:
-            time.sleep(2**delivery_attempt)
-    else:
-        raise RuntimeError("scenario delivery was not acknowledged within the retry bound")
+        if time.monotonic() >= delivery_deadline:
+            raise RuntimeError("scenario delivery was not acknowledged within the retry bound")
+        delivery_claim = claim_delivery(
+            factory,
+            organisation_id=organisation_id,
+            delivery_id=scenario_delivery_id,
+        )
+        if delivery_claim is None:
+            time.sleep(0.25)
+            continue
+        deliver_claim(
+            factory,
+            delivery_claim,
+            encryption_key=settings.WEBHOOK_SECRET_ENCRYPTION_KEY.get_secret_value(),
+            transport=webhook_transport,
+        )
     with factory() as session, session.begin():
         operation = session.scalar(
             select(ProviderOperation).where(
@@ -445,3 +446,41 @@ def _execute_lost_capture(
         {"key": "delivered", "label": "Delivered", "status": "COMPLETE"},
     ]
     return {"paymentIntentId": payment_id, "steps": steps, "assertions": assertions}
+
+
+def _ensure_operation_succeeded(
+    factory: sessionmaker[Session],
+    *,
+    organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    operation_public_id: str,
+    provider_account_id: str,
+    provider_signing_secret: str,
+    transport: ProviderTransport,
+    max_lookups: int = 3,
+) -> None:
+    for lookup in range(max_lookups + 1):
+        with factory() as session, session.begin():
+            status = session.scalar(
+                select(ProviderOperation.status).where(
+                    ProviderOperation.organisation_id == organisation_id,
+                    ProviderOperation.environment_id == environment_id,
+                    ProviderOperation.public_id == operation_public_id,
+                )
+            )
+        if status == "SUCCEEDED":
+            return
+        if status in {"FAILED", "REQUIRES_REVIEW", None}:
+            raise RuntimeError("scenario prerequisite operation did not succeed")
+        if lookup == max_lookups:
+            break
+        dispatch_operation(
+            factory,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            operation_public_id=operation_public_id,
+            provider_account_id=provider_account_id,
+            provider_signing_secret=provider_signing_secret,
+            transport=transport,
+        )
+    raise RuntimeError("scenario prerequisite operation remained indeterminate")
