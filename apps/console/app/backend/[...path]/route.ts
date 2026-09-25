@@ -1,7 +1,12 @@
 import type { NextRequest } from "next/server";
 
 const backendUrl = process.env.INTERNAL_API_BASE_URL ?? "http://localhost:8000";
-const forwardedRequestHeaders = ["content-type", "x-csrf-token", "x-request-id"];
+const forwardedRequestHeaders = [
+  "content-type",
+  "x-csrf-token",
+  "x-request-id",
+  "idempotency-key",
+];
 const forwardedResponseHeaders = ["content-type", "retry-after", "set-cookie", "x-request-id"];
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
