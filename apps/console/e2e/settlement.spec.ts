@@ -34,7 +34,7 @@ test("unsupported settlement question returns a typed clarification", async ({ p
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/^https?:\/\/[^/]+\/settlement(?:\?.*)?$/);
 
-  await page.getByLabel("Question").fill("What is the capital of France?");
+  await page.getByRole("textbox", { name: "Question" }).fill("What is the capital of France?");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(page).toHaveURL(/\/settlement\/sqn_[0-9a-f]{32}/);
   await expect(page.getByRole("heading", { name: "Rephrase the question" })).toBeVisible();

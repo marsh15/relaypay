@@ -107,9 +107,7 @@ export default async function SettlementPage({
           </div>
           {activePolicy ? (
             <p className="supporting-copy">
-              {activePolicy.timezone} · cutoff {activePolicy.cutoff} · T+
-              {activePolicy.settlementDelayDays} · weekends{" "}
-              {activePolicy.weekendHandling.toLowerCase()} · version {activePolicy.version}
+              {`${activePolicy.timezone} · cutoff ${activePolicy.cutoff} · T+${activePolicy.settlementDelayDays} · weekends ${activePolicy.weekendHandling.toLowerCase()} · version ${activePolicy.version}`}
             </p>
           ) : (
             <div className="resource-empty" role="status">
