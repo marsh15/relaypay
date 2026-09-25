@@ -7,3 +7,4 @@
 - [ADR-005: PostgreSQL-authoritative agent runtime](005-postgresql-authoritative-agent-runtime.md)
 - [ADR-006: Immutable, digest-bound dispute packages](006-immutable-dispute-packages.md)
 - [ADR-007: Terminal subscription recovery suppresses every later action](007-terminal-subscription-recovery.md)
+- [ADR-008: Settlement intelligence answers are deterministic with a bounded model role](008-deterministic-settlement-intelligence.md)

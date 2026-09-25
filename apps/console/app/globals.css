@@ -1522,3 +1522,42 @@ dialog::backdrop {
     animation: none;
   }
 }
+
+.settlement-ask {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 44rem;
+}
+
+.settlement-ask label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settlement-ask textarea {
+  font: inherit;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #334062;
+  border-radius: 8px;
+  background: #101728;
+  color: inherit;
+  resize: vertical;
+}
+
+.settlement-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .settlement-examples {
+    flex-direction: column;
+  }
+
+  .settlement-examples .button {
+    width: 100%;
+  }
+}

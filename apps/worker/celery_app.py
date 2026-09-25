@@ -52,6 +52,10 @@ app.conf.update(
             "task": "relaypay.run_subscription_recovery",
             "schedule": 1.0,
         },
+        "record-settlement-forecasts": {
+            "task": "relaypay.record_settlement_forecasts",
+            "schedule": 3600.0,
+        },
     },
 )
 

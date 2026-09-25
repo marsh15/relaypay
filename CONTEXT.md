@@ -86,6 +86,32 @@ One deterministic journal per default Merchant Account and environment that tran
 legacy merchant-payable position into Pending Payable without changing old journals or postings.
 _Avoid_: Backfill rewrite
 
+## Settlement intelligence
+
+**Settlement Policy**:
+An immutable, versioned timing rule for one Merchant Account: one IANA timezone, one daily cutoff,
+a T+0/T+1/T+2 weekday delay, and include-or-skip weekends.
+_Avoid_: Payout schedule, editable rule
+
+**Settlement Forecast**:
+One immutable pre-cutoff snapshot of expected capture, refund, receivable-offset, and settlement
+totals for a business date; a re-forecast appends a new sequence.
+_Avoid_: Settlement projection, mutable forecast
+
+**Forecast Line Item**:
+A deterministic capture, refund, or receivable-offset entry bound to one Settlement Forecast.
+_Avoid_: Estimate, model output
+
+**Settlement Question**:
+One idempotent operator question answered by fixed tenant-scoped queries with citations; the model
+may only classify intent and dates and narrate validated results.
+_Avoid_: Chat, free-form query
+
+**Clarification**:
+The typed response returned when a Settlement Question is unsupported or ambiguous.
+_Avoid_: Error, refusal
+
+
 ## Agent operations
 
 **Business Event**:

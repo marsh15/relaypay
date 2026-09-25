@@ -116,6 +116,8 @@ flowchart LR
     Worker["Celery worker + beat"] --> Redis[("Redis acceleration")]
     Worker --> RelayDB
     Worker --> RecoveryNetwork
+    Worker --> Forecasts["Immutable pre-cutoff settlement forecasts"]
+    Forecasts --> RelayDB
     Receiver --> ReceiverSchema[("Isolated receiver schema")]
 ```
 

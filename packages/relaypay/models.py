@@ -74,6 +74,12 @@ from relaypay.reconciliation.models import (
     StatementImport,
     StatementItem,
 )
+from relaypay.settlement_intelligence.models import (
+    SettlementForecast,
+    SettlementForecastItem,
+    SettlementPolicy,
+    SettlementQuestion,
+)
 from relaypay.subscriptions.models import (
     CommunicationRecord,
     RecoveryCase,
@@ -145,7 +151,11 @@ __all__ = [
     "ScenarioRun",
     "ScheduledRecoveryAction",
     "SessionRecord",
+    "SettlementForecast",
+    "SettlementForecastItem",
     "SettlementItem",
+    "SettlementPolicy",
+    "SettlementQuestion",
     "SettlementRun",
     "StatementImport",
     "StatementItem",

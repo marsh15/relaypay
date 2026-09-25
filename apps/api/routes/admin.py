@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -7,6 +8,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from relaypay.agent_runtime.contracts import StructuredModelProvider
 from relaypay.agent_runtime.models import ApprovalRequest
 from relaypay.agent_runtime.workflows import (
     decide_approval,
@@ -60,6 +62,9 @@ from relaypay.identity.service import (
     set_api_key_scopes,
     set_membership,
 )
+from relaypay.merchant_balances.models import (
+    MerchantAccount,
+)
 from relaypay.merchant_balances.service import (
     create_admin_merchant_account,
     list_admin_merchant_accounts,
@@ -84,6 +89,20 @@ from relaypay.reconciliation.service import (
     refresh_mismatch_evidence,
     resolve_mismatch,
 )
+from relaypay.settlement_intelligence.models import (
+    SettlementForecast,
+    SettlementForecastItem,
+    SettlementPolicy,
+    SettlementQuestion,
+)
+from relaypay.settlement_intelligence.provider import SettlementFakeProvider
+from relaypay.settlement_intelligence.service import (
+    answer_question,
+    create_policy,
+    policy_window,
+    record_pre_cutoff_forecast,
+)
+from relaypay.settlement_intelligence.windows import PolicyWindow, format_inr
 from relaypay.subscriptions.execution import (
     CommunicationNetwork,
     RecurringPaymentNetwork,
@@ -237,6 +256,24 @@ class RecoveryOptOutCreate(BaseModel):
     channel: Literal["ALL", "EMAIL", "WHATSAPP", "IN_APP"] = "ALL"
 
 
+class SettlementPolicyCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    merchant_account_id: str = Field(alias="merchantAccountId", min_length=1, max_length=64)
+    timezone: str = Field(min_length=1, max_length=64)
+    cutoff_hour: int = Field(alias="cutoffHour", ge=0, le=23)
+    cutoff_minute: int = Field(alias="cutoffMinute", ge=0, le=59)
+    settlement_delay_days: int = Field(alias="settlementDelayDays", ge=0, le=2)
+    weekend_handling: Literal["INCLUDE", "SKIP"] = Field(alias="weekendHandling")
+
+
+class SettlementQuestionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    question: str = Field(min_length=1, max_length=2000)
+    merchant_account_id: str | None = Field(
+        default=None, alias="merchantAccountId", min_length=1, max_length=64
+    )
+
+
 def build_admin_router(
     *,
     settings: Settings,
@@ -248,6 +285,7 @@ def build_admin_router(
     dispute_network: DisputeNetwork | None = None,
     communication_network: CommunicationNetwork | None = None,
     recurring_payment_network: RecurringPaymentNetwork | None = None,
+    settlement_model_provider: StructuredModelProvider | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["admin"])
     PrincipalDep = Annotated[Principal, Depends(principal_dependency)]
@@ -256,6 +294,8 @@ def build_admin_router(
     resolved_recurring_payment_network = (
         recurring_payment_network or DeterministicRecurringPaymentNetwork()
     )
+
+    resolved_settlement_provider = settlement_model_provider or SettlementFakeProvider()
 
     def require_csrf(principal: Principal, csrf_token: str | None) -> None:
         with session_factory() as session, session.begin():
@@ -1698,5 +1738,408 @@ def build_admin_router(
                 received_at=datetime.now(UTC),
             )
             return {"id": item.public_id, "caseStatus": case.status}
+
+    def _resolve_settlement_account(
+        session: Session,
+        organisation_id: uuid.UUID,
+        environment_id: uuid.UUID,
+        merchant_account_public_id: str | None,
+    ) -> "MerchantAccount":
+        statement = select(MerchantAccount).where(
+            MerchantAccount.organisation_id == organisation_id,
+            MerchantAccount.environment_id == environment_id,
+            MerchantAccount.status == "ACTIVE",
+        )
+        if merchant_account_public_id is None:
+            statement = statement.where(MerchantAccount.is_default.is_(True))
+        else:
+            statement = statement.where(MerchantAccount.public_id == merchant_account_public_id)
+        account = session.scalar(statement)
+        if account is None:
+            raise not_found("Merchant account")
+        return account
+
+    def _account_public_id(session: Session, account_id: uuid.UUID) -> str | None:
+        value = session.scalar(
+            select(MerchantAccount.public_id).where(MerchantAccount.id == account_id)
+        )
+        return value
+
+    def _capture_public_id(session: Session, capture_id: uuid.UUID | None) -> str | None:
+        if capture_id is None:
+            return None
+        from relaypay.payments.models import Capture
+
+        return session.scalar(select(Capture.public_id).where(Capture.id == capture_id))
+
+    def _refund_public_id(session: Session, refund_id: uuid.UUID | None) -> str | None:
+        if refund_id is None:
+            return None
+        from relaypay.payments.models import Refund
+
+        return session.scalar(select(Refund.public_id).where(Refund.id == refund_id))
+
+    def _active_policy_for(
+        session: Session,
+        organisation_id: uuid.UUID,
+        environment_id: uuid.UUID,
+        merchant_account_id: uuid.UUID,
+    ) -> SettlementPolicy:
+        from relaypay.settlement_intelligence.service import (
+            active_policy,
+            ensure_default_policy,
+        )
+
+        policy = active_policy(
+            session,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            merchant_account_id=merchant_account_id,
+        )
+        if policy is not None:
+            return policy
+        created = ensure_default_policy(
+            session,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            merchant_account_id=merchant_account_id,
+        )
+        return created
+
+    @router.get("/admin/v1/environments/{environment_id}/settlement-policies")
+    def get_settlement_policies(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="financial:read",
+            )
+            items = session.scalars(
+                select(SettlementPolicy)
+                .where(
+                    SettlementPolicy.organisation_id == organisation_id,
+                    SettlementPolicy.environment_id == resolved_environment_id,
+                )
+                .order_by(SettlementPolicy.created_at.desc(), SettlementPolicy.id.desc())
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "id": item.public_id,
+                    "merchantAccountId": _account_public_id(session, item.merchant_account_id),
+                    "version": item.version,
+                    "timezone": item.timezone_name,
+                    "cutoff": f"{item.cutoff_hour:02d}:{item.cutoff_minute:02d}",
+                    "cutoffHour": item.cutoff_hour,
+                    "cutoffMinute": item.cutoff_minute,
+                    "settlementDelayDays": item.settlement_delay_days,
+                    "weekendHandling": item.weekend_handling,
+                    "status": item.status,
+                    "policySha256": item.policy_sha256.hex(),
+                    "createdAt": item.created_at.isoformat(),
+                }
+                for item in items
+            ]
+
+    @router.post("/admin/v1/environments/{environment_id}/settlement-policies", status_code=201)
+    def post_settlement_policy(
+        environment_id: str,
+        payload: SettlementPolicyCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            account = _resolve_settlement_account(
+                session, organisation_id, resolved_environment_id, payload.merchant_account_id
+            )
+            item = create_policy(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                merchant_account_id=account.id,
+                window=PolicyWindow(
+                    timezone_name=payload.timezone,
+                    cutoff_hour=payload.cutoff_hour,
+                    cutoff_minute=payload.cutoff_minute,
+                    settlement_delay_days=payload.settlement_delay_days,
+                    weekend_handling=payload.weekend_handling,
+                ),
+            )
+            return {
+                "id": item.public_id,
+                "version": item.version,
+                "status": item.status,
+                "policySha256": item.policy_sha256.hex(),
+            }
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/merchant-accounts/{account_id}"
+        "/settlement-forecasts",
+        status_code=201,
+    )
+    def post_settlement_forecast(
+        environment_id: str,
+        account_id: str,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            account = _resolve_settlement_account(
+                session, organisation_id, resolved_environment_id, account_id
+            )
+            policy = _active_policy_for(
+                session, organisation_id, resolved_environment_id, account.id
+            )
+            item = record_pre_cutoff_forecast(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                merchant_account_id=account.id,
+                policy=policy,
+                now=datetime.now(UTC),
+            )
+            return {
+                "id": item.public_id,
+                "businessDate": item.business_date.isoformat(),
+                "sequence": item.sequence,
+                "expectedSettlementAmount": item.expected_settlement_amount,
+                "expectedSettlementFormatted": format_inr(item.expected_settlement_amount),
+                "captureTotal": item.capture_total,
+                "refundTotal": item.refund_total,
+                "receivableOffsetTotal": item.receivable_offset_total,
+                "expectedArrivalDate": item.expected_arrival_date.isoformat(),
+                "snapshotSha256": item.snapshot_sha256.hex(),
+            }
+
+    @router.get("/admin/v1/environments/{environment_id}/settlement-forecasts")
+    def get_settlement_forecasts(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="financial:read",
+            )
+            items = session.scalars(
+                select(SettlementForecast)
+                .where(
+                    SettlementForecast.organisation_id == organisation_id,
+                    SettlementForecast.environment_id == resolved_environment_id,
+                )
+                .order_by(SettlementForecast.created_at.desc(), SettlementForecast.id.desc())
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "id": item.public_id,
+                    "merchantAccountId": _account_public_id(session, item.merchant_account_id),
+                    "businessDate": item.business_date.isoformat(),
+                    "sequence": item.sequence,
+                    "expectedSettlementAmount": item.expected_settlement_amount,
+                    "expectedSettlementFormatted": format_inr(item.expected_settlement_amount),
+                    "expectedArrivalDate": item.expected_arrival_date.isoformat(),
+                    "snapshotSha256": item.snapshot_sha256.hex(),
+                    "createdAt": item.created_at.isoformat(),
+                }
+                for item in items
+            ]
+
+    @router.get("/admin/v1/environments/{environment_id}/settlement-forecasts/{forecast_id}")
+    def get_settlement_forecast(
+        environment_id: str, forecast_id: str, principal: PrincipalDep
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="financial:read",
+            )
+            item = session.scalar(
+                select(SettlementForecast).where(
+                    SettlementForecast.organisation_id == organisation_id,
+                    SettlementForecast.environment_id == resolved_environment_id,
+                    SettlementForecast.public_id == forecast_id,
+                )
+            )
+            if item is None:
+                raise not_found("Settlement forecast")
+            items = list(
+                session.scalars(
+                    select(SettlementForecastItem)
+                    .where(SettlementForecastItem.forecast_id == item.id)
+                    .order_by(SettlementForecastItem.item_type, SettlementForecastItem.created_at)
+                ).all()
+            )
+            policy = session.get(SettlementPolicy, item.policy_id)
+            window = policy_window(policy) if policy is not None else PolicyWindow.default()
+            return {
+                "id": item.public_id,
+                "merchantAccountId": _account_public_id(session, item.merchant_account_id),
+                "businessDate": item.business_date.isoformat(),
+                "sequence": item.sequence,
+                "cutoffAt": item.cutoff_at.isoformat(),
+                "expectedArrivalDate": item.expected_arrival_date.isoformat(),
+                "captureTotal": item.capture_total,
+                "refundTotal": item.refund_total,
+                "receivableOffsetTotal": item.receivable_offset_total,
+                "expectedSettlementAmount": item.expected_settlement_amount,
+                "captureCount": item.capture_count,
+                "refundCount": item.refund_count,
+                "snapshot": item.snapshot,
+                "snapshotSha256": item.snapshot_sha256.hex(),
+                "policy": {
+                    "timezone": window.timezone_name,
+                    "cutoff": f"{window.cutoff_hour:02d}:{window.cutoff_minute:02d}",
+                    "settlementDelayDays": window.settlement_delay_days,
+                    "weekendHandling": window.weekend_handling,
+                },
+                "items": [
+                    {
+                        "id": entry.public_id,
+                        "type": entry.item_type,
+                        "captureId": _capture_public_id(session, entry.capture_id),
+                        "refundId": _refund_public_id(session, entry.refund_id),
+                        "amount": entry.amount,
+                    }
+                    for entry in items
+                ],
+            }
+
+    @router.post("/admin/v1/environments/{environment_id}/settlement-questions")
+    def post_settlement_question(
+        environment_id: str,
+        payload: SettlementQuestionCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="financial:read",
+            )
+            account = _resolve_settlement_account(
+                session, organisation_id, resolved_environment_id, payload.merchant_account_id
+            )
+            account_id = account.id
+        key_digest = hashlib.sha256(
+            f"settlement-question:{organisation_id}:{resolved_environment_id}"
+            f":{idempotency_key}".encode()
+        ).digest()
+        payload_value, _replayed = answer_question(
+            session_factory,
+            organisation_id=organisation_id,
+            environment_id=resolved_environment_id,
+            merchant_account_id=account_id,
+            organisation_public_id=principal.organisation_public_id,
+            environment_public_id=environment_id,
+            question_text=payload.question,
+            idempotency_key_digest=key_digest,
+            provider=resolved_settlement_provider,
+        )
+        return payload_value
+
+    @router.get("/admin/v1/environments/{environment_id}/settlement-questions")
+    def get_settlement_questions(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="financial:read",
+            )
+            items = session.scalars(
+                select(SettlementQuestion)
+                .where(
+                    SettlementQuestion.organisation_id == organisation_id,
+                    SettlementQuestion.environment_id == resolved_environment_id,
+                )
+                .order_by(SettlementQuestion.created_at.desc(), SettlementQuestion.id.desc())
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "id": item.public_id,
+                    "question": item.question_text,
+                    "intent": item.intent,
+                    "status": item.status,
+                    "askedAt": item.asked_at.isoformat(),
+                    "createdAt": item.created_at.isoformat(),
+                }
+                for item in items
+            ]
+
+    @router.get("/admin/v1/environments/{environment_id}/settlement-questions/{question_id}")
+    def get_settlement_question(
+        environment_id: str, question_id: str, principal: PrincipalDep
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="financial:read",
+            )
+            item = session.scalar(
+                select(SettlementQuestion).where(
+                    SettlementQuestion.organisation_id == organisation_id,
+                    SettlementQuestion.environment_id == resolved_environment_id,
+                    SettlementQuestion.public_id == question_id,
+                )
+            )
+            if item is None:
+                raise not_found("Settlement question")
+            return {
+                "id": item.public_id,
+                "question": item.question_text,
+                "intent": item.intent,
+                "status": item.status,
+                "classification": item.classification,
+                "answer": item.answer,
+                "answerSha256": item.answer_sha256.hex() if item.answer_sha256 else None,
+                "askedAt": item.asked_at.isoformat(),
+                "answeredAt": item.answered_at.isoformat() if item.answered_at else None,
+            }
 
     return router

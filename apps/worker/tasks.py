@@ -9,6 +9,7 @@ from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
 from relaypay.reconciliation.service import run_reconciliation_batch
+from relaypay.settlement_intelligence.execution import run_forecast_batch
 from relaypay.subscriptions.execution import run_recovery_action_batch
 from relaypay.subscriptions.network import HTTPCommunicationNetwork, HTTPRecurringPaymentNetwork
 
@@ -145,5 +146,19 @@ def run_subscription_recovery() -> int:
             communication_network=HTTPCommunicationNetwork(settings.RECOVERY_NETWORK_BASE_URL),
             payment_network=HTTPRecurringPaymentNetwork(settings.RECOVERY_NETWORK_BASE_URL),
         )
+    finally:
+        engine.dispose()
+
+
+@app.task(name="relaypay.record_settlement_forecasts")  # type: ignore[untyped-decorator]
+@observe_worker_task("record_settlement_forecasts")
+def record_settlement_forecasts() -> int:
+    settings = get_settings()
+    engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-settlement-forecast-worker",
+    )
+    try:
+        return run_forecast_batch(build_session_factory(engine))
     finally:
         engine.dispose()

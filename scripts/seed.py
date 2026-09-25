@@ -24,6 +24,13 @@ from relaypay.mock_bank.models import BankAccount
 from relaypay.mock_commerce.models import CommerceAccount
 from relaypay.mock_provider.models import ProviderAccount
 from relaypay.payments.models import Customer
+from relaypay.settlement_intelligence.models import SettlementPolicy
+from relaypay.settlement_intelligence.service import (
+    ensure_daily_forecast,
+)
+from relaypay.settlement_intelligence.service import (
+    ensure_default_policy as ensure_default_settlement_policy,
+)
 from relaypay.subscriptions.models import RecoveryCase, Subscription
 from relaypay.subscriptions.service import (
     create_invoice,
@@ -164,6 +171,7 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
                     settings=settings,
                 )
                 _seed_subscription_recovery(session, organisation, existing_test_environment)
+                _seed_settlement_intelligence(session, organisation, existing_test_environment)
                 continue
             endpoint = WebhookEndpoint(
                 public_id=new_public_id("wh"),
@@ -195,6 +203,7 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
                 )
             )
             _seed_subscription_recovery(session, organisation, existing_test_environment)
+            _seed_settlement_intelligence(session, organisation, existing_test_environment)
     engine.dispose()
     _seed_provider_account(settings)
     _seed_bank_account(settings)
@@ -440,6 +449,42 @@ def _seed_commerce_account(settings: Settings) -> None:
                 )
             )
     engine.dispose()
+
+
+def _seed_settlement_intelligence(
+    session: object, organisation: Organisation, environment: Environment
+) -> None:
+    from relaypay.merchant_balances.service import ensure_default_merchant_account
+    from sqlalchemy.orm import Session
+
+    if not isinstance(session, Session):
+        raise TypeError("seed requires a SQLAlchemy session")
+    existing = session.scalar(
+        select(SettlementPolicy).where(
+            SettlementPolicy.organisation_id == organisation.id,
+            SettlementPolicy.environment_id == environment.id,
+            SettlementPolicy.status == "ACTIVE",
+        )
+    )
+    if existing is not None:
+        return
+    account = ensure_default_merchant_account(
+        session, organisation_id=organisation.id, environment_id=environment.id
+    )
+    session.flush([account])
+    ensure_default_settlement_policy(
+        session,
+        organisation_id=organisation.id,
+        environment_id=environment.id,
+        merchant_account_id=account.id,
+    )
+    ensure_daily_forecast(
+        session,
+        organisation_id=organisation.id,
+        environment_id=environment.id,
+        merchant_account_id=account.id,
+        now=datetime.now(UTC),
+    )
 
 
 def main() -> None:
