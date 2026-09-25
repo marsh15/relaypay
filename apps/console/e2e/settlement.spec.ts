@@ -38,7 +38,7 @@ test("unsupported settlement question returns a typed clarification", async ({ p
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(page).toHaveURL(/\/settlement\/sqn_[0-9a-f]{32}/);
   await expect(page.getByRole("heading", { name: "Rephrase the question" })).toBeVisible();
-  await expect(page.getByText(/four supported settlement questions/)).toBeVisible();
+  await expect(page.getByText(/four supported settlement intents/)).toBeVisible();
 
   await page.setViewportSize({ width: 320, height: 900 });
   const accessibility = await new AxeBuilder({ page }).analyze();
