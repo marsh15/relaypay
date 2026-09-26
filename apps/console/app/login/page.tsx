@@ -14,11 +14,13 @@ function safeNext(value: string | undefined): string {
     value === "/disputes" ||
     value === "/agents" ||
     value === "/settlement" ||
+    value === "/risk" ||
     value.startsWith("/payments/") ||
     value.startsWith("/recovery/") ||
     value.startsWith("/disputes/") ||
     value.startsWith("/agents/") ||
-    value.startsWith("/settlement/")
+    value.startsWith("/settlement/") ||
+    value.startsWith("/risk/")
   ) return value;
   return "/lab";
 }

@@ -35,6 +35,7 @@ x-app-environment: &app-environment
   DISPUTE_PACKAGE_SIGNING_SECRET: ${DISPUTE_PACKAGE_SIGNING_SECRET:-dev-dispute-package-signing-secret-change-me}
   DISPUTE_NETWORK_BASE_URL: http://dispute-network:8005
   RECOVERY_NETWORK_BASE_URL: http://recovery-network:8006
+  RISK_SITE_BASE_URL: http://merchant-site:8007
   RECEIVER_BASE_URL: http://receiver:8002
   RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:-dev-receiver-secret-change-me}
   OBSERVABILITY_ENABLED: ${OBSERVABILITY_ENABLED:-false}
@@ -165,6 +166,8 @@ services:
         condition: service_healthy
       dispute-network:
         condition: service_healthy
+      merchant-site:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
       interval: 30s
@@ -275,6 +278,22 @@ services:
       - "8006:8006"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health/live')"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+
+  merchant-site:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["uvicorn", "apps.merchant_site.asgi:app", "--host", "0.0.0.0", "--port", "8007", "--no-access-log"]
+    environment: *app-environment
+    ports:
+      - "8007:8007"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8007/health/live')"]
       interval: 30s
       timeout: 30s
       retries: 5

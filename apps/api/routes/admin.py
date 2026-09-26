@@ -89,6 +89,23 @@ from relaypay.reconciliation.service import (
     refresh_mismatch_evidence,
     resolve_mismatch,
 )
+from relaypay.risk_review.models import (
+    RiskEscalation,
+    RiskReview,
+)
+from relaypay.risk_review.service import (
+    annotate_review,
+    disposition_escalation,
+    execute_review,
+    list_reviews,
+    prepare_review,
+    read_review_payload,
+)
+from relaypay.risk_review.snapshot import (
+    DeterministicSiteSnapshotSource,
+    HTTPSiteSnapshotSource,
+    SiteSnapshotSource,
+)
 from relaypay.settlement_intelligence.models import (
     SettlementForecast,
     SettlementForecastItem,
@@ -274,6 +291,41 @@ class SettlementQuestionCreate(BaseModel):
     )
 
 
+class RiskSnapshotCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    site_ref: Literal[
+        "COMPLETE_CLEAN",
+        "MISSING_POLICIES",
+        "YOUNG_DOMAIN",
+        "PRICE_OUTLIER",
+        "SUSPICIOUS_CLAIMS",
+        "PROHIBITED_CATEGORY",
+    ] = Field(alias="siteRef")
+
+
+class RiskReviewCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    site_ref: Literal[
+        "COMPLETE_CLEAN",
+        "MISSING_POLICIES",
+        "YOUNG_DOMAIN",
+        "PRICE_OUTLIER",
+        "SUSPICIOUS_CLAIMS",
+        "PROHIBITED_CATEGORY",
+    ] = Field(alias="siteRef")
+
+
+class RiskAnnotationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    note: str = Field(min_length=1, max_length=2000)
+
+
+class RiskDispositionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    disposition: Literal["REJECT_ONBOARDING", "REQUEST_DOCUMENTS", "CLOSE_NO_ACTION"]
+    note: str = Field(min_length=1, max_length=2000)
+
+
 def build_admin_router(
     *,
     settings: Settings,
@@ -286,6 +338,7 @@ def build_admin_router(
     communication_network: CommunicationNetwork | None = None,
     recurring_payment_network: RecurringPaymentNetwork | None = None,
     settlement_model_provider: StructuredModelProvider | None = None,
+    risk_findings_provider: StructuredModelProvider | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["admin"])
     PrincipalDep = Annotated[Principal, Depends(principal_dependency)]
@@ -296,6 +349,47 @@ def build_admin_router(
     )
 
     resolved_settlement_provider = settlement_model_provider or SettlementFakeProvider()
+
+    from relaypay.agent_runtime.contracts import ModelRequest, ModelResult
+    from relaypay.risk_review.findings import ModelFindings as _ModelFindings
+    from relaypay.risk_review.findings import deterministic_findings
+
+    class RiskFindingsFakeProvider:
+        name = "fake"
+
+        def generate_structured(self, request: ModelRequest) -> ModelResult:
+            if request.schema is not _ModelFindings:
+                from relaypay.agent_runtime.contracts import TerminalModelError
+
+                raise TerminalModelError("unsupported risk findings schema")
+            output = deterministic_findings_from_prompt(request.prompt)
+            request_bytes = canonical_json_bytes(
+                {"model": request.model_id, "prompt": request.prompt}
+            )
+            response_bytes = canonical_json_bytes(output.model_dump(mode="json"))
+            return ModelResult(
+                output=output,
+                provider=self.name,
+                model_id=request.model_id,
+                request_bytes=request_bytes,
+                response_bytes=response_bytes,
+                latency_ms=0,
+                input_tokens=max(1, len(request.prompt) // 4),
+                output_tokens=max(1, len(response_bytes) // 4),
+                finish_status="STOP",
+            )
+
+    def deterministic_findings_from_prompt(prompt: str) -> _ModelFindings:
+        # The prompt embeds the delimited snapshot JSON; extract it deterministically.
+        marker = "<relaypay-untrusted-evidence>\n"
+        start = prompt.index(marker) + len(marker)
+        end = prompt.index("\n</relaypay-untrusted-evidence>", start)
+        import json as _json
+
+        snapshot = _json.loads(prompt[start:end])
+        return deterministic_findings(snapshot)
+
+    resolved_risk_provider = risk_findings_provider or RiskFindingsFakeProvider()
 
     def require_csrf(principal: Principal, csrf_token: str | None) -> None:
         with session_factory() as session, session.begin():
@@ -2141,5 +2235,183 @@ def build_admin_router(
                 "askedAt": item.asked_at.isoformat(),
                 "answeredAt": item.answered_at.isoformat() if item.answered_at else None,
             }
+
+    def _risk_site_source() -> SiteSnapshotSource:
+        base_url = settings.RISK_SITE_BASE_URL
+        if base_url:
+            return HTTPSiteSnapshotSource(base_url)
+        return DeterministicSiteSnapshotSource()
+
+    @router.get("/admin/v1/environments/{environment_id}/risk-reviews")
+    def get_risk_reviews(
+        environment_id: str,
+        principal: PrincipalDep,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> list[dict[str, object]]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="technical:read",
+            )
+            return [
+                {
+                    "id": review.public_id,
+                    "siteRef": site_ref,
+                    "status": review.status,
+                    "scoreVersion": review.score_version,
+                    "createdAt": review.created_at.isoformat(),
+                }
+                for review, site_ref in list_reviews(
+                    session,
+                    organisation_id=organisation_id,
+                    environment_id=resolved_environment_id,
+                    limit=limit,
+                )
+            ]
+
+    @router.post("/admin/v1/environments/{environment_id}/risk-reviews")
+    def post_risk_review(
+        environment_id: str,
+        payload: RiskReviewCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+        prepared = prepare_review(
+            session_factory,
+            organisation_id=organisation_id,
+            environment_id=resolved_environment_id,
+            site_ref=payload.site_ref,
+            source=_risk_site_source(),
+            source_url=str(settings.RISK_SITE_BASE_URL),
+        )
+        return execute_review(
+            session_factory,
+            prepared,
+            provider=resolved_risk_provider,
+            now=datetime.now(UTC),
+        )
+
+    @router.get("/admin/v1/environments/{environment_id}/risk-reviews/{review_id}")
+    def get_risk_review(
+        environment_id: str, review_id: str, principal: PrincipalDep
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="technical:read",
+            )
+        return read_review_payload(
+            session_factory,
+            review_id,
+            organisation_id=organisation_id,
+            environment_id=resolved_environment_id,
+        )
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/risk-reviews/{review_id}/annotations",
+        status_code=201,
+    )
+    def post_risk_annotation(
+        environment_id: str,
+        review_id: str,
+        payload: RiskAnnotationCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="workflows:write",
+            )
+            review = session.scalar(
+                select(RiskReview).where(
+                    RiskReview.organisation_id == organisation_id,
+                    RiskReview.environment_id == resolved_environment_id,
+                    RiskReview.public_id == review_id,
+                )
+            )
+            if review is None:
+                raise not_found("Risk review")
+            if principal.user_id is None:
+                raise not_found("User")
+            item = annotate_review(
+                session,
+                review=review,
+                author_user_id=principal.user_id,
+                note=payload.note,
+            )
+            return {"id": item.public_id, "note": item.note}
+
+    @router.post(
+        "/admin/v1/environments/{environment_id}/risk-reviews/{review_id}/escalation/disposition"
+    )
+    def post_risk_disposition(
+        environment_id: str,
+        review_id: str,
+        payload: RiskDispositionCreate,
+        principal: PrincipalDep,
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+        ],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, object]:
+        del idempotency_key
+        require_csrf(principal, csrf_token)
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="approvals:write",
+            )
+            review = session.scalar(
+                select(RiskReview).where(
+                    RiskReview.organisation_id == organisation_id,
+                    RiskReview.environment_id == resolved_environment_id,
+                    RiskReview.public_id == review_id,
+                )
+            )
+            if review is None:
+                raise not_found("Risk review")
+            escalation = session.scalar(
+                select(RiskEscalation).where(RiskEscalation.risk_review_id == review.id)
+            )
+            if escalation is None:
+                raise not_found("Risk escalation")
+            if principal.user_id is None:
+                raise not_found("User")
+            item = disposition_escalation(
+                session,
+                escalation=escalation,
+                review=review,
+                disposition=payload.disposition,
+                note=payload.note,
+                actor_user_id=principal.user_id,
+                now=datetime.now(UTC),
+            )
+            return {"id": item.public_id, "status": item.status, "disposition": item.disposition}
 
     return router

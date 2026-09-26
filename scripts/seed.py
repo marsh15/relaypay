@@ -24,6 +24,9 @@ from relaypay.mock_bank.models import BankAccount
 from relaypay.mock_commerce.models import CommerceAccount
 from relaypay.mock_provider.models import ProviderAccount
 from relaypay.payments.models import Customer
+from relaypay.risk_review.models import RiskReview
+from relaypay.risk_review.service import execute_review, prepare_review
+from relaypay.risk_review.snapshot import DeterministicSiteSnapshotSource
 from relaypay.settlement_intelligence.models import SettlementPolicy
 from relaypay.settlement_intelligence.service import (
     ensure_daily_forecast,
@@ -205,6 +208,7 @@ def seed() -> list[tuple[DemoOrganisation, str]]:
             _seed_subscription_recovery(session, organisation, existing_test_environment)
             _seed_settlement_intelligence(session, organisation, existing_test_environment)
     engine.dispose()
+    _seed_risk_reviews()
     _seed_provider_account(settings)
     _seed_bank_account(settings)
     _seed_commerce_account(settings)
@@ -485,6 +489,98 @@ def _seed_settlement_intelligence(
         merchant_account_id=account.id,
         now=datetime.now(UTC),
     )
+
+
+def _seed_risk_reviews() -> None:
+    """Run one deterministic risk review per synthetic site archetype (first org only)."""
+    from relaypay.config import get_settings
+    from relaypay.database import build_engine, build_session_factory
+    from relaypay.identity.models import Environment as EnvModel
+    from sqlalchemy import select as _select
+
+    settings = get_settings()
+    engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(), application_name="relaypay-risk-seed"
+    )
+    factory = build_session_factory(engine)
+    try:
+        with factory() as session, session.begin():
+            organisation = session.scalar(
+                _select(Organisation).order_by(Organisation.created_at).limit(1)
+            )
+            if organisation is None:
+                return
+            environment = session.scalar(
+                _select(EnvModel).where(
+                    EnvModel.organisation_id == organisation.id,
+                    EnvModel.environment_type == "TEST",
+                )
+            )
+            if environment is None:
+                return
+            existing = session.scalar(
+                _select(RiskReview).where(
+                    RiskReview.organisation_id == organisation.id,
+                    RiskReview.environment_id == environment.id,
+                )
+            )
+            if existing is not None:
+                return
+        from datetime import UTC, datetime
+
+        source = DeterministicSiteSnapshotSource()
+        from relaypay.agent_runtime.contracts import ModelRequest, ModelResult, TerminalModelError
+        from relaypay.idempotency import canonical_json_bytes as _cj
+        from relaypay.risk_review.findings import (
+            ModelFindings,
+            deterministic_findings,
+        )
+
+        class _SeedFindingsProvider:
+            name = "fake"
+
+            def generate_structured(self, request: ModelRequest) -> ModelResult:
+                if request.schema is not ModelFindings:
+                    raise TerminalModelError("unsupported schema")
+                import json as _json
+
+                marker = "<relaypay-untrusted-evidence>\n"
+                start = request.prompt.index(marker) + len(marker)
+                end = request.prompt.index("\n</relaypay-untrusted-evidence>", start)
+                snapshot = _json.loads(request.prompt[start:end])
+                output = deterministic_findings(snapshot)
+                response_bytes = _cj(output.model_dump(mode="json"))
+                return ModelResult(
+                    output=output,
+                    provider=self.name,
+                    model_id=request.model_id,
+                    request_bytes=_cj({"model": request.model_id, "prompt": request.prompt}),
+                    response_bytes=response_bytes,
+                    latency_ms=0,
+                    input_tokens=max(1, len(request.prompt) // 4),
+                    output_tokens=max(1, len(response_bytes) // 4),
+                    finish_status="STOP",
+                )
+
+        provider = _SeedFindingsProvider()
+        for site_ref in ("COMPLETE_CLEAN", "SUSPICIOUS_CLAIMS", "PROHIBITED_CATEGORY"):
+            prepared = prepare_review(
+                factory,
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                site_ref=site_ref,
+                source=source,
+                source_url=settings.RISK_SITE_BASE_URL,
+            )
+            if not prepared.replayed:
+                execute_review(
+                    factory,
+                    prepared,
+                    provider=provider,
+                    now=datetime.now(UTC),
+                )
+    finally:
+        engine.dispose()
 
 
 def main() -> None:
