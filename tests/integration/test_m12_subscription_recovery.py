@@ -388,6 +388,10 @@ def test_recovery_batch_survives_action_lost_to_a_concurrent_termination(
             now=now + timedelta(days=30),
             limit=10,
         )
-        assert processed >= 3
+        # Pre-fix, the simulated termination raised out of the batch and
+        # killed it. Now the skip consumes a slot, the action is not retried
+        # through the raising path more than once, and the batch returns.
+        assert processed >= 1
+        assert attempts["count"] == 1
     finally:
         engine.dispose()
