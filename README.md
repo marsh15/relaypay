@@ -80,6 +80,15 @@ Run the versioned connector, inbound webhook, and commerce synchronization proof
 make connector-demo
 ```
 
+Run one end-to-end synthetic journey across the integrated platform — payment authorization and
+capture, a settlement question, a recovery case, a dispute draft, a risk review, and the portfolio
+analytics summary — and replay the versioned v1.0.0 evaluation suite:
+
+```bash
+make portfolio-demo
+make evaluations
+```
+
 To restore only synthetic state, stop application processes and use the explicit destructive
 confirmation:
 
@@ -147,6 +156,7 @@ ledger history, immutable event bytes, and delivery progress.
 - [v0.8.0 release notes](docs/releases/v0.8.0.md)
 - [v0.9.0 release notes](docs/releases/v0.9.0.md)
 - [Operations telemetry](docs/operations/observability.md)
+- [Resilience proofs](docs/operations/resilience-proofs.md)
 - [Python SDK](docs/api/python-sdk.md)
 - [API error catalog](docs/api/error-catalog.md)
 

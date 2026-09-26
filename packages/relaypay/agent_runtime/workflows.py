@@ -460,4 +460,27 @@ def decide_approval(
     )
     request.status = decision
     session.add(item)
+    from relaypay.agent_runtime.events import append_business_event
+    from relaypay.identity.models import Organisation as OrganisationModel
+
+    scope_row = session.execute(
+        select(OrganisationModel.public_id, Environment.public_id)
+        .join(Environment, Environment.organisation_id == OrganisationModel.id)
+        .where(
+            OrganisationModel.id == organisation_id,
+            Environment.id == environment_id,
+        )
+    ).one_or_none()
+    if scope_row is not None:
+        append_business_event(
+            session,
+            organisation_id=organisation_id,
+            organisation_public_id=scope_row[0],
+            environment_id=environment_id,
+            environment_public_id=scope_row[1],
+            event_type="approval.decided.v1",
+            resource_type="approval_request",
+            resource_id=request.public_id,
+            payload={"decision": decision, "note": note},
+        )
     return item

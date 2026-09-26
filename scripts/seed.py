@@ -568,6 +568,8 @@ def _seed_risk_reviews() -> None:
                 factory,
                 organisation_id=organisation.id,
                 environment_id=environment.id,
+                organisation_public_id=organisation.public_id,
+                environment_public_id=environment.public_id,
                 site_ref=site_ref,
                 source=source,
                 source_url=settings.RISK_SITE_BASE_URL,

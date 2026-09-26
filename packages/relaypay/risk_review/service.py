@@ -54,6 +54,8 @@ class PreparedReview:
     snapshot: dict[str, object]
     snapshot_sha256: bytes
     replayed: bool
+    organisation_public_id: str
+    environment_public_id: str
 
 
 def store_snapshot(
@@ -99,6 +101,8 @@ def prepare_review(
     *,
     organisation_id: uuid.UUID,
     environment_id: uuid.UUID,
+    organisation_public_id: str,
+    environment_public_id: str,
     site_ref: str,
     source: SiteSnapshotSource,
     source_url: str,
@@ -128,6 +132,8 @@ def prepare_review(
                 snapshot=snapshot_row.snapshot,
                 snapshot_sha256=snapshot_row.snapshot_sha256,
                 replayed=True,
+                organisation_public_id=organisation_public_id,
+                environment_public_id=environment_public_id,
             )
         review = RiskReview(
             id=new_uuid(),
@@ -147,6 +153,8 @@ def prepare_review(
             snapshot=snapshot_row.snapshot,
             snapshot_sha256=snapshot_row.snapshot_sha256,
             replayed=False,
+            organisation_public_id=organisation_public_id,
+            environment_public_id=environment_public_id,
         )
 
 
@@ -370,6 +378,30 @@ def execute_review(
             review.status = "ESCALATED"
         else:
             review.status = "COMPLETED"
+        from relaypay.agent_runtime.events import append_business_event
+
+        append_business_event(
+            session,
+            organisation_id=review.organisation_id,
+            organisation_public_id=prepared.organisation_public_id,
+            environment_id=review.environment_id,
+            environment_public_id=prepared.environment_public_id,
+            event_type=(
+                "risk-review.escalated.v1"
+                if review.status == "ESCALATED"
+                else "risk-review.completed.v1"
+            ),
+            resource_type="risk_review",
+            resource_id=review.public_id,
+            payload={
+                "reason": reason,
+                "totalScore": breakdown.total,
+                "severity": severity,
+                "confidence": confidence,
+                "hardStop": hard_stop,
+            },
+            now=now,
+        )
     # Read the committed state only after the write transaction has closed.
     return read_review_payload(session_factory, review.public_id)
 

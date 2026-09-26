@@ -1215,6 +1215,82 @@
         ]
       }
     },
+    "/api/admin/v1/environments/{environment_id}/analytics/portfolio": {
+      "get": {
+        "operationId": "get_portfolio_analytics_api_admin_v1_environments__environment_id__analytics_portfolio_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Portfolio Analytics Api Admin V1 Environments  Environment Id  Analytics Portfolio Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Portfolio Analytics",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/v1/environments/{environment_id}/api-keys": {
       "post": {
         "operationId": "post_api_key_api_admin_v1_environments__environment_id__api_keys_post",

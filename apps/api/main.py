@@ -105,7 +105,7 @@ def create_app(
 
     app = FastAPI(
         title="RelayPay API",
-        version="0.15.0",
+        version="1.0.0",
         description=(
             "Synthetic-data-only RelayPay merchant and operator API. "
             "Never submit real payment, bank-account, identity, or customer data."

@@ -1,0 +1,571 @@
+{
+  "version": 1,
+  "kind": "dispute-evidence-retrieval",
+  "cases": [
+    {
+      "caseId": "eval-dispute-00",
+      "reasonCode": "FRAUD",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0000",
+        "authenticationResult": "ASC_Y",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-000",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "authenticationResult"
+      ],
+      "expectedMissing": [
+        "customerCommunication"
+      ]
+    },
+    {
+      "caseId": "eval-dispute-01",
+      "reasonCode": "PRODUCT_NOT_RECEIVED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0001",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-001",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "deliveryStatus",
+        "deliveryProof"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-02",
+      "reasonCode": "NOT_AS_DESCRIBED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0002",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-002",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "invoice",
+        "productDescription"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-03",
+      "reasonCode": "DUPLICATE",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0003",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-003",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "relatedPaymentId": "pay_eval0103"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "relatedPaymentId"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-04",
+      "reasonCode": "CREDIT_NOT_PROCESSED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0004",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-004",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "refundStatus": "PROCESSING"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "refundStatus"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-05",
+      "reasonCode": "OTHER",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0005",
+        "authenticationResult": "ASC_Y",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-005",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId"
+      ],
+      "expectedMissing": [
+        "customerCommunication"
+      ]
+    },
+    {
+      "caseId": "eval-dispute-06",
+      "reasonCode": "FRAUD",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0006",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-006",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "authenticationResult",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-07",
+      "reasonCode": "PRODUCT_NOT_RECEIVED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0007",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-007",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "deliveryStatus",
+        "deliveryProof"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-08",
+      "reasonCode": "NOT_AS_DESCRIBED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0008",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-008",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "invoice",
+        "productDescription"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-09",
+      "reasonCode": "DUPLICATE",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0009",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-009",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "relatedPaymentId": "pay_eval0109"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "relatedPaymentId"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-10",
+      "reasonCode": "CREDIT_NOT_PROCESSED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0010",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-010",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId"
+      ],
+      "expectedMissing": [
+        "refundStatus"
+      ]
+    },
+    {
+      "caseId": "eval-dispute-11",
+      "reasonCode": "OTHER",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0011",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-011",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-12",
+      "reasonCode": "FRAUD",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0012",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-012",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "authenticationResult",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-13",
+      "reasonCode": "PRODUCT_NOT_RECEIVED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0013",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-013",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "deliveryStatus",
+        "deliveryProof"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-14",
+      "reasonCode": "NOT_AS_DESCRIBED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0014",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-014",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "invoice",
+        "productDescription"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-15",
+      "reasonCode": "DUPLICATE",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0015",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-015",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId"
+      ],
+      "expectedMissing": [
+        "relatedPaymentId"
+      ]
+    },
+    {
+      "caseId": "eval-dispute-16",
+      "reasonCode": "CREDIT_NOT_PROCESSED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0016",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-016",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "refundStatus": "PROCESSING"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "refundStatus"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-17",
+      "reasonCode": "OTHER",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0017",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-017",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-18",
+      "reasonCode": "FRAUD",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0018",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-018",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "authenticationResult",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-19",
+      "reasonCode": "PRODUCT_NOT_RECEIVED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0019",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-019",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "deliveryStatus",
+        "deliveryProof"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-20",
+      "reasonCode": "NOT_AS_DESCRIBED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0020",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-020",
+        "invoice": "synthetic invoice"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "invoice"
+      ],
+      "expectedMissing": [
+        "productDescription"
+      ]
+    },
+    {
+      "caseId": "eval-dispute-21",
+      "reasonCode": "DUPLICATE",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0021",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-021",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "relatedPaymentId": "pay_eval0121"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "relatedPaymentId"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-22",
+      "reasonCode": "CREDIT_NOT_PROCESSED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0022",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-022",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "refundStatus": "PROCESSING"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "refundStatus"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-23",
+      "reasonCode": "OTHER",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0023",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-023",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-24",
+      "reasonCode": "FRAUD",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0024",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-024",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "authenticationResult",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-25",
+      "reasonCode": "PRODUCT_NOT_RECEIVED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0025",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "deliveryStatus"
+      ],
+      "expectedMissing": [
+        "deliveryProof"
+      ]
+    },
+    {
+      "caseId": "eval-dispute-26",
+      "reasonCode": "NOT_AS_DESCRIBED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0026",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-026",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "invoice",
+        "productDescription"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-27",
+      "reasonCode": "DUPLICATE",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0027",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-027",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "relatedPaymentId": "pay_eval0127"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "relatedPaymentId"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-28",
+      "reasonCode": "CREDIT_NOT_PROCESSED",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0028",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-028",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods",
+        "refundStatus": "PROCESSING"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "refundStatus"
+      ],
+      "expectedMissing": []
+    },
+    {
+      "caseId": "eval-dispute-29",
+      "reasonCode": "OTHER",
+      "sourceSnapshot": {
+        "paymentId": "pay_eval0029",
+        "authenticationResult": "ASC_Y",
+        "customerCommunication": "synthetic refund request thread",
+        "deliveryStatus": "DELIVERED",
+        "deliveryProof": "POD-029",
+        "invoice": "synthetic invoice",
+        "productDescription": "synthetic goods"
+      },
+      "expectedSelected": [
+        "paymentId",
+        "customerCommunication"
+      ],
+      "expectedMissing": []
+    }
+  ]
+}

@@ -59,6 +59,37 @@ class OperationsMetrics:
             ("outcome",),
             registry=self.registry,
         )
+        self.portfolio_completion = Gauge(
+            "relaypay_portfolio_completion_rate",
+            "Cross-workflow completion rate (raw or approval-adjusted).",
+            ("kind",),
+            registry=self.registry,
+        )
+        self.portfolio_recovery_rate = Gauge(
+            "relaypay_portfolio_recovery_rate",
+            "Recovered recovery cases over eligible cases.",
+            registry=self.registry,
+        )
+        self.portfolio_handling_reduction = Gauge(
+            "relaypay_portfolio_handling_time_reduction",
+            "Synthetic handling-time reduction versus the versioned manual baseline.",
+            registry=self.registry,
+        )
+        self.portfolio_model_cost = Gauge(
+            "relaypay_portfolio_model_cost_usd_micros",
+            "Model USD micros per completed workflow.",
+            registry=self.registry,
+        )
+        self.portfolio_analyst_interventions = Gauge(
+            "relaypay_portfolio_analyst_intervention_rate",
+            "Analyst edits, cancellations, or rerouting over completed workflows.",
+            registry=self.registry,
+        )
+        self.portfolio_invalid_actions = Gauge(
+            "relaypay_portfolio_invalid_action_rate",
+            "Policy-blocked or suppressed actions over proposed actions.",
+            registry=self.registry,
+        )
         self.mismatches = Gauge(
             "relaypay_reconciliation_mismatches",
             "Current reconciliation mismatch count.",

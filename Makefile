@@ -1,4 +1,4 @@
-.PHONY: install lint format format-check typecheck unit test api-contract sdk-drift sdk-example m7-evidence edge-install edge-check compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
+.PHONY: install lint format format-check typecheck unit test evaluations portfolio-demo api-contract sdk-drift sdk-example m7-evidence edge-install edge-check compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -20,6 +20,12 @@ unit:
 
 test:
 	uv run pytest
+
+evaluations:
+	uv run python -m scripts.run_evaluations
+
+portfolio-demo:
+	uv run python -m scripts.portfolio_demo
 
 api-contract:
 	uv run python -m scripts.generate_openapi --baseline --check
