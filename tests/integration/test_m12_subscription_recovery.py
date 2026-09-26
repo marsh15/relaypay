@@ -367,25 +367,34 @@ def test_recovery_batch_survives_action_lost_to_a_concurrent_termination(
             )
             assert outcome.case is not None
 
-        real_execute = execution.execute_message_action
+        real_message = execution.execute_message_action
+        real_payment = execution.execute_payment_action
         attempts = {"count": 0}
 
-        def flaky_execute(**kwargs: object) -> object:
-            if attempts["count"] == 0:
-                attempts["count"] += 1
-                raise RelayPayError(
-                    code="RECOVERY_CASE_TERMINAL",
-                    message="simulated concurrent termination",
-                    http_status=409,
-                )
-            return real_execute(**kwargs)
+        def make_flaky(real: object) -> object:
+            def flaky(*args: object, **kwargs: object) -> object:
+                # Whichever action type the batch selects first simulates a
+                # case that a concurrent writer terminated mid-flight.
+                if attempts["count"] == 0:
+                    attempts["count"] += 1
+                    raise RelayPayError(
+                        code="RECOVERY_CASE_TERMINAL",
+                        message="simulated concurrent termination",
+                        http_status=409,
+                    )
+                return real(*args, **kwargs)
 
-        monkeypatch.setattr(execution, "execute_message_action", flaky_execute)
+            return flaky
+
+        monkeypatch.setattr(execution, "execute_message_action", make_flaky(real_message))
+        monkeypatch.setattr(execution, "execute_payment_action", make_flaky(real_payment))
         processed = run_recovery_action_batch(
             factory,
             communication_network=DeterministicCommunicationNetwork(),
             payment_network=DeterministicRecurringPaymentNetwork(),
-            now=now + timedelta(days=30),
+            # Seven days: inside the 14-day policy window but past the first
+            # scheduled action windows, so the batch has real work to do.
+            now=now + timedelta(days=7),
             limit=10,
         )
         # Pre-fix, the simulated termination raised out of the batch and
