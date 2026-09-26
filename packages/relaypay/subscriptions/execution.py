@@ -86,16 +86,12 @@ def _prepare_action(
     if subscription is None or invoice is None:
         raise not_found("Recovery evidence")
     if case.status in TERMINAL_CASE_STATES:
-        action.status = "SUPPRESSED"
         raise RelayPayError(
             code="RECOVERY_CASE_TERMINAL",
             message="No action is allowed after recovery terminates",
             http_status=409,
         )
     if now >= case.expires_at:
-        terminate_case(session, case=case, reason="POLICY_EXPIRED", now=now)
-        case.status = "EXPIRED"
-        action.status = "SUPPRESSED"
         raise RelayPayError(
             code="RECOVERY_POLICY_EXPIRED",
             message="Recovery policy window has expired",
@@ -372,19 +368,28 @@ def run_recovery_action_batch(
         if candidate is None:
             break
         public_id, action_type = action.public_id, action.action_type
-        if action_type == "MESSAGE":
-            execute_message_action(
-                factory,
-                action_public_id=public_id,
-                network=communication_network,
-                now=timestamp,
-            )
-        else:
-            execute_payment_action(
-                factory,
-                action_public_id=public_id,
-                network=payment_network,
-                now=timestamp,
-            )
+        try:
+            if action_type == "MESSAGE":
+                execute_message_action(
+                    factory,
+                    action_public_id=public_id,
+                    network=communication_network,
+                    now=timestamp,
+                )
+            else:
+                execute_payment_action(
+                    factory,
+                    action_public_id=public_id,
+                    network=payment_network,
+                    now=timestamp,
+                )
+        except RelayPayError:
+            # A racing writer terminated or expired the case between the
+            # committed pre-check and the execute transaction; the action's
+            # own transaction rolled back untouched. Consume a batch slot for
+            # the skip: terminal and expired cases are excluded by the next
+            # selection, so this is bounded and the batch keeps moving.
+            processed += 1
+            continue
         processed += 1
     return processed

@@ -27,6 +27,7 @@ from pathlib import Path
 
 from relaypay.agent_runtime.contracts import ModelRequest, ModelResult, TerminalModelError
 from relaypay.agent_runtime.models import EvaluationDataset, EvaluationRun
+from relaypay.config import get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.disputes.evidence import plan_evidence
 from relaypay.disputes.models import DisputeCase
@@ -55,15 +56,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "evaluations" / "v1"
-DATABASE_URL = "postgresql+psycopg://relaypay_app:relaypay_app_dev@localhost:55432/relaypay"
 MIN_EVIDENCE_PRECISION = 0.90
 
 
 class FixedFindingsProvider:
     name = "fake"
 
+    def __init__(self) -> None:
+        self.schema_failures = 0
+
     def generate_structured(self, request: ModelRequest) -> ModelResult:
         if request.schema is not ModelFindings:
+            self.schema_failures += 1
             raise TerminalModelError("unsupported schema")
         marker = "<relaypay-untrusted-evidence>\n"
         start = request.prompt.index(marker) + len(marker)
@@ -90,10 +94,6 @@ def _load(name: str) -> dict[str, object]:
     document = json.loads((FIXTURES / name).read_text())
     assert isinstance(document, dict) and "cases" in document
     return document
-
-
-def _schema_failures() -> int:
-    return 0
 
 
 def _eval_payment_intent(
@@ -184,7 +184,6 @@ def evaluate_disputes(
     return {
         "cases": len(cases),
         "precision": round(precision, 6),
-        "schemaFailures": _schema_failures(),
     }
 
 
@@ -343,7 +342,6 @@ def evaluate_settlement(
     provider = SettlementFakeProvider()
     numeric_mismatches = 0
     citation_failures = 0
-    schema_failures = 0
     for case in cases:
         assert isinstance(case, dict)
         payload, _replayed = answer_question(
@@ -384,6 +382,8 @@ def evaluate_settlement(
         cited = answer.get("citedRecordIds")
         if not isinstance(cited, list) or not cited:
             citation_failures += 1
+    schema_failures = provider.schema_failures
+    assert schema_failures == 0, f"{schema_failures} settlement schema failures"
     assert numeric_mismatches == 0, f"{numeric_mismatches} settlement numeric mismatches"
     assert citation_failures == 0, f"{citation_failures} settlement citation failures"
     return {
@@ -538,7 +538,10 @@ def evaluate_adversarial(
 
 
 def main() -> None:
-    engine = build_engine(DATABASE_URL, application_name="v1-evaluation-runner")
+    engine = build_engine(
+        get_settings().RELAYPAY_DATABASE_URL.get_secret_value(),
+        application_name="v1-evaluation-runner",
+    )
     factory = build_session_factory(engine)
     try:
         with factory() as session, session.begin():

@@ -52,7 +52,7 @@ edge-check:
 compose-check:
 	docker compose --env-file .env.example config --quiet
 	docker compose --env-file .env.example --profile observability config --quiet
-	docker compose --env-file .env.example -f compose.yaml -f compose.production.yaml config --quiet
+	docker compose --env-file .env.production.example -f compose.yaml -f compose.production.yaml config --quiet
 
 infra-up:
 	docker compose up -d postgres redis

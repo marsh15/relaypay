@@ -616,3 +616,46 @@ def test_merchant_balance_admin_api_preserves_exact_settlement_replay() -> None:
             assert missing_csrf.json()["error"]["code"] == "CSRF_INVALID"
     finally:
         engine.dispose()
+
+
+def test_concurrent_refund_finalizations_cannot_double_drain_available_balance() -> None:
+    """Refund sourcing reads live posting sums, so two finalizations for the
+    same merchant must serialize on the merchant-account lock — the same
+    discipline run_settlement and payouts already apply — instead of each
+    debiting from the same read of the available balance."""
+    engine, principal, environment = _identity()
+    factory = build_session_factory(engine)
+    try:
+        first = _successful_capture(factory, principal, environment, 100_000)
+        second = _successful_capture(factory, principal, environment, 100_000)
+        with factory() as session, session.begin():
+            merchant = session.scalar(
+                select(MerchantAccount).where(
+                    MerchantAccount.organisation_id == principal.organisation_id,
+                    MerchantAccount.environment_id == environment.id,
+                    MerchantAccount.is_default.is_(True),
+                )
+            )
+            assert merchant is not None
+        assert _settle(factory, principal, environment, merchant) == 200_000
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(_successful_refund, factory, principal, environment, capture, 100_000)
+                for capture in (first, second)
+            ]
+            for future in futures:
+                future.result()
+
+        with factory() as session, session.begin():
+            merchant = session.scalar(
+                select(MerchantAccount).where(
+                    MerchantAccount.organisation_id == principal.organisation_id,
+                    MerchantAccount.environment_id == environment.id,
+                    MerchantAccount.is_default.is_(True),
+                )
+            )
+            assert merchant is not None
+            assert derive_balances(session, merchant).available >= 0
+    finally:
+        engine.dispose()

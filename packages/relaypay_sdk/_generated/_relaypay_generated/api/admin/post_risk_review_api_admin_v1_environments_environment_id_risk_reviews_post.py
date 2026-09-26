@@ -20,15 +20,12 @@ def _get_kwargs(
     environment_id: str,
     *,
     body: RiskReviewCreate,
-    idempotency_key: str,
     x_csrf_token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
 
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
-    headers["Idempotency-Key"] = idempotency_key
-
     if not isinstance(x_csrf_token, Unset):
         headers["X-CSRF-Token"] = x_csrf_token
 
@@ -95,7 +92,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: RiskReviewCreate,
-    idempotency_key: str,
     x_csrf_token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
@@ -105,7 +101,6 @@ def sync_detailed(
 
     Args:
         environment_id (str):
-        idempotency_key (str):
         x_csrf_token (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
@@ -123,7 +118,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         environment_id=environment_id,
 body=body,
-idempotency_key=idempotency_key,
 x_csrf_token=x_csrf_token,
 authorization=authorization,
 relaypay_session=relaypay_session,
@@ -141,7 +135,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: RiskReviewCreate,
-    idempotency_key: str,
     x_csrf_token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
@@ -151,7 +144,6 @@ def sync(
 
     Args:
         environment_id (str):
-        idempotency_key (str):
         x_csrf_token (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
@@ -170,7 +162,6 @@ def sync(
         environment_id=environment_id,
 client=client,
 body=body,
-idempotency_key=idempotency_key,
 x_csrf_token=x_csrf_token,
 authorization=authorization,
 relaypay_session=relaypay_session,
@@ -182,7 +173,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: RiskReviewCreate,
-    idempotency_key: str,
     x_csrf_token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
@@ -192,7 +182,6 @@ async def asyncio_detailed(
 
     Args:
         environment_id (str):
-        idempotency_key (str):
         x_csrf_token (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
@@ -210,7 +199,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         environment_id=environment_id,
 body=body,
-idempotency_key=idempotency_key,
 x_csrf_token=x_csrf_token,
 authorization=authorization,
 relaypay_session=relaypay_session,
@@ -228,7 +216,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: RiskReviewCreate,
-    idempotency_key: str,
     x_csrf_token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
@@ -238,7 +225,6 @@ async def asyncio(
 
     Args:
         environment_id (str):
-        idempotency_key (str):
         x_csrf_token (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
@@ -257,7 +243,6 @@ async def asyncio(
         environment_id=environment_id,
 client=client,
 body=body,
-idempotency_key=idempotency_key,
 x_csrf_token=x_csrf_token,
 authorization=authorization,
 relaypay_session=relaypay_session,

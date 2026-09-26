@@ -6,6 +6,10 @@ x-production-environment: &production-environment
   PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:${PROVIDER_APP_DB_PASSWORD:?set PROVIDER_APP_DB_PASSWORD}@postgres:5432/provider
   PROVIDER_MIGRATION_DATABASE_URL: postgresql+psycopg://provider_migrator:${PROVIDER_MIGRATOR_DB_PASSWORD:?set PROVIDER_MIGRATOR_DB_PASSWORD}@postgres:5432/provider
   RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:?set RECEIVER_APP_DB_PASSWORD}@postgres:5432/relaypay
+  BANK_DATABASE_URL: postgresql+psycopg://bank_app:${BANK_APP_DB_PASSWORD:?set BANK_APP_DB_PASSWORD}@postgres:5432/bank
+  BANK_MIGRATION_DATABASE_URL: postgresql+psycopg://bank_migrator:${BANK_MIGRATOR_DB_PASSWORD:?set BANK_MIGRATOR_DB_PASSWORD}@postgres:5432/bank
+  COMMERCE_DATABASE_URL: postgresql+psycopg://commerce_app:${COMMERCE_APP_DB_PASSWORD:?set COMMERCE_APP_DB_PASSWORD}@postgres:5432/commerce
+  COMMERCE_MIGRATION_DATABASE_URL: postgresql+psycopg://commerce_migrator:${COMMERCE_MIGRATOR_DB_PASSWORD:?set COMMERCE_MIGRATOR_DB_PASSWORD}@postgres:5432/commerce
   CELERY_BROKER_URL: redis://redis:6379/0
   SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
   CSRF_SECRET: ${CSRF_SECRET:?set CSRF_SECRET}
@@ -20,6 +24,13 @@ x-production-environment: &production-environment
   RECOVERY_NETWORK_BASE_URL: http://recovery-network:8006
   RISK_SITE_BASE_URL: http://merchant-site:8007
   RECEIVER_WEBHOOK_SECRET: ${RECEIVER_WEBHOOK_SECRET:?set RECEIVER_WEBHOOK_SECRET}
+  BANK_ACCOUNT_ID: ${BANK_ACCOUNT_ID:?set BANK_ACCOUNT_ID}
+  BANK_SIGNING_SECRET: ${BANK_SIGNING_SECRET:?set BANK_SIGNING_SECRET}
+  BANK_CONTROL_SECRET: ${BANK_CONTROL_SECRET:?set BANK_CONTROL_SECRET}
+  COMMERCE_ACCOUNT_ID: ${COMMERCE_ACCOUNT_ID:?set COMMERCE_ACCOUNT_ID}
+  COMMERCE_CONTROL_SECRET: ${COMMERCE_CONTROL_SECRET:?set COMMERCE_CONTROL_SECRET}
+  CONNECTOR_CREDENTIAL_ENCRYPTION_KEY: ${CONNECTOR_CREDENTIAL_ENCRYPTION_KEY:?set CONNECTOR_CREDENTIAL_ENCRYPTION_KEY}
+  DISPUTE_PACKAGE_SIGNING_SECRET: ${DISPUTE_PACKAGE_SIGNING_SECRET:?set DISPUTE_PACKAGE_SIGNING_SECRET}
 
 services:
   postgres:
@@ -33,7 +44,13 @@ services:
       PROVIDER_MIGRATOR_DB_PASSWORD: ${PROVIDER_MIGRATOR_DB_PASSWORD:?set PROVIDER_MIGRATOR_DB_PASSWORD}
       PROVIDER_APP_DB_PASSWORD: ${PROVIDER_APP_DB_PASSWORD:?set PROVIDER_APP_DB_PASSWORD}
       RECEIVER_APP_DB_PASSWORD: ${RECEIVER_APP_DB_PASSWORD:?set RECEIVER_APP_DB_PASSWORD}
+      BANK_MIGRATOR_DB_PASSWORD: ${BANK_MIGRATOR_DB_PASSWORD:?set BANK_MIGRATOR_DB_PASSWORD}
+      BANK_APP_DB_PASSWORD: ${BANK_APP_DB_PASSWORD:?set BANK_APP_DB_PASSWORD}
+      COMMERCE_MIGRATOR_DB_PASSWORD: ${COMMERCE_MIGRATOR_DB_PASSWORD:?set COMMERCE_MIGRATOR_DB_PASSWORD}
+      COMMERCE_APP_DB_PASSWORD: ${COMMERCE_APP_DB_PASSWORD:?set COMMERCE_APP_DB_PASSWORD}
   redis:
+    ports: !reset []
+  redpanda:
     ports: !reset []
   migrate:
     environment: *production-environment
@@ -47,6 +64,18 @@ services:
     ports: !reset []
     environment: *production-environment
   recovery-network:
+    ports: !reset []
+    environment: *production-environment
+  bank:
+    ports: !reset []
+    environment: *production-environment
+  commerce:
+    ports: !reset []
+    environment: *production-environment
+  dispute-network:
+    ports: !reset []
+    environment: *production-environment
+  merchant-site:
     ports: !reset []
     environment: *production-environment
   poller:

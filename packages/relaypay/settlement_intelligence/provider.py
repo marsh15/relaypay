@@ -21,6 +21,9 @@ from relaypay.settlement_intelligence.narrative import narrative_factory
 class SettlementFakeProvider:
     name = "fake"
 
+    def __init__(self) -> None:
+        self.schema_failures = 0
+
     def generate_structured(self, request: ModelRequest) -> ModelResult:
         from relaypay.settlement_intelligence.classification import QuestionClassification
         from relaypay.settlement_intelligence.narrative import SettlementNarrative
@@ -30,6 +33,7 @@ class SettlementFakeProvider:
         elif request.schema is SettlementNarrative:
             raw = narrative_factory(request.schema, request.prompt)
         else:
+            self.schema_failures += 1
             raise TerminalModelError("unsupported settlement model schema")
         output = request.schema.model_validate(raw)
         request_bytes = canonical_json_bytes(
