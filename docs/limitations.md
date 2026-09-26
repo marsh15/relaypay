@@ -24,3 +24,13 @@
   application workers must be stopped, as documented.
 - Repository publication, hosted deployment, and demo-video recording require owner-controlled
   external accounts and are intentionally not automated by this codebase.
+- Portfolio analytics aggregates are organisation+environment scoped queries computed on demand;
+  there is no warehouse, materialized view, incremental rollup, or long-term metric history beyond
+  the current Prometheus gauge values.
+- Handling-time baselines and analytics shapes are versioned constants in code, not operator
+  configuration; changing them is a code change, not a setting.
+- The live-provider comparison report requires vendor API keys, calls external services, and is
+  intentionally excluded from CI; without keys the script is inert and the deterministic
+  evaluation runner remains the only release quality gate.
+- The versioned evaluation fixtures pin current deterministic behaviour; regenerating them is a
+  deliberate, reviewed change (via the checked-in generator), not an automated step.

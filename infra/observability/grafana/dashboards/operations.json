@@ -1,67 +1,313 @@
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "editable": false,
   "graphTooltip": 1,
   "panels": [
     {
       "title": "HTTP latency p50 / p95 / p99",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
-        {"expr": "histogram_quantile(0.50, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A"},
-        {"expr": "histogram_quantile(0.95, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B"},
-        {"expr": "histogram_quantile(0.99, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C"}
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(relaypay_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
       ]
     },
     {
       "title": "Payment and payout throughput",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "targets": [
-        {"expr": "sum by (kind, outcome) (rate(relaypay_payments_processed_total[5m]))", "legendFormat": "payment {{kind}} {{outcome}}", "refId": "A"},
-        {"expr": "sum by (outcome) (rate(relaypay_payouts_processed_total[5m]))", "legendFormat": "payout {{outcome}}", "refId": "B"}
+        {
+          "expr": "sum by (kind, outcome) (rate(relaypay_payments_processed_total[5m]))",
+          "legendFormat": "payment {{kind}} {{outcome}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (outcome) (rate(relaypay_payouts_processed_total[5m]))",
+          "legendFormat": "payout {{outcome}}",
+          "refId": "B"
+        }
       ]
     },
     {
       "title": "Webhook outcomes",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
       "targets": [
-        {"expr": "sum by (outcome) (rate(relaypay_webhook_deliveries_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A"}
+        {
+          "expr": "sum by (outcome) (rate(relaypay_webhook_deliveries_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
       ]
     },
     {
       "title": "Mismatch and claim depth",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
       "targets": [
-        {"expr": "relaypay_reconciliation_mismatches", "legendFormat": "mismatch {{status}}", "refId": "A"},
-        {"expr": "relaypay_claim_depth", "legendFormat": "queue {{queue}}", "refId": "B"}
+        {
+          "expr": "relaypay_reconciliation_mismatches",
+          "legendFormat": "mismatch {{status}}",
+          "refId": "A"
+        },
+        {
+          "expr": "relaypay_claim_depth",
+          "legendFormat": "queue {{queue}}",
+          "refId": "B"
+        }
       ]
     },
     {
       "title": "Worker latency and recovery",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
       "targets": [
-        {"expr": "histogram_quantile(0.95, sum by (task, le) (rate(relaypay_worker_processing_seconds_bucket[5m])))", "legendFormat": "p95 {{task}}", "refId": "A"},
-        {"expr": "sum by (kind) (rate(relaypay_recoveries_total[5m]))", "legendFormat": "recovery {{kind}}", "refId": "B"}
+        {
+          "expr": "histogram_quantile(0.95, sum by (task, le) (rate(relaypay_worker_processing_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{task}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (kind) (rate(relaypay_recoveries_total[5m]))",
+          "legendFormat": "recovery {{kind}}",
+          "refId": "B"
+        }
       ]
     },
     {
       "title": "Connector circuit state",
       "type": "state-timeline",
-      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 16},
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
       "targets": [
-        {"expr": "relaypay_connector_circuit_state == 1", "legendFormat": "{{connector}} {{state}}", "refId": "A"}
+        {
+          "expr": "relaypay_connector_circuit_state == 1",
+          "legendFormat": "{{connector}} {{state}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "title": "Portfolio completion rate (raw vs approval-adjusted)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "relaypay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "relaypay_portfolio_completion_rate",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "title": "Portfolio recovery rate",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "relaypay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "relaypay_portfolio_recovery_rate",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "title": "Portfolio handling-time reduction vs manual baseline",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "relaypay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "relaypay_portfolio_handling_reduction",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 109,
+      "title": "Portfolio model cost per completed workflow",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "relaypay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µUSD"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "relaypay_portfolio_model_cost_usd_micros",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "title": "Portfolio analyst intervention rate",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "relaypay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "relaypay_portfolio_analyst_intervention_rate",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 111,
+      "title": "Portfolio invalid/policy-blocked action rate",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "relaypay-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "relaypay_portfolio_invalid_action_rate",
+          "refId": "A"
+        }
       ]
     }
   ],
   "refresh": "5s",
   "schemaVersion": 41,
-  "tags": ["relaypay", "operations"],
-  "templating": {"list": []},
-  "time": {"from": "now-30m", "to": "now"},
+  "tags": [
+    "relaypay",
+    "operations"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "timezone": "browser",
   "title": "RelayPay Operations Evidence",
   "uid": "relaypay-operations",

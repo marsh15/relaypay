@@ -16,6 +16,7 @@ from relaypay.agent_runtime.workflows import (
     read_run,
     resolve_admin_scope,
 )
+from relaypay.analytics.service import portfolio_analytics, refresh_portfolio_metrics
 from relaypay.config import Settings
 from relaypay.connectors.adapters import BankConnectorAdapter, PaymentConnectorAdapter
 from relaypay.connectors.service import (
@@ -72,6 +73,7 @@ from relaypay.merchant_balances.service import (
     read_admin_balances,
     run_settlement,
 )
+from relaypay.observability.metrics import operations_metrics
 from relaypay.operations.service import list_operations_resource
 from relaypay.payouts.service import (
     create_beneficiary,
@@ -390,6 +392,7 @@ def build_admin_router(
         return deterministic_findings(snapshot)
 
     resolved_risk_provider = risk_findings_provider or RiskFindingsFakeProvider()
+    operations_metrics_instance = operations_metrics()
 
     def require_csrf(principal: Principal, csrf_token: str | None) -> None:
         with session_factory() as session, session.begin():
@@ -2294,6 +2297,8 @@ def build_admin_router(
             session_factory,
             organisation_id=organisation_id,
             environment_id=resolved_environment_id,
+            organisation_public_id=principal.organisation_public_id,
+            environment_public_id=environment_id,
             site_ref=payload.site_ref,
             source=_risk_site_source(),
             source_url=str(settings.RISK_SITE_BASE_URL),
@@ -2413,5 +2418,30 @@ def build_admin_router(
                 now=datetime.now(UTC),
             )
             return {"id": item.public_id, "status": item.status, "disposition": item.disposition}
+
+    @router.get("/admin/v1/environments/{environment_id}/analytics/portfolio")
+    def get_portfolio_analytics(
+        environment_id: str,
+        principal: PrincipalDep,
+    ) -> dict[str, object]:
+        with session_factory() as session, session.begin():
+            organisation_id, resolved_environment_id = resolve_admin_scope(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                permission="technical:read",
+            )
+            analytics = portfolio_analytics(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+            )
+            refresh_portfolio_metrics(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                metrics=operations_metrics_instance,
+            )
+            return analytics.payload()
 
     return router

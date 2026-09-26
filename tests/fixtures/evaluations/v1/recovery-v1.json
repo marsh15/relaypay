@@ -1,0 +1,397 @@
+{
+  "version": 1,
+  "kind": "subscription-recovery",
+  "cases": [
+    {
+      "caseId": "eval-recovery-00",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-01",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-02",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "AUTHENTICATION_REQUIRED",
+      "consent": {
+        "channels": []
+      },
+      "expectTerminal": false,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-03",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "EXPIRED_METHOD",
+      "consent": {
+        "channels": [
+          "WHATSAPP",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-04",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-05",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-06",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "AUTHENTICATION_REQUIRED",
+      "consent": {
+        "channels": []
+      },
+      "expectTerminal": false,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-07",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "EXPIRED_METHOD",
+      "consent": {
+        "channels": [
+          "WHATSAPP",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-08",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-09",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-10",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "AUTHENTICATION_REQUIRED",
+      "consent": {
+        "channels": []
+      },
+      "expectTerminal": false,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-11",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "EXPIRED_METHOD",
+      "consent": {
+        "channels": [
+          "WHATSAPP",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-12",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-13",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-14",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "AUTHENTICATION_REQUIRED",
+      "consent": {
+        "channels": []
+      },
+      "expectTerminal": false,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-15",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "EXPIRED_METHOD",
+      "consent": {
+        "channels": [
+          "WHATSAPP",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-16",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-17",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-18",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "AUTHENTICATION_REQUIRED",
+      "consent": {
+        "channels": []
+      },
+      "expectTerminal": false,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-19",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "EXPIRED_METHOD",
+      "consent": {
+        "channels": [
+          "WHATSAPP",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-20",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-21",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-22",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "AUTHENTICATION_REQUIRED",
+      "consent": {
+        "channels": []
+      },
+      "expectTerminal": false,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-23",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "EXPIRED_METHOD",
+      "consent": {
+        "channels": [
+          "WHATSAPP",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-24",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-25",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-26",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "AUTHENTICATION_REQUIRED",
+      "consent": {
+        "channels": []
+      },
+      "expectTerminal": false,
+      "expectNoAction": true
+    },
+    {
+      "caseId": "eval-recovery-27",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "EXPIRED_METHOD",
+      "consent": {
+        "channels": [
+          "WHATSAPP",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-28",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "RETRYABLE_SOFT_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL",
+          "IN_APP"
+        ]
+      },
+      "expectTerminal": false,
+      "expectNoAction": false
+    },
+    {
+      "caseId": "eval-recovery-29",
+      "providerCode": "INSUFFICIENT_FUNDS",
+      "outcome": "VERIFIED_FAILED",
+      "failureClassification": "NON_RETRYABLE_HARD_DECLINE",
+      "consent": {
+        "channels": [
+          "EMAIL"
+        ]
+      },
+      "expectTerminal": true,
+      "expectNoAction": true
+    }
+  ]
+}

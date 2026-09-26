@@ -134,6 +134,9 @@ jobs:
             tests/unit/test_risk_findings.py
           uv run pytest tests/integration/test_m14_risk_review.py
 
+      - name: Portfolio v1 deterministic evaluation gate
+        run: uv run python -m scripts.run_evaluations
+
       - name: Measure M7 failure behavior and database query plans
         run: |
           mkdir -p output/m7

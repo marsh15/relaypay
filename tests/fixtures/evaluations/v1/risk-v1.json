@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "kind": "merchant-risk-review",
+  "cases": [
+    {
+      "caseId": "eval-risk-00",
+      "siteRef": "COMPLETE_CLEAN",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-01",
+      "siteRef": "MISSING_POLICIES",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-02",
+      "siteRef": "YOUNG_DOMAIN",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-03",
+      "siteRef": "PRICE_OUTLIER",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-04",
+      "siteRef": "SUSPICIOUS_CLAIMS",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-05",
+      "siteRef": "PROHIBITED_CATEGORY",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-06",
+      "siteRef": "COMPLETE_CLEAN",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-07",
+      "siteRef": "MISSING_POLICIES",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-08",
+      "siteRef": "YOUNG_DOMAIN",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-09",
+      "siteRef": "PRICE_OUTLIER",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-10",
+      "siteRef": "SUSPICIOUS_CLAIMS",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-11",
+      "siteRef": "PROHIBITED_CATEGORY",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-12",
+      "siteRef": "COMPLETE_CLEAN",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-13",
+      "siteRef": "MISSING_POLICIES",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-14",
+      "siteRef": "YOUNG_DOMAIN",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-15",
+      "siteRef": "PRICE_OUTLIER",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-16",
+      "siteRef": "SUSPICIOUS_CLAIMS",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-17",
+      "siteRef": "PROHIBITED_CATEGORY",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-18",
+      "siteRef": "COMPLETE_CLEAN",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-19",
+      "siteRef": "MISSING_POLICIES",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-20",
+      "siteRef": "YOUNG_DOMAIN",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-21",
+      "siteRef": "PRICE_OUTLIER",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-22",
+      "siteRef": "SUSPICIOUS_CLAIMS",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-23",
+      "siteRef": "PROHIBITED_CATEGORY",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-24",
+      "siteRef": "COMPLETE_CLEAN",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-25",
+      "siteRef": "MISSING_POLICIES",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-26",
+      "siteRef": "YOUNG_DOMAIN",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-27",
+      "siteRef": "PRICE_OUTLIER",
+      "expectHardStop": false,
+      "expectEscalated": false
+    },
+    {
+      "caseId": "eval-risk-28",
+      "siteRef": "SUSPICIOUS_CLAIMS",
+      "expectHardStop": true,
+      "expectEscalated": true
+    },
+    {
+      "caseId": "eval-risk-29",
+      "siteRef": "PROHIBITED_CATEGORY",
+      "expectHardStop": true,
+      "expectEscalated": true
+    }
+  ]
+}

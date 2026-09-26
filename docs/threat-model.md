@@ -42,3 +42,16 @@ streams or prompts, unbounded tool/model output, provider fallback after policy 
 budget bypass, and duplicate broker effects. Controls are tenant scope injection, Pydantic-validated
 read-only allowlists, PII tokens, explicit untrusted-data delimiters, byte/token/cost ceilings,
 transport-only fallback, artifact-hash maker-checker constraints, PostgreSQL leases, and event dedupe.
+
+## v1.0.0 analytics and evaluation additions
+
+Portfolio analytics introduce a read-only aggregation surface over existing authoritative tables:
+the admin portfolio endpoint resolves the caller's scope through the same permission/tenant path as
+every other admin route, returns aggregates only (no raw evidence), and emits no tenant identifiers
+to Prometheus. Live-provider comparison is key-gated, release-only, PII-tokenizes question text
+before any outbound call, and writes only aggregate quality/latency/cost rows to `output/v1/`; it
+never runs in CI. The evaluation runner executes synthetic fixtures through real domain services in
+an isolated synthetic organisation, so the adversarial suite (injection, cross-tenant access, PII,
+permission escalation, duplicate effects) exercises the same production code paths without any real
+data. Residual risk: analytics queries are organisation+environment-scoped but unpaginated by
+design; they are bounded by the scale of a single synthetic tenant.

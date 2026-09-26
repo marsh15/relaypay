@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "kind": "settlement-intelligence",
+  "cases": [
+    {
+      "caseId": "eval-settlement-00",
+      "intent": "SETTLEMENT_LOWER",
+      "question": "Why is today's settlement lower than the forecast?",
+      "siteSeed": 0
+    },
+    {
+      "caseId": "eval-settlement-01",
+      "intent": "UNSETTLED_PAYMENTS",
+      "question": "Which payments are still unsettled?",
+      "siteSeed": 0
+    },
+    {
+      "caseId": "eval-settlement-02",
+      "intent": "REFUND_IMPACT",
+      "question": "What is the refund cash impact today?",
+      "siteSeed": 0
+    },
+    {
+      "caseId": "eval-settlement-03",
+      "intent": "ARRIVAL_TOMORROW",
+      "question": "When is the expected arrival tomorrow?",
+      "siteSeed": 0
+    },
+    {
+      "caseId": "eval-settlement-04",
+      "intent": "SETTLEMENT_LOWER",
+      "question": "Why is today's settlement lower than the forecast?",
+      "siteSeed": 1
+    },
+    {
+      "caseId": "eval-settlement-05",
+      "intent": "UNSETTLED_PAYMENTS",
+      "question": "Which payments are still unsettled?",
+      "siteSeed": 1
+    },
+    {
+      "caseId": "eval-settlement-06",
+      "intent": "REFUND_IMPACT",
+      "question": "What is the refund cash impact today?",
+      "siteSeed": 1
+    },
+    {
+      "caseId": "eval-settlement-07",
+      "intent": "ARRIVAL_TOMORROW",
+      "question": "When is the expected arrival tomorrow?",
+      "siteSeed": 1
+    },
+    {
+      "caseId": "eval-settlement-08",
+      "intent": "SETTLEMENT_LOWER",
+      "question": "Why is today's settlement lower than the forecast?",
+      "siteSeed": 2
+    },
+    {
+      "caseId": "eval-settlement-09",
+      "intent": "UNSETTLED_PAYMENTS",
+      "question": "Which payments are still unsettled?",
+      "siteSeed": 2
+    },
+    {
+      "caseId": "eval-settlement-10",
+      "intent": "REFUND_IMPACT",
+      "question": "What is the refund cash impact today?",
+      "siteSeed": 2
+    },
+    {
+      "caseId": "eval-settlement-11",
+      "intent": "ARRIVAL_TOMORROW",
+      "question": "When is the expected arrival tomorrow?",
+      "siteSeed": 2
+    },
+    {
+      "caseId": "eval-settlement-12",
+      "intent": "SETTLEMENT_LOWER",
+      "question": "Why is today's settlement lower than the forecast?",
+      "siteSeed": 3
+    },
+    {
+      "caseId": "eval-settlement-13",
+      "intent": "UNSETTLED_PAYMENTS",
+      "question": "Which payments are still unsettled?",
+      "siteSeed": 3
+    },
+    {
+      "caseId": "eval-settlement-14",
+      "intent": "REFUND_IMPACT",
+      "question": "What is the refund cash impact today?",
+      "siteSeed": 3
+    },
+    {
+      "caseId": "eval-settlement-15",
+      "intent": "ARRIVAL_TOMORROW",
+      "question": "When is the expected arrival tomorrow?",
+      "siteSeed": 3
+    },
+    {
+      "caseId": "eval-settlement-16",
+      "intent": "SETTLEMENT_LOWER",
+      "question": "Why is today's settlement lower than the forecast?",
+      "siteSeed": 4
+    },
+    {
+      "caseId": "eval-settlement-17",
+      "intent": "UNSETTLED_PAYMENTS",
+      "question": "Which payments are still unsettled?",
+      "siteSeed": 4
+    },
+    {
+      "caseId": "eval-settlement-18",
+      "intent": "REFUND_IMPACT",
+      "question": "What is the refund cash impact today?",
+      "siteSeed": 4
+    },
+    {
+      "caseId": "eval-settlement-19",
+      "intent": "ARRIVAL_TOMORROW",
+      "question": "When is the expected arrival tomorrow?",
+      "siteSeed": 4
+    },
+    {
+      "caseId": "eval-settlement-20",
+      "intent": "CLARIFICATION",
+      "question": "What is the capital of France?",
+      "siteSeed": 0
+    },
+    {
+      "caseId": "eval-settlement-21",
+      "intent": "CLARIFICATION",
+      "question": "What is the capital of France?",
+      "siteSeed": 0
+    },
+    {
+      "caseId": "eval-settlement-22",
+      "intent": "CLARIFICATION",
+      "question": "What is the capital of France?",
+      "siteSeed": 0
+    },
+    {
+      "caseId": "eval-settlement-23",
+      "intent": "CLARIFICATION",
+      "question": "What is the capital of France?",
+      "siteSeed": 0
+    }
+  ]
+}

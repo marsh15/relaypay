@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "kind": "cross-workflow-adversarial",
+  "cases": [
+    {
+      "caseId": "eval-adversarial-00",
+      "variant": "PROMPT_INJECTION_RECORD"
+    },
+    {
+      "caseId": "eval-adversarial-01",
+      "variant": "CROSS_TENANT_ACCESS"
+    },
+    {
+      "caseId": "eval-adversarial-02",
+      "variant": "PII_IN_EVIDENCE"
+    },
+    {
+      "caseId": "eval-adversarial-03",
+      "variant": "PERMISSION_ESCALATION"
+    },
+    {
+      "caseId": "eval-adversarial-04",
+      "variant": "DUPLICATE_EFFECT"
+    },
+    {
+      "caseId": "eval-adversarial-05",
+      "variant": "PROMPT_INJECTION_RECORD"
+    },
+    {
+      "caseId": "eval-adversarial-06",
+      "variant": "CROSS_TENANT_ACCESS"
+    },
+    {
+      "caseId": "eval-adversarial-07",
+      "variant": "PII_IN_EVIDENCE"
+    },
+    {
+      "caseId": "eval-adversarial-08",
+      "variant": "PERMISSION_ESCALATION"
+    },
+    {
+      "caseId": "eval-adversarial-09",
+      "variant": "DUPLICATE_EFFECT"
+    },
+    {
+      "caseId": "eval-adversarial-10",
+      "variant": "PROMPT_INJECTION_RECORD"
+    },
+    {
+      "caseId": "eval-adversarial-11",
+      "variant": "CROSS_TENANT_ACCESS"
+    },
+    {
+      "caseId": "eval-adversarial-12",
+      "variant": "PII_IN_EVIDENCE"
+    },
+    {
+      "caseId": "eval-adversarial-13",
+      "variant": "PERMISSION_ESCALATION"
+    },
+    {
+      "caseId": "eval-adversarial-14",
+      "variant": "DUPLICATE_EFFECT"
+    },
+    {
+      "caseId": "eval-adversarial-15",
+      "variant": "PROMPT_INJECTION_RECORD"
+    },
+    {
+      "caseId": "eval-adversarial-16",
+      "variant": "CROSS_TENANT_ACCESS"
+    },
+    {
+      "caseId": "eval-adversarial-17",
+      "variant": "PII_IN_EVIDENCE"
+    },
+    {
+      "caseId": "eval-adversarial-18",
+      "variant": "PERMISSION_ESCALATION"
+    },
+    {
+      "caseId": "eval-adversarial-19",
+      "variant": "DUPLICATE_EFFECT"
+    }
+  ]
+}

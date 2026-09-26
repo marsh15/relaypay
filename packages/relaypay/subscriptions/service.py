@@ -344,6 +344,36 @@ def terminate_case(
     if workflow is not None:
         workflow.status = "SUCCEEDED" if recovered else "CANCELLED"
         workflow.completed_at = now
+    from relaypay.agent_runtime.events import append_business_event
+    from relaypay.identity.models import Environment as EnvironmentModel
+    from relaypay.identity.models import Organisation as OrganisationModel
+
+    scope_row = session.execute(
+        select(OrganisationModel.public_id, EnvironmentModel.public_id)
+        .join(EnvironmentModel, EnvironmentModel.organisation_id == OrganisationModel.id)
+        .where(
+            OrganisationModel.id == case.organisation_id,
+            EnvironmentModel.id == case.environment_id,
+        )
+    ).one_or_none()
+    if scope_row is not None:
+        append_business_event(
+            session,
+            organisation_id=case.organisation_id,
+            organisation_public_id=scope_row[0],
+            environment_id=case.environment_id,
+            environment_public_id=scope_row[1],
+            event_type="recovery-case.closed.v1",
+            resource_type="recovery_case",
+            resource_id=case.public_id,
+            payload={
+                "recovered": recovered,
+                "reason": reason,
+                "paymentRetryCount": case.payment_retry_count,
+                "messageCount": case.message_count,
+            },
+            now=now,
+        )
     subscription = session.get(Subscription, case.subscription_id)
     if subscription is not None and recovered:
         subscription.status = "RECOVERED"

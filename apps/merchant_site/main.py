@@ -132,7 +132,7 @@ class SnapshotResponse(BaseModel):
 def build_app() -> FastAPI:
     app = FastAPI(
         title="RelayPay synthetic merchant sites",
-        version="0.15.0",
+        version="1.0.0",
         description=(
             "Immutable synthetic merchant-site snapshots for onboarding risk review. "
             "Never submit real merchant or website data."
