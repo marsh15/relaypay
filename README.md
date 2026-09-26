@@ -5,6 +5,12 @@ payment service can survive a provider committing a financial effect while its r
 the mutation is never repeated, recovery uses a signed status lookup, and local state finalizes
 exactly once with an immutable balanced ledger entry, event, and webhook trail.
 
+v1.0.0 is the integrated platform release: the same PostgreSQL-authoritative core now spans
+payments, reconciliation, dispute responses, subscription recovery, settlement-intelligence
+questions, merchant risk review, and cross-workflow portfolio analytics — with tenant dimensions
+kept in PostgreSQL, a versioned deterministic evaluation suite wired into CI, and one runnable
+synthetic portfolio journey (`make portfolio-demo`).
+
 **Synthetic data only. RelayPay is not a payment processor and must never receive real card,
 bank-account, identity, or customer data.**
 
@@ -49,6 +55,7 @@ make demo
 make lint
 make typecheck
 make test
+make evaluations
 make console-check
 make console-e2e
 ```
@@ -57,9 +64,9 @@ Integration tests use PostgreSQL and Redis at the development ports from `.env.e
 them with `make infra-up`, then run `make migrate` and `make seed` when not using the complete
 Compose stack.
 
-Upgrading an existing v0.7 installation to v0.8 adds bounded operations storage, opt-in
-OpenTelemetry/Prometheus/Grafana, and reproducible performance and failure evidence. The frozen
-merchant API remains compatible. See the [v0.9.0 migration guide](docs/migrations/v0.9.0.md).
+Upgrading to v1.0.0 from any earlier release adds no database migration: the integrated-platform
+analytics layer is query-only, and the frozen merchant API remains compatible. Run the versioned
+evaluation suite after upgrading. See the [v1.0.0 migration guide](docs/migrations/v1.0.0.md).
 
 With the complete stack running, export a synthetic provider statement, import it into TEST,
 and process its reconciliation run with:
@@ -146,15 +153,9 @@ ledger history, immutable event bytes, and delivery progress.
 - [PRD, TRD, flows, UI brief, schema, and frozen six-week plan](docs/vibe-coding/README.md)
 - [Phase 2 product contract](docs/phase-2/product-contract.md)
 - [Phase 2 implementation roadmap](docs/phase-2/implementation-roadmap.md)
-- [v0.1.0 release notes](docs/releases/v0.1.0.md)
-- [v0.2.0 release notes](docs/releases/v0.2.0.md)
-- [v0.3.0 release notes](docs/releases/v0.3.0.md)
-- [v0.4.0 release notes](docs/releases/v0.4.0.md)
-- [v0.5.0 release notes](docs/releases/v0.5.0.md)
-- [v0.6.0 release notes](docs/releases/v0.6.0.md)
-- [v0.7.0 release notes](docs/releases/v0.7.0.md)
-- [v0.8.0 release notes](docs/releases/v0.8.0.md)
-- [v0.9.0 release notes](docs/releases/v0.9.0.md)
+- [v1.0.0 release notes](docs/releases/v1.0.0.md)
+- [All release notes](docs/releases/)
+- [Migration guides](docs/migrations/)
 - [Operations telemetry](docs/operations/observability.md)
 - [Resilience proofs](docs/operations/resilience-proofs.md)
 - [Python SDK](docs/api/python-sdk.md)
