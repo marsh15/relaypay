@@ -1214,12 +1214,8 @@ def build_admin_router(
         request_id: str,
         payload: ApprovalDecisionCreate,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, str]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             item = decide_approval(
@@ -1482,12 +1478,8 @@ def build_admin_router(
         environment_id: str,
         package_id: str,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             package = read_package_for_admin(
@@ -1546,12 +1538,8 @@ def build_admin_router(
         environment_id: str,
         payload: SubscriptionCreate,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             organisation_id, resolved_environment_id = resolve_admin_scope(
@@ -1581,12 +1569,8 @@ def build_admin_router(
         subscription_id: str,
         payload: SubscriptionInvoiceCreate,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             organisation_id, resolved_environment_id = resolve_admin_scope(
@@ -1754,12 +1738,8 @@ def build_admin_router(
         environment_id: str,
         action_id: str,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             organisation_id, resolved_environment_id = resolve_admin_scope(
@@ -1802,12 +1782,8 @@ def build_admin_router(
         case_id: str,
         payload: RecoveryOptOutCreate,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             organisation_id, resolved_environment_id = resolve_admin_scope(
@@ -2279,12 +2255,8 @@ def build_admin_router(
         environment_id: str,
         payload: RiskReviewCreate,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             organisation_id, resolved_environment_id = resolve_admin_scope(
@@ -2378,12 +2350,8 @@ def build_admin_router(
         review_id: str,
         payload: RiskDispositionCreate,
         principal: PrincipalDep,
-        idempotency_key: Annotated[
-            str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
-        ],
         csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, object]:
-        del idempotency_key
         require_csrf(principal, csrf_token)
         with session_factory() as session, session.begin():
             organisation_id, resolved_environment_id = resolve_admin_scope(

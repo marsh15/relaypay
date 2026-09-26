@@ -10,6 +10,7 @@ from relaypay.idempotency import canonical_json_bytes
 from relaypay.identity.models import Environment, Organisation
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.payments.models import Customer
+from relaypay.subscriptions import execution
 from relaypay.subscriptions.execution import (
     execute_message_action,
     execute_payment_action,
@@ -278,5 +279,128 @@ def test_recovery_batch_empty_query_uses_an_explicit_transaction() -> None:
             )
             == 0
         )
+    finally:
+        engine.dispose()
+
+
+def test_recovery_batch_survives_action_lost_to_a_concurrent_termination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A case terminated between the batch's committed pre-check and the
+    execute transaction makes _prepare_action raise after rolling back; the
+    batch must skip that action and keep processing instead of dying (which
+    would stall every remaining due action until manual intervention)."""
+    database_url = os.getenv(
+        "RELAYPAY_DATABASE_URL",
+        "postgresql+psycopg://relaypay_app:relaypay_app_dev@localhost:55432/relaypay",
+    )
+    engine = build_engine(database_url, application_name="m12-recovery-batch-resilience")
+    factory = build_session_factory(engine)
+    now = datetime.now(UTC)
+    try:
+        with factory() as session, session.begin():
+            organisation = Organisation(
+                id=new_uuid(),
+                public_id=new_public_id("org"),
+                name="Recovery batch resilience",
+                status="ACTIVE",
+            )
+            session.add(organisation)
+            session.flush([organisation])
+            environment = session.scalar(
+                select(Environment).where(
+                    Environment.organisation_id == organisation.id,
+                    Environment.environment_type == "TEST",
+                )
+            )
+            assert environment is not None
+            customer = Customer(
+                id=new_uuid(),
+                public_id=new_public_id("cus"),
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                merchant_customer_reference=f"recovery-{new_uuid().hex}",
+                display_name="Synthetic Subscriber",
+            )
+            definition = WorkflowDefinition(
+                id=new_uuid(),
+                public_id=new_public_id("wdf"),
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                name="subscription-recovery",
+                version=1,
+                definition_sha256=hashlib.sha256(b"subscription-recovery-v1").digest(),
+                definition={"steps": []},
+                status="ACTIVE",
+            )
+            session.add_all([customer, definition])
+            subscription = create_subscription(
+                session,
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                customer_public_id=customer.public_id,
+                external_id=f"subscription-{new_uuid().hex}",
+                plan_reference="monthly",
+                amount=12_500,
+                consent={"channels": ["EMAIL"], "displayName": "Synthetic Subscriber"},
+            )
+            session.flush([subscription])
+            invoice = create_invoice(
+                session,
+                subscription=subscription,
+                external_id=f"invoice-{new_uuid().hex}",
+                due_at=now,
+            )
+            session.flush([invoice])
+            outcome = consume_recurring_payment_failed(
+                session,
+                _envelope(
+                    organisation=organisation,
+                    environment=environment,
+                    subscription_id=subscription.public_id,
+                    invoice_id=invoice.public_id,
+                    provider_attempt_id=f"provider-{new_uuid().hex}",
+                    provider_code="INSUFFICIENT_FUNDS",
+                    outcome="VERIFIED_FAILED",
+                    occurred_at=now,
+                ),
+            )
+            assert outcome.case is not None
+
+        real_message = execution.execute_message_action
+        real_payment = execution.execute_payment_action
+        attempts = {"count": 0}
+
+        def make_flaky(real: object) -> object:
+            def flaky(*args: object, **kwargs: object) -> object:
+                # Whichever action type the batch selects first simulates a
+                # case that a concurrent writer terminated mid-flight.
+                if attempts["count"] == 0:
+                    attempts["count"] += 1
+                    raise RelayPayError(
+                        code="RECOVERY_CASE_TERMINAL",
+                        message="simulated concurrent termination",
+                        http_status=409,
+                    )
+                return real(*args, **kwargs)
+
+            return flaky
+
+        monkeypatch.setattr(execution, "execute_message_action", make_flaky(real_message))
+        monkeypatch.setattr(execution, "execute_payment_action", make_flaky(real_payment))
+        processed = run_recovery_action_batch(
+            factory,
+            communication_network=DeterministicCommunicationNetwork(),
+            payment_network=DeterministicRecurringPaymentNetwork(),
+            # Seven days: inside the 14-day policy window but past the first
+            # scheduled action windows, so the batch has real work to do.
+            now=now + timedelta(days=7),
+            limit=10,
+        )
+        # Pre-fix, the simulated termination raised out of the batch and
+        # killed it. Now the skip consumes a slot, the action is not retried
+        # through the raising path more than once, and the batch returns.
+        assert processed >= 1
+        assert attempts["count"] == 1
     finally:
         engine.dispose()

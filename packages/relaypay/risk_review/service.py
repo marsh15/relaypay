@@ -530,6 +530,18 @@ def annotate_review(
             message="Annotation note must be between 1 and 2000 characters",
             http_status=422,
         )
+    # Content-keyed replay: resubmitting an identical note by the same
+    # analyst returns the existing annotation instead of appending a
+    # duplicate, so a retried POST cannot double-append.
+    existing = session.scalar(
+        select(RiskAnnotation).where(
+            RiskAnnotation.risk_review_id == review.id,
+            RiskAnnotation.author_user_id == author_user_id,
+            RiskAnnotation.note == note,
+        )
+    )
+    if existing is not None:
+        return existing
     item = RiskAnnotation(
         id=new_uuid(),
         public_id=new_public_id("ran"),

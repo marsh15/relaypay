@@ -166,6 +166,7 @@ def create_policy(
         .order_by(SettlementPolicy.version.desc())
         .limit(1)
     )
+    digest = hashlib.sha256(canonical_json_bytes(window.policy_value())).digest()
     for previous in session.scalars(
         select(SettlementPolicy).where(
             SettlementPolicy.organisation_id == organisation_id,
@@ -174,8 +175,12 @@ def create_policy(
             SettlementPolicy.status == "ACTIVE",
         )
     ).all():
+        if previous.policy_sha256 == digest:
+            # Content-keyed replay: the requested policy content is already
+            # the active version, so a retried request must not retire and
+            # recreate it.
+            return previous
         previous.status = "RETIRED"
-    digest = hashlib.sha256(canonical_json_bytes(window.policy_value())).digest()
     item = SettlementPolicy(
         id=new_uuid(),
         public_id=new_public_id("spv"),
@@ -244,6 +249,32 @@ def record_pre_cutoff_forecast(
         "recordedAt": now.isoformat(),
     }
     snapshot_digest = hashlib.sha256(canonical_json_bytes(snapshot)).digest()
+    # Content-keyed replay: a retried forecast within the same cutoff window
+    # carries identical captured values, so return the latest snapshot for
+    # the business date instead of appending a duplicate series entry.
+    latest = session.scalar(
+        select(SettlementForecast)
+        .where(
+            SettlementForecast.organisation_id == organisation_id,
+            SettlementForecast.environment_id == environment_id,
+            SettlementForecast.merchant_account_id == merchant_account_id,
+            SettlementForecast.business_date == business_date,
+        )
+        .order_by(SettlementForecast.sequence.desc())
+        .limit(1)
+    )
+    if (
+        latest is not None
+        and latest.policy_id == policy.id
+        and latest.cutoff_at == cutoff
+        and latest.capture_total == capture_total
+        and latest.refund_total == refund_total
+        and latest.receivable_offset_total == offset
+        and latest.expected_settlement_amount == expected
+        and latest.capture_count == len(captures)
+        and latest.refund_count == len(refunds)
+    ):
+        return latest
     sequence = (
         session.scalar(
             select(func.count(SettlementForecast.id)).where(

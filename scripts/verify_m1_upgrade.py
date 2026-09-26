@@ -9,6 +9,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Connection, create_engine, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "migrations" / "relaypay" / "alembic.ini"
@@ -286,8 +287,33 @@ def _verify_backfill(
     assert tuple(key_version) == (1, "ACTIVE", True)
 
 
+def _require_clean_starting_point(database_url: str) -> None:
+    """Refuse to run against a database holding later-milestone state.
+
+    The proof migrates down to the v0.1 schema first; on anything newer than
+    0005_scenarios that would destroy later milestones' tables. CI runs this
+    first on a fresh database, so only a fresh (no alembic_version) or
+    exactly-0005 database is acceptable.
+    """
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            current = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    except (OperationalError, ProgrammingError):
+        return  # fresh database: no alembic_version table yet
+    finally:
+        engine.dispose()
+    if current is not None and current != "0005_scenarios":
+        raise RuntimeError(
+            f"verify_m1_upgrade needs a fresh or 0005_scenarios database "
+            f"(found {current!r}); recreate the database instead of running "
+            "this proof against later-milestone state"
+        )
+
+
 def main() -> None:
     config, database_url = _configuration()
+    _require_clean_starting_point(database_url)
     command.upgrade(config, "0005_scenarios")
     engine = create_engine(database_url)
     with engine.begin() as connection:

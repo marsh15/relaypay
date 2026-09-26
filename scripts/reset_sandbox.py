@@ -34,6 +34,9 @@ def reset() -> None:
 
     databases = (
         (settings.RECEIVER_DATABASE_URL.get_secret_value(), "TRUNCATE receiver.received_events"),
+        # TRUNCATE ... CASCADE is transitive: this wipes every tenant-bound table
+        # (environments, organisation_memberships -> users, sessions, api_keys,
+        # and all per-environment tables), which is exactly the reset contract.
         (relay_url, "TRUNCATE organisations CASCADE"),
         (provider_url, "TRUNCATE provider_accounts CASCADE"),
         (bank_url, "TRUNCATE bank_accounts CASCADE"),

@@ -80,6 +80,20 @@ class Settings(BaseSettings):
             == "dev-edge-origin-signing-secret-change-me"
         ):
             raise ValueError("EDGE_ORIGIN_SIGNING_SECRET must be replaced when enforcement is on")
+        if self.APP_ENV == "production":
+            dev_default_secrets = {
+                "PROVIDER_SIGNING_SECRET": "dev-provider-signing-secret-change-me",
+                "PROVIDER_CONTROL_SECRET": "dev-provider-control-secret-change-me",
+                "BANK_SIGNING_SECRET": "dev-bank-signing-secret-change-me",
+                "BANK_CONTROL_SECRET": "dev-bank-control-secret-change-me",
+                "COMMERCE_CONTROL_SECRET": "dev-commerce-control-secret-change-me",
+                "CONNECTOR_CREDENTIAL_ENCRYPTION_KEY": "dev-connector-credential-encryption-key",
+                "DISPUTE_PACKAGE_SIGNING_SECRET": "dev-dispute-package-signing-secret-change-me",
+                "RECEIVER_WEBHOOK_SECRET": "dev-receiver-secret-change-me",
+            }
+            for field, dev_value in dev_default_secrets.items():
+                if getattr(self, field).get_secret_value() == dev_value:
+                    raise ValueError(f"{field} must be replaced in production")
         return self
 
 

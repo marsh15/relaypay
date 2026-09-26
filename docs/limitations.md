@@ -32,5 +32,10 @@
 - The live-provider comparison report requires vendor API keys, calls external services, and is
   intentionally excluded from CI; without keys the script is inert and the deterministic
   evaluation runner remains the only release quality gate.
+- The optional edge origin boundary (opt-in via `EDGE_ORIGIN_SIGNATURE_REQUIRED`) verifies the
+  HMAC, timestamp window, and nonce format of each request, but the origin does not keep a replay
+  store: a captured signed request can be replayed within the timestamp window unless the origin is
+  reachable only through the edge worker, which does track replay keys. Production deployments must
+  network-restrict the origin to the worker.
 - The versioned evaluation fixtures pin current deterministic behaviour; regenerating them is a
   deliberate, reviewed change (via the checked-in generator), not an automated step.

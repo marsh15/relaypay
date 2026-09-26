@@ -1842,17 +1842,6 @@
           },
           {
             "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
             "name": "X-CSRF-Token",
             "required": false,
             "schema": {
@@ -2517,17 +2506,6 @@
             "required": true,
             "schema": {
               "title": "Package Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
               "type": "string"
             }
           },
@@ -4542,17 +4520,6 @@
           },
           {
             "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
             "name": "X-CSRF-Token",
             "required": false,
             "schema": {
@@ -4830,17 +4797,6 @@
           },
           {
             "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
             "name": "X-CSRF-Token",
             "required": false,
             "schema": {
@@ -5027,17 +4983,6 @@
             "required": true,
             "schema": {
               "title": "Environment Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
               "type": "string"
             }
           },
@@ -5356,17 +5301,6 @@
             "required": true,
             "schema": {
               "title": "Review Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
               "type": "string"
             }
           },
@@ -6448,17 +6382,6 @@
           },
           {
             "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
             "name": "X-CSRF-Token",
             "required": false,
             "schema": {
@@ -6565,17 +6488,6 @@
             "required": true,
             "schema": {
               "title": "Subscription Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": true,
-            "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Idempotency-Key",
               "type": "string"
             }
           },

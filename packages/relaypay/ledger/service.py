@@ -9,7 +9,7 @@ from relaypay.errors import RelayPayError
 from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.ledger.models import Journal, LedgerAccount, Posting
-from relaypay.merchant_balances.models import BalanceTransaction, SettlementItem
+from relaypay.merchant_balances.models import BalanceTransaction, MerchantAccount, SettlementItem
 from relaypay.payments.models import Capture, PaymentIntent, Refund
 
 JournalType = Literal["CAPTURE", "REFUND", "SETTLEMENT", "PAYOUT"]
@@ -264,6 +264,12 @@ def post_refund_journal(
     )
     if merchant_account_id is None:
         raise RuntimeError("refund payment merchant account is missing")
+    # The payable sourcing below reads live posting sums, so this transaction
+    # must serialize against the other AVAILABLE-debiting writers
+    # (run_settlement, payouts), which all take the same row lock first.
+    session.scalar(
+        select(MerchantAccount).where(MerchantAccount.id == merchant_account_id).with_for_update()
+    )
     pending_use, available_use, receivable_use = _refund_sources(
         session, refund=refund, merchant_account_id=merchant_account_id
     )
