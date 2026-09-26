@@ -118,6 +118,8 @@ flowchart LR
     Worker --> RecoveryNetwork
     Worker --> Forecasts["Immutable pre-cutoff settlement forecasts"]
     Forecasts --> RelayDB
+    API --> MerchantSite["Synthetic merchant-site snapshots"]
+    API --> RiskDB[("Risk reviews in RelayDB")]
     Receiver --> ReceiverSchema[("Isolated receiver schema")]
 ```
 

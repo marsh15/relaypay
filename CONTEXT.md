@@ -111,6 +111,29 @@ _Avoid_: Chat, free-form query
 The typed response returned when a Settlement Question is unsupported or ambiguous.
 _Avoid_: Error, refusal
 
+## Merchant risk review
+
+**Onboarding Snapshot**:
+An immutable code-defined synthetic capture of one merchant site: HTML, catalogue, policies,
+contacts, WHOIS-like domain data, pricing, and claims.
+_Avoid_: Crawl, uploaded evidence
+
+**Risk Review**:
+One immutable evaluation of an Onboarding Snapshot under one score version.
+_Avoid_: Investigation, case
+
+**Risk Finding**:
+A deterministic check result or a model claim finding with a verbatim quote and source path.
+_Avoid_: Suspicion, annotation
+
+**Risk Escalation**:
+A hard-stop or severity-driven reviewer queue entry bound to one review version.
+_Avoid_: Alert, blocking rule
+
+**Disposition**:
+A reviewer decision on an escalation that never rewrites evidence, findings, or scores.
+_Avoid_: Override, score edit
+
 
 ## Agent operations
 

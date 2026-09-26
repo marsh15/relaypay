@@ -15,6 +15,9 @@ export function ConsoleShell({ session, children }: { session: Session; children
             <Link className="nav-link" href="/settlement">
               Settlement
             </Link>
+            <Link className="nav-link" href="/risk">
+              Risk
+            </Link>
             <Link className="nav-link" href="/recovery">
               Recovery
             </Link>

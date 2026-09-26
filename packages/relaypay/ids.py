@@ -64,6 +64,12 @@ PublicIdPrefix = Literal[
     "sfc",
     "sfi",
     "sqn",
+    "osn",
+    "rsk",
+    "rrv",
+    "rfd",
+    "res",
+    "ran",
 ]
 
 _PUBLIC_ID_SEPARATOR: Final = "_"

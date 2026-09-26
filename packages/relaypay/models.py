@@ -74,6 +74,14 @@ from relaypay.reconciliation.models import (
     StatementImport,
     StatementItem,
 )
+from relaypay.risk_review.models import (
+    OnboardingSnapshot,
+    RiskAnnotation,
+    RiskEscalation,
+    RiskFinding,
+    RiskReview,
+    RiskReviewVersion,
+)
 from relaypay.settlement_intelligence.models import (
     SettlementForecast,
     SettlementForecastItem,
@@ -125,6 +133,7 @@ __all__ = [
     "MismatchEvidenceVersion",
     "MismatchWorkflowHistory",
     "ModelInvocation",
+    "OnboardingSnapshot",
     "OperationHistory",
     "Organisation",
     "PaymentIntent",
@@ -148,6 +157,11 @@ __all__ = [
     "RecurringPaymentAttempt",
     "Refund",
     "RequestLog",
+    "RiskAnnotation",
+    "RiskEscalation",
+    "RiskFinding",
+    "RiskReview",
+    "RiskReviewVersion",
     "ScenarioRun",
     "ScheduledRecoveryAction",
     "SessionRecord",

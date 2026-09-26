@@ -125,7 +125,7 @@ def test_validation_response_never_echoes_password(client: TestClient) -> None:
 
 
 def test_login_rate_limit_has_retry_after(client: TestClient) -> None:
-    for _ in range(5):
+    for _ in range(10):
         client.post(
             "/api/session/login",
             json={"email": "nobody@example.test", "password": "Wrong-Password"},

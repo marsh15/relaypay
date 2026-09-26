@@ -105,7 +105,7 @@ def create_app(
 
     app = FastAPI(
         title="RelayPay API",
-        version="0.14.0",
+        version="0.15.0",
         description=(
             "Synthetic-data-only RelayPay merchant and operator API. "
             "Never submit real payment, bank-account, identity, or customer data."
@@ -115,7 +115,7 @@ def create_app(
     app.state.settings = resolved
     app.state.engine = engine
     app.state.session_factory = session_factory
-    app.state.login_limiter = FixedWindowRateLimiter(limit=5, window_seconds=60)
+    app.state.login_limiter = FixedWindowRateLimiter(limit=10, window_seconds=60)
     app.state.operations_metrics = operations_metrics()
     install_edge_origin_boundary(app, resolved)
     transport = provider_transport or HTTPProviderTransport(base_url=resolved.PROVIDER_BASE_URL)
