@@ -9,7 +9,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Connection, create_engine, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "migrations" / "relaypay" / "alembic.ini"
@@ -299,8 +299,8 @@ def _require_clean_starting_point(database_url: str) -> None:
     try:
         with engine.connect() as connection:
             current = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    except OperationalError:
-        return
+    except (OperationalError, ProgrammingError):
+        return  # fresh database: no alembic_version table yet
     finally:
         engine.dispose()
     if current is not None and current != "0005_scenarios":
