@@ -12,7 +12,6 @@ dependencies = [
   "cryptography>=46.0.0,<47",
   "fastapi[standard-no-fastapi-cloud-cli]==0.139.0",
   "httpx==0.28.1",
-  "httpx2==2.7.0",
   "kafka-python-ng>=2.2.3,<3",
   "opentelemetry-api==1.44.0",
   "opentelemetry-exporter-otlp-proto-http==1.44.0",

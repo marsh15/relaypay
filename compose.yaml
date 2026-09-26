@@ -12,7 +12,6 @@ x-app-environment: &app-environment
   COMMERCE_DATABASE_URL: postgresql+psycopg://commerce_app:${COMMERCE_APP_DB_PASSWORD:-commerce_app_dev}@postgres:5432/commerce
   COMMERCE_MIGRATION_DATABASE_URL: postgresql+psycopg://commerce_migrator:${COMMERCE_MIGRATOR_DB_PASSWORD:-commerce_migrator_dev}@postgres:5432/commerce
   RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}@postgres:5432/relaypay
-  REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/0
   REDPANDA_BROKERS: redpanda:9092
   SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me-32-bytes}

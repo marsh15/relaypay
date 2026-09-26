@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-import httpx2
+import httpx
 from sqlalchemy import func, select, true
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -40,7 +40,7 @@ class HTTPProviderTransport:
         self._timeout = timeout_seconds
 
     def mutate(self, request_bytes: bytes) -> ProviderObservation:
-        response = httpx2.post(
+        response = httpx.post(
             f"{self._base_url}/v1/effects",
             content=request_bytes,
             headers={"Content-Type": "application/json"},
@@ -49,7 +49,7 @@ class HTTPProviderTransport:
         return ProviderObservation(response.status_code, response.content, dict(response.headers))
 
     def lookup(self, *, account_id: str, stable_key: str) -> ProviderObservation:
-        response = httpx2.get(
+        response = httpx.get(
             f"{self._base_url}/v1/effects/{stable_key}",
             params={"account_id": account_id},
             timeout=self._timeout,

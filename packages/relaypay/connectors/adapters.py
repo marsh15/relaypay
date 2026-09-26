@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 
-import httpx2
+import httpx
 
 from relaypay.connectors.protocols import ConnectorError, ConnectorRequest
 from relaypay.provider_operations.service_types import ProviderObservation
@@ -28,7 +28,7 @@ class SignedHTTPConnectorAdapter:
         self.timeout_seconds = timeout_seconds
 
     def request(self, command: ConnectorRequest) -> ProviderObservation:
-        response = httpx2.post(
+        response = httpx.post(
             self.base_url + self.mutation_path,
             content=command.body,
             headers={"Content-Type": "application/json"},
@@ -37,14 +37,14 @@ class SignedHTTPConnectorAdapter:
         return ProviderObservation(response.status_code, response.content, dict(response.headers))
 
     def lookup(self, stable_key: str) -> ProviderObservation:
-        response = httpx2.get(
+        response = httpx.get(
             self.base_url + self.lookup_path.format(stable_key=stable_key),
             timeout=self.timeout_seconds,
         )
         return ProviderObservation(response.status_code, response.content, dict(response.headers))
 
     def health(self) -> ProviderObservation:
-        response = httpx2.get(
+        response = httpx.get(
             self.base_url + self.health_path,
             timeout=self.timeout_seconds,
         )

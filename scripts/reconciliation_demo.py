@@ -7,7 +7,7 @@ import os
 import uuid
 from datetime import UTC, datetime, timedelta
 
-import httpx2
+import httpx
 from relaypay.config import get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.reconciliation.service import run_reconciliation_batch
@@ -30,7 +30,7 @@ def main() -> None:
     period_start = now - timedelta(days=1)
     period_end = now + timedelta(minutes=1)
 
-    with httpx2.Client(base_url=api_base_url, timeout=10.0) as api:
+    with httpx.Client(base_url=api_base_url, timeout=10.0) as api:
         login = api.post("/api/session/login", json={"email": email, "password": password})
         login.raise_for_status()
         csrf_token = login.json()["csrfToken"]
@@ -38,7 +38,7 @@ def main() -> None:
         environments.raise_for_status()
         test_environment = next(item for item in environments.json() if item["type"] == "TEST")
 
-        provider_response = httpx2.post(
+        provider_response = httpx.post(
             f"{settings.PROVIDER_BASE_URL.rstrip('/')}/control/statements",
             headers={"X-Provider-Control": settings.PROVIDER_CONTROL_SECRET.get_secret_value()},
             json={

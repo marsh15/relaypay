@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-import httpx2
+import httpx
 from sqlalchemy import and_, or_, select, true
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -55,7 +55,7 @@ class HTTPWebhookTransport:
     def send(self, *, url: str, body: bytes, headers: dict[str, str]) -> DeliveryResponse:
         if url != self._allowed_url:
             raise ValueError("webhook destination is not allowlisted")
-        response = httpx2.post(
+        response = httpx.post(
             url,
             content=body,
             headers=headers,
