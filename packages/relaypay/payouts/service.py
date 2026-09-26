@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
-import httpx2
+import httpx
 from sqlalchemy import Integer, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -45,7 +45,7 @@ class HTTPBankTransport:
         self._timeout = timeout_seconds
 
     def mutate(self, request_bytes: bytes) -> ProviderObservation:
-        response = httpx2.post(
+        response = httpx.post(
             f"{self._base_url}/v1/transfers",
             content=request_bytes,
             headers={"Content-Type": "application/json"},
@@ -54,7 +54,7 @@ class HTTPBankTransport:
         return ProviderObservation(response.status_code, response.content, dict(response.headers))
 
     def lookup(self, *, account_id: str, stable_key: str) -> ProviderObservation:
-        response = httpx2.get(
+        response = httpx.get(
             f"{self._base_url}/v1/transfers/{stable_key}",
             params={"account_id": account_id},
             timeout=self._timeout,

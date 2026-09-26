@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol, cast
 
-import httpx2
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -47,7 +47,7 @@ class HTTPScenarioFaultController:
         self._timeout = timeout_seconds
 
     def lose_next_response(self, stable_key: str) -> None:
-        response = httpx2.post(
+        response = httpx.post(
             f"{self._base_url}/control/faults",
             headers={"X-Provider-Control": self._secret},
             json={
@@ -60,7 +60,7 @@ class HTTPScenarioFaultController:
         response.raise_for_status()
 
     def effect_count(self, stable_key: str) -> int:
-        response = httpx2.get(
+        response = httpx.get(
             f"{self._base_url}/control/effects/{stable_key}/proof",
             headers={"X-Provider-Control": self._secret},
             params={"account_id": self._account_id},

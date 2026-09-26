@@ -6,7 +6,6 @@ x-production-environment: &production-environment
   PROVIDER_DATABASE_URL: postgresql+psycopg://provider_app:${PROVIDER_APP_DB_PASSWORD:?set PROVIDER_APP_DB_PASSWORD}@postgres:5432/provider
   PROVIDER_MIGRATION_DATABASE_URL: postgresql+psycopg://provider_migrator:${PROVIDER_MIGRATOR_DB_PASSWORD:?set PROVIDER_MIGRATOR_DB_PASSWORD}@postgres:5432/provider
   RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:?set RECEIVER_APP_DB_PASSWORD}@postgres:5432/relaypay
-  REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/0
   SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
   CSRF_SECRET: ${CSRF_SECRET:?set CSRF_SECRET}
