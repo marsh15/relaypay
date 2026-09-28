@@ -19,6 +19,10 @@
   when present (so users behind the console proxy or Caddy do not share one budget); that header
   is only as trustworthy as the ingress that sets it, and a hostile direct-to-API client can
   spoof it to rotate keys — the sandbox assumes the API port is not directly exposed.
+- The API's `/metrics` Prometheus endpoint and the worker's metrics port are unauthenticated by
+  design (CI and the local Prometheus scrape them directly). They expose route shapes, latencies,
+  and tenant counters — no secrets or personal data — so the sandbox keeps them network-internal;
+  any real deployment must put them behind an authenticated scraper or network boundary.
 - The Compose deployment is an optional single-host Ubuntu LTS sandbox, not a PCI-DSS or
   regulated production architecture.
 - Caddy terminates HTTPS, but host firewalling, OS patching, DNS, monitoring, restore drills, and

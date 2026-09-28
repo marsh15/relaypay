@@ -1,4 +1,5 @@
 import base64
+import functools
 import hashlib
 import hmac
 import secrets
@@ -83,6 +84,13 @@ def _csrf_token(session_id: uuid.UUID, secret: str) -> str:
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
+@functools.cache
+def _dummy_password_hash() -> str:
+    # Fixed-cost argon2 target for unknown-email attempts so response timing
+    # does not reveal whether an account exists.
+    return _PASSWORD_HASHER.hash(secrets.token_urlsafe(32))
+
+
 def issue_session(
     session: Session,
     *,
@@ -97,7 +105,14 @@ def issue_session(
     users = session.scalars(
         select(User).where(User.email_normalized == normalized, User.status == "ACTIVE")
     ).all()
-    if len(users) != 1 or not verify_password(users[0].password_hash, password):
+    if len(users) != 1:
+        verify_password(_dummy_password_hash(), password)
+        raise RelayPayError(
+            code="INVALID_CREDENTIALS",
+            message="Email or password is incorrect",
+            http_status=401,
+        )
+    if not verify_password(users[0].password_hash, password):
         raise RelayPayError(
             code="INVALID_CREDENTIALS",
             message="Email or password is incorrect",
@@ -210,20 +225,19 @@ def authenticate_session(
     )
 
 
-def rotate_csrf(session: Session, principal: Principal, csrf_secret: str) -> str:
+def current_csrf_token(principal: Principal, csrf_secret: str) -> str:
+    """Derive the session's deterministic CSRF token without writing.
+
+    The token is an HMAC of the session id, so it equals what was stored at
+    issue time; recomputing it lets read paths return the token without a
+    database write per render.
+    """
+
     if principal.kind != "SESSION" or principal.session_id is None:
         raise RelayPayError(
             code="FORBIDDEN", message="Administrator session required", http_status=403
         )
-    record = session.get(SessionRecord, principal.session_id)
-    if record is None or record.revoked_at is not None:
-        raise RelayPayError(
-            code="UNAUTHENTICATED", message="Authentication required", http_status=401
-        )
-    csrf_token = _csrf_token(record.id, csrf_secret)
-    record.csrf_digest = _csrf_digest(record.id, csrf_token, csrf_secret)
-    record.last_seen_at = datetime.now(UTC)
-    return csrf_token
+    return _csrf_token(principal.session_id, csrf_secret)
 
 
 def verify_csrf(

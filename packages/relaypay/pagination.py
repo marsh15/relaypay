@@ -16,6 +16,19 @@ class CursorPosition:
     identifier: str
 
 
+def derive_cursor_secret(pepper: str) -> str:
+    """Domain-separate cursor MAC keys from the API-key pepper.
+
+    Cursor signatures and API-key digests then never share an HMAC key, so a
+    leaked cursor signature reveals nothing about (and cannot be replayed as)
+    any other pepper-derived secret.
+    """
+
+    return hmac.new(
+        pepper.encode("utf-8"), b"relaypay:pagination-cursor:v1", hashlib.sha256
+    ).hexdigest()
+
+
 def filter_fingerprint(filters: dict[str, object]) -> str:
     return hashlib.sha256(canonical_json_bytes(filters)).hexdigest()
 

@@ -14,6 +14,7 @@ from relaypay.contracts import (
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import build_fingerprint, canonical_json_bytes
 from relaypay.identity.security import Principal, authenticate_api_key, require_scopes
+from relaypay.pagination import derive_cursor_secret
 from relaypay.payments.service import (
     HTTPResult,
     create_customer,
@@ -164,7 +165,7 @@ def build_payments_router(
             limit=limit,
             after=after,
             merchant_reference=merchant_reference,
-            cursor_secret=settings.API_KEY_PEPPER.get_secret_value(),
+            cursor_secret=derive_cursor_secret(settings.API_KEY_PEPPER.get_secret_value()),
         )
         return PaymentIntentPage(data=page.data, nextCursor=page.next_cursor)
 

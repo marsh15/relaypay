@@ -22,9 +22,9 @@ from relaypay.identity.rate_limit import FixedWindowRateLimiter
 from relaypay.identity.security import (
     Principal,
     authenticate_session,
+    current_csrf_token,
     issue_session,
     revoke_session,
-    rotate_csrf,
     verify_csrf,
 )
 from relaypay.identity.service import append_audit, require_organisation_admin
@@ -360,15 +360,13 @@ def create_app(
 
     @app.get("/api/session/me", response_model=SessionResponse)
     def me(principal: Annotated[Principal, Depends(get_principal)]) -> SessionResponse:
-        with session_factory() as session, session.begin():
-            csrf_token = rotate_csrf(session, principal, resolved.CSRF_SECRET.get_secret_value())
         return SessionResponse(
             userId=str(principal.user_id),
             displayName=principal.display_name,
             organisationId=principal.organisation_public_id,
             organisationRole=principal.membership_role,
             platformRole=principal.platform_role,
-            csrfToken=csrf_token,
+            csrfToken=current_csrf_token(principal, resolved.CSRF_SECRET.get_secret_value()),
         )
 
     @app.post("/api/session/logout")
