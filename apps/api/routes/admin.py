@@ -75,6 +75,7 @@ from relaypay.merchant_balances.service import (
 )
 from relaypay.observability.metrics import operations_metrics
 from relaypay.operations.service import list_operations_resource
+from relaypay.pagination import derive_cursor_secret
 from relaypay.payouts.service import (
     create_beneficiary,
     create_payout,
@@ -432,7 +433,7 @@ def build_admin_router(
                 resource=resource,
                 limit=limit,
                 after=after,
-                cursor_secret=settings.API_KEY_PEPPER.get_secret_value(),
+                cursor_secret=derive_cursor_secret(settings.API_KEY_PEPPER.get_secret_value()),
             )
         return JSONResponse(content={"data": page.data, "nextCursor": page.next_cursor})
 
