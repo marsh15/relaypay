@@ -901,6 +901,7 @@ def list_mismatches(
     principal: Principal,
     environment_public_id: str,
     workflow_status: str | None = None,
+    limit: int = 500,
 ) -> list[ReconciliationMismatch]:
     query = (
         select(ReconciliationMismatch)
@@ -910,6 +911,7 @@ def list_mismatches(
             Environment.public_id == environment_public_id,
         )
         .order_by(ReconciliationMismatch.created_at, ReconciliationMismatch.id)
+        .limit(limit)
     )
     if workflow_status is not None:
         if workflow_status not in {"OPEN", "ACKNOWLEDGED", "RESOLVED"}:

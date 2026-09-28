@@ -266,7 +266,11 @@ def derive_balances(session: Session, merchant: MerchantAccount) -> MerchantBala
 
 
 def list_admin_merchant_accounts(
-    session: Session, *, principal: Principal, environment_public_id: str
+    session: Session,
+    *,
+    principal: Principal,
+    environment_public_id: str,
+    limit: int = 500,
 ) -> list[MerchantAccount]:
     environment = _environment(session, principal, environment_public_id)
     ensure_default_merchant_account(
@@ -280,6 +284,7 @@ def list_admin_merchant_accounts(
                 MerchantAccount.environment_id == environment.id,
             )
             .order_by(MerchantAccount.is_default.desc(), MerchantAccount.created_at)
+            .limit(limit)
         )
     )
 
@@ -307,6 +312,7 @@ def list_balance_transactions(
     principal: Principal,
     environment_public_id: str,
     merchant_public_id: str,
+    limit: int = 500,
 ) -> list[BalanceTransaction]:
     environment = _environment(session, principal, environment_public_id)
     merchant = _scoped_merchant(
@@ -320,21 +326,9 @@ def list_balance_transactions(
             select(BalanceTransaction)
             .where(BalanceTransaction.merchant_account_id == merchant.id)
             .order_by(BalanceTransaction.created_at, BalanceTransaction.id)
+            .limit(limit)
         )
     )
-
-
-def _pending_refunded_for_capture(session: Session, capture: Capture) -> int:
-    value = session.scalar(
-        select(func.coalesce(func.sum(-BalanceTransaction.pending_delta), 0))
-        .join(Journal, Journal.id == BalanceTransaction.journal_id)
-        .join(Refund, Refund.id == Journal.reference_id)
-        .where(
-            BalanceTransaction.transaction_type == "REFUND",
-            Refund.capture_id == capture.id,
-        )
-    )
-    return int(value or 0)
 
 
 def _run_settlement_transaction(
@@ -406,55 +400,58 @@ def _run_settlement_transaction(
             .with_for_update(skip_locked=True, of=Capture)
         )
     )
+    refunded_by_capture = {
+        capture_id: int(value or 0)
+        for capture_id, value in session.execute(
+            select(Refund.capture_id, func.coalesce(func.sum(-BalanceTransaction.pending_delta), 0))
+            .join(Journal, Journal.id == BalanceTransaction.journal_id)
+            .join(Refund, Refund.id == Journal.reference_id)
+            .where(
+                BalanceTransaction.transaction_type == "REFUND",
+                Refund.capture_id.in_([capture.id for capture in captures]),
+            )
+            .group_by(Refund.capture_id)
+        ).all()
+    }
+    pending_account = account(
+        session,
+        principal.organisation_id,
+        environment.id,
+        "PENDING_PAYABLE_LIABILITY",
+        merchant_account_id=merchant.id,
+    )
+    receivable_account = account(
+        session,
+        principal.organisation_id,
+        environment.id,
+        "MERCHANT_RECEIVABLE_ASSET",
+        merchant_account_id=merchant.id,
+    )
+    available_account = account(
+        session,
+        principal.organisation_id,
+        environment.id,
+        "AVAILABLE_PAYABLE_LIABILITY",
+        merchant_account_id=merchant.id,
+    )
+    # Settlement credits only touch this merchant's receivable account, so the
+    # per-item recompute derive_balances() would perform collapses to a running
+    # subtraction of each item's receivable_offset (clamped at zero).
+    receivable_balance = max(derive_balances(session, merchant).receivable, 0)
     item_bodies: list[dict[str, object]] = []
     for capture in captures:
-        amount = capture.amount - _pending_refunded_for_capture(session, capture)
+        amount = capture.amount - refunded_by_capture.get(capture.id, 0)
         if amount <= 0:
             continue
-        receivable = max(derive_balances(session, merchant).receivable, 0)
-        receivable_offset = min(receivable, amount)
+        receivable_offset = min(receivable_balance, amount)
         available_credit = amount - receivable_offset
         entries: list[tuple[LedgerAccount, Literal["DEBIT", "CREDIT"], int]] = [
-            (
-                account(
-                    session,
-                    principal.organisation_id,
-                    environment.id,
-                    "PENDING_PAYABLE_LIABILITY",
-                    merchant_account_id=merchant.id,
-                ),
-                "DEBIT",
-                amount,
-            )
+            (pending_account, "DEBIT", amount)
         ]
         if receivable_offset:
-            entries.append(
-                (
-                    account(
-                        session,
-                        principal.organisation_id,
-                        environment.id,
-                        "MERCHANT_RECEIVABLE_ASSET",
-                        merchant_account_id=merchant.id,
-                    ),
-                    "CREDIT",
-                    receivable_offset,
-                )
-            )
+            entries.append((receivable_account, "CREDIT", receivable_offset))
         if available_credit:
-            entries.append(
-                (
-                    account(
-                        session,
-                        principal.organisation_id,
-                        environment.id,
-                        "AVAILABLE_PAYABLE_LIABILITY",
-                        merchant_account_id=merchant.id,
-                    ),
-                    "CREDIT",
-                    available_credit,
-                )
-            )
+            entries.append((available_account, "CREDIT", available_credit))
         journal = post_journal(
             session,
             organisation_id=principal.organisation_id,
@@ -488,6 +485,7 @@ def _run_settlement_transaction(
             receivable_delta=-receivable_offset,
         )
         run.settled_amount += amount
+        receivable_balance -= receivable_offset
         item_bodies.append({"captureId": capture.public_id, "amount": amount})
 
     body = canonical_json_bytes(

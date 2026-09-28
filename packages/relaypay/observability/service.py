@@ -1,4 +1,5 @@
 import logging
+import random
 import uuid
 from datetime import UTC, datetime
 
@@ -10,6 +11,11 @@ from relaypay.observability.metrics import OperationsMetrics
 from relaypay.observability.models import RequestLog, UsageRollup
 
 logger = logging.getLogger("relaypay.operations")
+
+# Pruning sorts the whole request log to find the retention tail, so it runs
+# probabilistically instead of on every write; the retention bound stays soft
+# by at most the rows accrued between prunes.
+_PRUNE_PROBABILITY = 0.01
 
 
 def _hour_bucket(now: datetime) -> datetime:
@@ -77,12 +83,13 @@ def record_request(
                 },
             )
         )
-        oldest_to_keep = (
-            select(RequestLog.id)
-            .order_by(RequestLog.created_at.desc(), RequestLog.id.desc())
-            .offset(retention)
-        )
-        session.execute(delete(RequestLog).where(RequestLog.id.in_(oldest_to_keep)))
+        if random.random() < _PRUNE_PROBABILITY:  # noqa: S311 -- retention coin flip, not crypto
+            oldest_to_keep = (
+                select(RequestLog.id)
+                .order_by(RequestLog.created_at.desc(), RequestLog.id.desc())
+                .offset(retention)
+            )
+            session.execute(delete(RequestLog).where(RequestLog.id.in_(oldest_to_keep)))
 
 
 def emit_structured_audit(

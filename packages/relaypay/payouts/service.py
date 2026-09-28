@@ -876,6 +876,7 @@ def list_payouts(
     *,
     principal: Principal,
     environment_public_id: str,
+    limit: int = 500,
 ) -> list[Payout]:
     environment = _environment(session, principal, environment_public_id)
     return list(
@@ -886,6 +887,7 @@ def list_payouts(
                 Payout.environment_id == environment.id,
             )
             .order_by(Payout.created_at, Payout.id)
+            .limit(limit)
         )
     )
 
@@ -895,6 +897,7 @@ def list_beneficiaries(
     *,
     principal: Principal,
     environment_public_id: str,
+    limit: int = 500,
 ) -> list[Beneficiary]:
     environment = _environment(session, principal, environment_public_id)
     return list(
@@ -905,6 +908,7 @@ def list_beneficiaries(
                 Beneficiary.environment_id == environment.id,
             )
             .order_by(Beneficiary.created_at, Beneficiary.id)
+            .limit(limit)
         )
     )
 

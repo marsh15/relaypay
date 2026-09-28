@@ -3,6 +3,7 @@ import uuid
 import pytest
 from relaypay.config import get_settings
 from relaypay.database import build_engine, build_session_factory
+from relaypay.observability import service as observability_service
 from relaypay.observability.models import RequestLog, UsageRollup
 from relaypay.observability.service import record_request
 from sqlalchemy import delete, func, select
@@ -10,7 +11,10 @@ from sqlalchemy import delete, func, select
 pytestmark = pytest.mark.integration
 
 
-def test_request_metadata_is_bounded_and_rolls_up_without_sensitive_material() -> None:
+def test_request_metadata_is_bounded_and_rolls_up_without_sensitive_material(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(observability_service, "_PRUNE_PROBABILITY", 1.0)
     settings = get_settings()
     engine = build_engine(
         settings.RELAYPAY_DATABASE_URL.get_secret_value(),
@@ -46,5 +50,38 @@ def test_request_metadata_is_bounded_and_rolls_up_without_sensitive_material() -
             session.execute(delete(RequestLog).where(RequestLog.route == route))
             session.execute(delete(UsageRollup).where(UsageRollup.route == route))
             assert session.scalar(select(func.count()).select_from(RequestLog)) is not None
+    finally:
+        engine.dispose()
+
+
+def test_retention_prune_runs_probabilistically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(observability_service, "_PRUNE_PROBABILITY", 0.0)
+    settings = get_settings()
+    engine = build_engine(
+        settings.RELAYPAY_DATABASE_URL.get_secret_value(),
+        application_name="relaypay-m7-observability-test",
+    )
+    factory = build_session_factory(engine)
+    route = f"/m7-prune-proof/{uuid.uuid4().hex}"
+    try:
+        for index in range(4):
+            record_request(
+                factory,
+                request_id=f"req_m7_{uuid.uuid4().hex}",
+                organisation_id=None,
+                environment_id=None,
+                method="POST",
+                route=route,
+                status_code=200,
+                duration_ms=index + 1,
+                retention=2,
+            )
+        with factory() as session, session.begin():
+            logs = list(session.scalars(select(RequestLog).where(RequestLog.route == route)))
+            assert len(logs) == 4
+            session.execute(delete(RequestLog).where(RequestLog.route == route))
+            session.execute(delete(UsageRollup).where(UsageRollup.route == route))
     finally:
         engine.dispose()
