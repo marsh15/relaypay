@@ -12,7 +12,6 @@ x-app-environment: &app-environment
   COMMERCE_DATABASE_URL: postgresql+psycopg://commerce_app:${COMMERCE_APP_DB_PASSWORD:-commerce_app_dev}@postgres:5432/commerce
   COMMERCE_MIGRATION_DATABASE_URL: postgresql+psycopg://commerce_migrator:${COMMERCE_MIGRATOR_DB_PASSWORD:-commerce_migrator_dev}@postgres:5432/commerce
   RECEIVER_DATABASE_URL: postgresql+psycopg://receiver_app:${RECEIVER_APP_DB_PASSWORD:-receiver_app_dev}@postgres:5432/relaypay
-  CELERY_BROKER_URL: redis://redis:6379/0
   REDPANDA_BROKERS: redpanda:9092
   SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me-32-bytes}
   CSRF_SECRET: ${CSRF_SECRET:-dev-csrf-secret-change-me-32-bytes}
@@ -79,22 +78,6 @@ services:
       timeout: 3s
       retries: 20
 
-  redis:
-    <<: *service-defaults
-    image: redis:8.2.0-bookworm
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 2s
-      timeout: 3s
-      retries: 20
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 128M
 
   redpanda:
     <<: *service-defaults
@@ -151,8 +134,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      redis:
-        condition: service_healthy
       provider:
         condition: service_healthy
       bank:
@@ -317,28 +298,6 @@ services:
       receiver:
         condition: service_healthy
       redpanda:
-        condition: service_healthy
-
-  worker:
-    <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile.python
-    command:
-      ["celery", "-A", "apps.worker.celery_app:app", "worker", "--beat", "--pool=solo", "--loglevel=INFO"]
-    environment: *app-environment
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      provider:
-        condition: service_healthy
-      bank:
-        condition: service_healthy
-      receiver:
-        condition: service_healthy
-      recovery-network:
         condition: service_healthy
 
   console:

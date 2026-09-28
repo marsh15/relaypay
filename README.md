@@ -60,7 +60,7 @@ make console-check
 make console-e2e
 ```
 
-Integration tests use PostgreSQL and Redis at the development ports from `.env.example`. Start
+Integration tests use PostgreSQL at the development port from `.env.example`. Start
 them with `make infra-up`, then run `make migrate` and `make seed` when not using the complete
 Compose stack.
 
@@ -119,9 +119,9 @@ flowchart LR
     API --> RelayDB[("RelayPay PostgreSQL")]
     API --> Provider["Deterministic provider"]
     API --> RecoveryNetwork["Synthetic recovery network"]
-    Worker --> Bank["Deterministic synthetic bank"]
+    Poller --> Bank["Deterministic synthetic bank"]
     Bank --> BankDB[("Bank PostgreSQL")]
-    Worker --> Commerce["Synthetic commerce"]
+    Poller --> Commerce["Synthetic commerce"]
     Commerce --> CommerceDB[("Commerce PostgreSQL")]
     Provider --> ProviderDB[("Provider PostgreSQL")]
     Poller["Recovery / delivery poller"] --> RelayDB
@@ -129,18 +129,18 @@ flowchart LR
     Reconcile --> RelayDB
     Poller --> Provider
     Poller --> Receiver["Bundled allowlisted receiver"]
-    Worker["Celery worker + beat"] --> Redis[("Redis acceleration")]
     Worker --> RelayDB
     Worker --> RecoveryNetwork
-    Worker --> Forecasts["Immutable pre-cutoff settlement forecasts"]
+    Poller --> Forecasts["Immutable pre-cutoff settlement forecasts"]
     Forecasts --> RelayDB
     API --> MerchantSite["Synthetic merchant-site snapshots"]
     API --> RiskDB[("Risk reviews in RelayDB")]
     Receiver --> ReceiverSchema[("Isolated receiver schema")]
 ```
 
-Correctness does not depend on Redis: PostgreSQL is the authority for operation state, leases,
-ledger history, immutable event bytes, and delivery progress.
+There is no broker and no Redis: one broker-less poller owns every background batch, and
+PostgreSQL is the authority for operation state, leases, ledger history, immutable event bytes,
+and delivery progress.
 
 ## Documentation
 
@@ -164,7 +164,7 @@ ledger history, immutable event bytes, and delivery progress.
 ## Technology
 
 Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Psycopg 3, Alembic, PostgreSQL 17,
-Redis/Celery, Next.js 16 App Router, React 19, TypeScript, Playwright, Caddy, and Docker Compose.
+Next.js 16 App Router, React 19, TypeScript, Playwright, Caddy, and Docker Compose.
 
 RelayPay is available under the [MIT License](LICENSE). Release publication does not deploy or
 host the sandbox.

@@ -27,7 +27,6 @@ class Settings(BaseSettings):
     )
     BANK_MIGRATION_DATABASE_URL: SecretStr | None = None
     RECEIVER_DATABASE_URL: SecretStr
-    CELERY_BROKER_URL: SecretStr = SecretStr("redis://localhost:6379/0")
     REDPANDA_BROKERS: str = "localhost:19092"
     SESSION_COOKIE_NAME: str = "relaypay_session"
     SESSION_SECRET: SecretStr = Field(min_length=32)

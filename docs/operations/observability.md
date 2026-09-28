@@ -11,7 +11,7 @@ cookies, arbitrary headers, and bodies are never persisted. `REQUEST_LOG_RETENTI
 metadata rows; hourly rollups remain durable.
 
 OpenTelemetry uses OTLP/HTTP and batched span export. API, mock, receiver, poller, and worker
-processes each publish an explicit service name. Celery instrumentation initializes from
+processes each publish an explicit service name. The poller initializes from
 `worker_process_init` and flushes on worker-process shutdown.
 
 The canonical gate produces:

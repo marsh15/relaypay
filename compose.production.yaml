@@ -10,7 +10,6 @@ x-production-environment: &production-environment
   BANK_MIGRATION_DATABASE_URL: postgresql+psycopg://bank_migrator:${BANK_MIGRATOR_DB_PASSWORD:?set BANK_MIGRATOR_DB_PASSWORD}@postgres:5432/bank
   COMMERCE_DATABASE_URL: postgresql+psycopg://commerce_app:${COMMERCE_APP_DB_PASSWORD:?set COMMERCE_APP_DB_PASSWORD}@postgres:5432/commerce
   COMMERCE_MIGRATION_DATABASE_URL: postgresql+psycopg://commerce_migrator:${COMMERCE_MIGRATOR_DB_PASSWORD:?set COMMERCE_MIGRATOR_DB_PASSWORD}@postgres:5432/commerce
-  CELERY_BROKER_URL: redis://redis:6379/0
   SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
   CSRF_SECRET: ${CSRF_SECRET:?set CSRF_SECRET}
   API_KEY_PEPPER: ${API_KEY_PEPPER:?set API_KEY_PEPPER}
@@ -48,8 +47,6 @@ services:
       BANK_APP_DB_PASSWORD: ${BANK_APP_DB_PASSWORD:?set BANK_APP_DB_PASSWORD}
       COMMERCE_MIGRATOR_DB_PASSWORD: ${COMMERCE_MIGRATOR_DB_PASSWORD:?set COMMERCE_MIGRATOR_DB_PASSWORD}
       COMMERCE_APP_DB_PASSWORD: ${COMMERCE_APP_DB_PASSWORD:?set COMMERCE_APP_DB_PASSWORD}
-  redis:
-    ports: !reset []
   redpanda:
     ports: !reset []
   migrate:
@@ -79,8 +76,6 @@ services:
     ports: !reset []
     environment: *production-environment
   poller:
-    environment: *production-environment
-  worker:
     environment: *production-environment
   console:
     ports: !reset []

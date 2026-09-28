@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 SCENARIOS = {
-    "workerShutdown": "test_recovery_worker_uses_redis_as_broker_only_and_late_acknowledgement",
+    "workerShutdown": "test_single_broker_less_scheduler_owns_every_background_batch",
     "commitThenCrash": (
         "test_crash_after_lookup_response_persistence_recovers_without_mutation_retry"
     ),

@@ -20,10 +20,13 @@ class EventPublisher(Protocol):
 
 class RedpandaPublisher:
     def __init__(self, brokers: str) -> None:
+        # kafka-python-ng 2.2.3 has no enable_idempotence producer config;
+        # acks="all" plus the PostgreSQL outbox (publish_one marks rows
+        # published only after an acknowledged send, and consumers dedupe on
+        # event id) carries the correctness guarantees.
         self._producer = KafkaProducer(
             bootstrap_servers=[item.strip() for item in brokers.split(",")],
             acks="all",
-            enable_idempotence=True,
             retries=5,
         )
 

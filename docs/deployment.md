@@ -28,7 +28,7 @@ docker compose \
 
 Verify `https://$CADDY_DOMAIN/health/live`, `/health/ready`, login, CSRF-protected scenario run,
 and the lost-response proof. Caddy obtains and renews the public certificate. Provider control,
-PostgreSQL, Redis, and worker endpoints have no host bindings.
+PostgreSQL and internal service endpoints have no host bindings.
 
 ## Backup and restore posture
 
