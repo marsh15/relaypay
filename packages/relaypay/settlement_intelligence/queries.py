@@ -460,21 +460,23 @@ def refund_cash_impact(
     creates_receivable = 0
     citations: list[Citation] = [_policy_citation(policy, window)]
     required = [policy.public_id]
-    for refund in refunds[:MAX_CITED_RECORDS]:
+    cited_refunds = refunds[:MAX_CITED_RECORDS]
+    deltas_by_journal: dict[uuid.UUID | None, list[BalanceTransaction]] = {}
+    if cited_refunds:
+        for delta in session.scalars(
+            select(BalanceTransaction).where(
+                BalanceTransaction.organisation_id == scope.organisation_id,
+                BalanceTransaction.environment_id == scope.environment_id,
+                BalanceTransaction.merchant_account_id == scope.merchant_account_id,
+                BalanceTransaction.journal_id.in_([refund.journal_id for refund in cited_refunds]),
+                BalanceTransaction.transaction_type == "REFUND",
+            )
+        ).all():
+            deltas_by_journal.setdefault(delta.journal_id, []).append(delta)
+    for refund in cited_refunds:
         citations.append(_refund_citation(refund))
         required.append(refund.public_id)
-        deltas = list(
-            session.scalars(
-                select(BalanceTransaction).where(
-                    BalanceTransaction.organisation_id == scope.organisation_id,
-                    BalanceTransaction.environment_id == scope.environment_id,
-                    BalanceTransaction.merchant_account_id == scope.merchant_account_id,
-                    BalanceTransaction.journal_id == refund.journal_id,
-                    BalanceTransaction.transaction_type == "REFUND",
-                )
-            ).all()
-        )
-        for delta in deltas:
+        for delta in deltas_by_journal.get(refund.journal_id, []):
             reduces_pending += abs(delta.pending_delta)
             draws_available += abs(delta.available_delta)
             creates_receivable += delta.receivable_delta

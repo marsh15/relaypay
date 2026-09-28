@@ -839,22 +839,34 @@ def list_payments(
             )
         )
         page_items = payments[:limit]
+        authorizations_by_intent: dict[uuid.UUID, Authorization] = {}
+        captures_by_intent: dict[uuid.UUID, Capture] = {}
+        if page_items:
+            intent_ids = [payment.id for payment in page_items]
+            authorizations_by_intent = {
+                authorization.payment_intent_id: authorization
+                for authorization in session.scalars(
+                    select(Authorization).where(
+                        Authorization.organisation_id == organisation_id,
+                        Authorization.environment_id == resolved_environment_id,
+                        Authorization.payment_intent_id.in_(intent_ids),
+                    )
+                )
+            }
+            captures_by_intent = {
+                capture.payment_intent_id: capture
+                for capture in session.scalars(
+                    select(Capture).where(
+                        Capture.organisation_id == organisation_id,
+                        Capture.environment_id == resolved_environment_id,
+                        Capture.payment_intent_id.in_(intent_ids),
+                    )
+                )
+            }
         data: list[dict[str, object]] = []
         for payment in page_items:
-            authorization = session.scalar(
-                select(Authorization).where(
-                    Authorization.organisation_id == organisation_id,
-                    Authorization.environment_id == resolved_environment_id,
-                    Authorization.payment_intent_id == payment.id,
-                )
-            )
-            capture = session.scalar(
-                select(Capture).where(
-                    Capture.organisation_id == organisation_id,
-                    Capture.environment_id == resolved_environment_id,
-                    Capture.payment_intent_id == payment.id,
-                )
-            )
+            authorization = authorizations_by_intent.get(payment.id)
+            capture = captures_by_intent.get(payment.id)
             data.append(
                 {
                     "id": payment.public_id,

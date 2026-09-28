@@ -1846,6 +1846,22 @@ def build_admin_router(
         )
         return value
 
+    def _account_public_ids(
+        session: Session, account_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, str | None]:
+        unique_ids = list(dict.fromkeys(account_ids))
+        if not unique_ids:
+            return {}
+        found = {
+            row_id: public_id
+            for row_id, public_id in session.execute(
+                select(MerchantAccount.id, MerchantAccount.public_id).where(
+                    MerchantAccount.id.in_(unique_ids)
+                )
+            ).all()
+        }
+        return {row_id: found.get(row_id) for row_id in unique_ids}
+
     def _capture_public_id(session: Session, capture_id: uuid.UUID | None) -> str | None:
         if capture_id is None:
             return None
@@ -1909,10 +1925,11 @@ def build_admin_router(
                 .order_by(SettlementPolicy.created_at.desc(), SettlementPolicy.id.desc())
                 .limit(limit)
             ).all()
+            account_ids = _account_public_ids(session, [item.merchant_account_id for item in items])
             return [
                 {
                     "id": item.public_id,
-                    "merchantAccountId": _account_public_id(session, item.merchant_account_id),
+                    "merchantAccountId": account_ids.get(item.merchant_account_id),
                     "version": item.version,
                     "timezone": item.timezone_name,
                     "cutoff": f"{item.cutoff_hour:02d}:{item.cutoff_minute:02d}",
@@ -2041,10 +2058,11 @@ def build_admin_router(
                 .order_by(SettlementForecast.created_at.desc(), SettlementForecast.id.desc())
                 .limit(limit)
             ).all()
+            account_ids = _account_public_ids(session, [item.merchant_account_id for item in items])
             return [
                 {
                     "id": item.public_id,
-                    "merchantAccountId": _account_public_id(session, item.merchant_account_id),
+                    "merchantAccountId": account_ids.get(item.merchant_account_id),
                     "businessDate": item.business_date.isoformat(),
                     "sequence": item.sequence,
                     "expectedSettlementAmount": item.expected_settlement_amount,
