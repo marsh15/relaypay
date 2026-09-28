@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from relaypay.agent_runtime.models import WorkflowRun
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
 from relaypay.identity.models import Environment, Organisation
@@ -818,5 +819,44 @@ def test_forecast_worker_batch_is_idempotent_per_business_date() -> None:
             )
             assert len(second) == 1
             assert second[0].snapshot_sha256 == digest
+    finally:
+        engine.dispose()
+
+
+def test_provider_failure_fails_the_question_instead_of_stuck_processing() -> None:
+    engine = build_engine(DATABASE_URL, application_name="m13-provider-failure-proof")
+    factory = build_session_factory(engine)
+    try:
+        organisation, environment, account = _organisation(factory, "M13 provider failure")
+        from relaypay.agent_runtime.contracts import TerminalModelError
+
+        class ExplodingProvider(SettlementFakeProvider):
+            def generate_structured(self, request: object) -> object:
+                raise TerminalModelError("synthetic provider outage")
+
+        with pytest.raises(TerminalModelError):
+            answer_question(
+                factory,
+                organisation_id=organisation.id,
+                environment_id=environment.id,
+                merchant_account_id=account.id,
+                organisation_public_id=organisation.public_id,
+                environment_public_id=environment.public_id,
+                question_text=QUESTION_LOWER,
+                idempotency_key_digest=hashlib.sha256(b"provider-failure").digest(),
+                provider=ExplodingProvider(),
+                now=datetime.now(UTC),
+            )
+        with factory() as session, session.begin():
+            question = session.scalar(
+                select(SettlementQuestion).where(
+                    SettlementQuestion.organisation_id == organisation.id
+                )
+            )
+            assert question is not None
+            assert question.status == "FAILED"
+            assert question.answer == {"failureCode": "SETTLEMENT_PROVIDER_FAILED"}
+            run = session.get(WorkflowRun, question.workflow_run_id)
+            assert run is not None and run.status == "FAILED"
     finally:
         engine.dispose()

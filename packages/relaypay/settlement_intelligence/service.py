@@ -13,9 +13,16 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from relaypay.agent_runtime.contracts import ModelRequest, ModelResult, StructuredModelProvider
+from relaypay.agent_runtime.contracts import (
+    ModelRequest,
+    ModelResult,
+    RetryableProviderError,
+    StructuredModelProvider,
+    TerminalModelError,
+)
 from relaypay.agent_runtime.events import append_business_event
 from relaypay.agent_runtime.models import (
     ModelInvocation,
@@ -514,108 +521,115 @@ def prepare_question(
             http_status=422,
         )
     digest = _question_digest(organisation_id, environment_id, merchant_account_id, question_text)
-    with session_factory() as session, session.begin():
-        existing = session.scalar(
-            select(SettlementQuestion).where(
-                SettlementQuestion.organisation_id == organisation_id,
-                SettlementQuestion.environment_id == environment_id,
-                SettlementQuestion.question_digest == digest,
-            )
-        )
-        if existing is None:
+    try:
+        with session_factory() as session, session.begin():
             existing = session.scalar(
                 select(SettlementQuestion).where(
                     SettlementQuestion.organisation_id == organisation_id,
                     SettlementQuestion.environment_id == environment_id,
-                    SettlementQuestion.idempotency_key_digest == idempotency_key_digest,
+                    SettlementQuestion.question_digest == digest,
                 )
             )
-            if existing is not None:
-                raise RelayPayError(
-                    code="SETTLEMENT_QUESTION_KEY_REUSED",
-                    message="Idempotency key was reused with a different question",
-                    http_status=409,
+            if existing is None:
+                existing = session.scalar(
+                    select(SettlementQuestion).where(
+                        SettlementQuestion.organisation_id == organisation_id,
+                        SettlementQuestion.environment_id == environment_id,
+                        SettlementQuestion.idempotency_key_digest == idempotency_key_digest,
+                    )
                 )
-        if existing is not None:
+                if existing is not None:
+                    raise RelayPayError(
+                        code="SETTLEMENT_QUESTION_KEY_REUSED",
+                        message="Idempotency key was reused with a different question",
+                        http_status=409,
+                    )
+            if existing is not None:
+                return PreparedQuestion(
+                    question_id=existing.id,
+                    question_public_id=existing.public_id,
+                    run_public_id=_run_public_id(session, existing.workflow_run_id),
+                    merchant_account_id=existing.merchant_account_id,
+                    organisation_public_id=organisation_public_id,
+                    environment_public_id=environment_public_id,
+                    replayed=True,
+                )
+            policy = ensure_default_policy(
+                session,
+                organisation_id=organisation_id,
+                environment_id=environment_id,
+                merchant_account_id=merchant_account_id,
+            )
+            definition = _ensure_question_definition(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
+            run = WorkflowRun(
+                id=new_uuid(),
+                public_id=new_public_id("wfr"),
+                organisation_id=organisation_id,
+                environment_id=environment_id,
+                workflow_definition_id=definition.id,
+                route="QUESTION:settlement.v1",
+                idempotency_digest=digest,
+                status="RUNNING",
+                token_budget=QUESTION_TOKEN_BUDGET,
+                cost_budget_usd_micros=QUESTION_COST_BUDGET_USD_MICROS,
+                tokens_used=0,
+                cost_used_usd_micros=0,
+            )
+            session.add(run)
+            session.flush([run])
+            for step in QUESTION_DEFINITION_STEPS:
+                session.add(
+                    WorkflowStep(
+                        id=new_uuid(),
+                        public_id=new_public_id("wfs"),
+                        organisation_id=organisation_id,
+                        environment_id=environment_id,
+                        workflow_run_id=run.id,
+                        step_key=str(step["key"]),
+                        step_kind=str(step["kind"]),
+                        definition=step,
+                        status="QUEUED",
+                        attempt_count=0,
+                        max_attempts=3,
+                        next_attempt_at=now,
+                    )
+                )
+            question = SettlementQuestion(
+                id=new_uuid(),
+                public_id=new_public_id("sqn"),
+                organisation_id=organisation_id,
+                environment_id=environment_id,
+                merchant_account_id=merchant_account_id,
+                policy_id=policy.id,
+                workflow_run_id=run.id,
+                question_digest=digest,
+                idempotency_key_digest=idempotency_key_digest,
+                question_text=question_text,
+                intent="CLARIFICATION",
+                status="PROCESSING",
+                classification={},
+                classification_sha256=hashlib.sha256(b"{}").digest(),
+                asked_at=now,
+            )
+            session.add(question)
+            session.flush([question])
             return PreparedQuestion(
-                question_id=existing.id,
-                question_public_id=existing.public_id,
-                run_public_id=_run_public_id(session, existing.workflow_run_id),
-                merchant_account_id=existing.merchant_account_id,
+                question_id=question.id,
+                question_public_id=question.public_id,
+                run_public_id=run.public_id,
+                merchant_account_id=merchant_account_id,
                 organisation_public_id=organisation_public_id,
                 environment_public_id=environment_public_id,
-                replayed=True,
+                replayed=False,
             )
-        policy = ensure_default_policy(
-            session,
-            organisation_id=organisation_id,
-            environment_id=environment_id,
-            merchant_account_id=merchant_account_id,
-        )
-        definition = _ensure_question_definition(
-            session, organisation_id=organisation_id, environment_id=environment_id
-        )
-        run = WorkflowRun(
-            id=new_uuid(),
-            public_id=new_public_id("wfr"),
-            organisation_id=organisation_id,
-            environment_id=environment_id,
-            workflow_definition_id=definition.id,
-            route="QUESTION:settlement.v1",
-            idempotency_digest=digest,
-            status="RUNNING",
-            token_budget=QUESTION_TOKEN_BUDGET,
-            cost_budget_usd_micros=QUESTION_COST_BUDGET_USD_MICROS,
-            tokens_used=0,
-            cost_used_usd_micros=0,
-        )
-        session.add(run)
-        session.flush([run])
-        for step in QUESTION_DEFINITION_STEPS:
-            session.add(
-                WorkflowStep(
-                    id=new_uuid(),
-                    public_id=new_public_id("wfs"),
-                    organisation_id=organisation_id,
-                    environment_id=environment_id,
-                    workflow_run_id=run.id,
-                    step_key=str(step["key"]),
-                    step_kind=str(step["kind"]),
-                    definition=step,
-                    status="QUEUED",
-                    attempt_count=0,
-                    max_attempts=3,
-                    next_attempt_at=now,
-                )
-            )
-        question = SettlementQuestion(
-            id=new_uuid(),
-            public_id=new_public_id("sqn"),
-            organisation_id=organisation_id,
-            environment_id=environment_id,
-            merchant_account_id=merchant_account_id,
-            policy_id=policy.id,
-            workflow_run_id=run.id,
-            question_digest=digest,
-            idempotency_key_digest=idempotency_key_digest,
-            question_text=question_text,
-            intent="CLARIFICATION",
-            status="PROCESSING",
-            classification={},
-            classification_sha256=hashlib.sha256(b"{}").digest(),
-            asked_at=now,
-        )
-        session.add(question)
-        session.flush([question])
-        return PreparedQuestion(
-            question_id=question.id,
-            question_public_id=question.public_id,
-            run_public_id=run.public_id,
-            merchant_account_id=merchant_account_id,
-            organisation_public_id=organisation_public_id,
-            environment_public_id=environment_public_id,
-            replayed=False,
-        )
+    except IntegrityError as error:
+        raise RelayPayError(
+            code="SETTLEMENT_QUESTION_CONCURRENT",
+            message="The question was submitted concurrently; retry to replay it",
+            http_status=409,
+        ) from error
 
 
 def _run_public_id(session: Session, run_id: uuid.UUID) -> str:
@@ -934,22 +948,48 @@ def answer_question(
                 },
                 True,
             )
-    classification_result = provider.generate_structured(
-        ModelRequest(
-            prompt=classification_prompt(question_text),
-            schema=QuestionClassification,
-            model_id=QUESTION_MODEL_ID,
-            max_output_tokens=512,
-            trace_id=prepared.question_public_id,
+    classification_result: ModelResult | None = None
+    classification: QuestionClassification | None = None
+    try:
+        classification_result = provider.generate_structured(
+            ModelRequest(
+                prompt=classification_prompt(question_text),
+                schema=QuestionClassification,
+                model_id=QUESTION_MODEL_ID,
+                max_output_tokens=512,
+                trace_id=prepared.question_public_id,
+            )
         )
-    )
-    classification = classification_result.output
-    if not isinstance(classification, QuestionClassification):
-        raise RelayPayError(
-            code="SETTLEMENT_CLASSIFICATION_INVALID",
-            message="Classification provider returned an unsupported schema",
-            http_status=502,
+        raw_classification = classification_result.output
+        if not isinstance(raw_classification, QuestionClassification):
+            raise RelayPayError(
+                code="SETTLEMENT_CLASSIFICATION_INVALID",
+                message="Classification provider returned an unsupported schema",
+                http_status=502,
+            )
+        classification = raw_classification
+    except RelayPayError as error:
+        fail_question(
+            session_factory,
+            prepared,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            reason_code=error.code,
+            now=moment,
         )
+        raise
+    except (RetryableProviderError, TerminalModelError):
+        fail_question(
+            session_factory,
+            prepared,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            reason_code="SETTLEMENT_PROVIDER_FAILED",
+            now=moment,
+        )
+        raise
+    if classification is None or classification_result is None:
+        raise RuntimeError("settlement classification completed without a result")
     if classification.intent == "CLARIFICATION":
         payload = _finalize(
             session_factory,

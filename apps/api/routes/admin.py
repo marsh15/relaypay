@@ -45,7 +45,7 @@ from relaypay.disputes.service import (
     read_package_for_admin,
     submit_approved_package,
 )
-from relaypay.errors import not_found
+from relaypay.errors import RelayPayError, not_found
 from relaypay.event_delivery.admin import read_delivery, replay_delivery
 from relaypay.event_delivery.delivery import WebhookTransport
 from relaypay.idempotency import build_fingerprint, canonical_json_bytes
@@ -1380,7 +1380,11 @@ def build_admin_router(
     ) -> dict[str, object]:
         require_csrf(principal, csrf_token)
         if principal.user_id is None:
-            raise ValueError("session user required")
+            raise RelayPayError(
+                code="SESSION_USER_REQUIRED",
+                message="A console session user is required for this action",
+                http_status=403,
+            )
         with session_factory() as session, session.begin():
             case, _ = latest_draft_for_admin(
                 session,
@@ -1417,7 +1421,11 @@ def build_admin_router(
     ) -> dict[str, object]:
         require_csrf(principal, csrf_token)
         if principal.user_id is None:
-            raise ValueError("session user required")
+            raise RelayPayError(
+                code="SESSION_USER_REQUIRED",
+                message="A console session user is required for this action",
+                http_status=403,
+            )
         with session_factory() as session, session.begin():
             case, draft = latest_draft_for_admin(
                 session,

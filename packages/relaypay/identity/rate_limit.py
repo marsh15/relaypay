@@ -5,6 +5,8 @@ from collections.abc import Callable
 
 from relaypay.errors import RelayPayError
 
+_MAX_TRACKED_KEYS = 10_000
+
 
 class FixedWindowRateLimiter:
     """Small process-local limiter for the single-instance portfolio sandbox."""
@@ -22,6 +24,16 @@ class FixedWindowRateLimiter:
         now = self._clock()
         cutoff = now - self._window
         with self._lock:
+            if len(self._events) >= _MAX_TRACKED_KEYS:
+                # Bound the process-local key map: drop fully expired keys so
+                # a long-lived single-instance sandbox cannot grow it forever.
+                expired = [
+                    tracked
+                    for tracked, moments in self._events.items()
+                    if not moments or moments[-1] <= cutoff
+                ]
+                for tracked in expired[: len(expired) // 2]:
+                    del self._events[tracked]
             events = self._events[key]
             while events and events[0] <= cutoff:
                 events.popleft()

@@ -490,6 +490,18 @@ def submit_approved_package(
             raise not_found("Dispute submission attempt")
         case = session.get(DisputeCase, persisted.dispute_case_id)
         package = session.get(DisputePackageVersion, persisted.package_version_id)
+        if package is not None and package.status not in {"APPROVED", "SUBMITTED"}:
+            # The approval was invalidated while the network call was in
+            # flight. The observation is recorded as immutable evidence, but
+            # the package and case must not be marked SUBMITTED.
+            persisted.response_code = observation.code
+            persisted.response_sha256 = hashlib.sha256(observation.response_bytes).digest()
+            persisted.status = "FAILED"
+            raise RelayPayError(
+                code="PACKAGE_INVALIDATED_BEFORE_SUBMISSION",
+                message="Exact package approval was invalidated before submission completed",
+                http_status=409,
+            )
         persisted.response_code = observation.code
         persisted.response_sha256 = hashlib.sha256(observation.response_bytes).digest()
         if observation.status == "SUCCEEDED":

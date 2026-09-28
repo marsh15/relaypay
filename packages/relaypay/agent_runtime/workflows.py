@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, true
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from relaypay.agent_runtime.models import (
@@ -220,7 +221,24 @@ def start_run(
         tokens_used=0,
         cost_used_usd_micros=0,
     )
-    session.add(run)
+    try:
+        with session.begin_nested():
+            session.add(run)
+            session.flush()
+    except IntegrityError:
+        # A concurrent run with the same (route, idempotency key) won the
+        # unique race; the savepoint rollback keeps this transaction usable.
+        winner = session.scalar(
+            select(WorkflowRun).where(
+                WorkflowRun.organisation_id == organisation_id,
+                WorkflowRun.environment_id == environment_id,
+                WorkflowRun.route == route,
+                WorkflowRun.idempotency_digest == digest,
+            )
+        )
+        if winner is not None:
+            return winner
+        raise
     timestamp = now or datetime.now(UTC)
     steps = definition.definition.get("steps", [])
     if not isinstance(steps, list):

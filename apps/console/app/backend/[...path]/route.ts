@@ -6,6 +6,7 @@ const forwardedRequestHeaders = [
   "x-csrf-token",
   "x-request-id",
   "idempotency-key",
+  "x-forwarded-for",
 ];
 const forwardedResponseHeaders = ["content-type", "retry-after", "set-cookie", "x-request-id"];
 
