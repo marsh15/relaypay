@@ -216,7 +216,7 @@ def verify_connector_version(
                 session,
                 principal=principal,
                 environment_id=environment.id,
-                    action="CONNECTOR_VERSION_VERIFIED",
+                action="CONNECTOR_VERSION_VERIFIED",
                 target_type="CONNECTOR_VERSION",
                 target_id=version.public_id,
                 details={},

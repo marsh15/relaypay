@@ -495,9 +495,7 @@ def submit_approved_package(
             # flight. The observation is recorded as immutable evidence, but
             # the package and case must not be marked SUBMITTED.
             persisted.response_code = observation.code
-            persisted.response_sha256 = hashlib.sha256(
-                observation.response_bytes
-            ).digest()
+            persisted.response_sha256 = hashlib.sha256(observation.response_bytes).digest()
             persisted.status = "FAILED"
             raise RelayPayError(
                 code="PACKAGE_INVALIDATED_BEFORE_SUBMISSION",
