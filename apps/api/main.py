@@ -313,7 +313,13 @@ def create_app(
 
     @app.post("/api/session/login", response_model=SessionResponse)
     def login(payload: LoginRequest, request: Request, response: Response) -> SessionResponse:
-        client_host = request.client.host if request.client else "unknown"
+        # Behind the console proxy / Caddy every browser shares the proxy's
+        # client address, which would give all users one shared login budget;
+        # prefer the ingress-supplied forwarded chain when present.
+        forwarded = request.headers.get("x-forwarded-for", "")
+        client_host = (forwarded.split(",")[0].strip() if forwarded.strip() else None) or (
+            request.client.host if request.client else "unknown"
+        )
         request.app.state.login_limiter.check(client_host)
         with session_factory() as session, session.begin():
             issued = issue_session(

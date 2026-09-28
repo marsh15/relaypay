@@ -15,7 +15,10 @@
 - No multi-region operation, automatic failover, point-in-time recovery, managed KMS, WAF, or
   production observability backend.
 - In-process login rate limiting is per API process; a distributed limiter is required before
-  horizontal public deployment.
+  horizontal public deployment. The limiter keys on the ingress-supplied `X-Forwarded-For` chain
+  when present (so users behind the console proxy or Caddy do not share one budget); that header
+  is only as trustworthy as the ingress that sets it, and a hostile direct-to-API client can
+  spoof it to rotate keys — the sandbox assumes the API port is not directly exposed.
 - The Compose deployment is an optional single-host Ubuntu LTS sandbox, not a PCI-DSS or
   regulated production architecture.
 - Caddy terminates HTTPS, but host firewalling, OS patching, DNS, monitoring, restore drills, and

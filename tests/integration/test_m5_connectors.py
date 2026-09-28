@@ -357,3 +357,46 @@ def test_inbound_signature_replay_dedup_attempts_and_commerce_sync() -> None:
     finally:
         commerce_engine.dispose()
         engine.dispose()
+
+
+def test_failed_verification_persists_its_unavailable_observation() -> None:
+    engine, principal, environment = _identity()
+    factory = build_session_factory(engine)
+    try:
+        with factory() as session, session.begin():
+            issued = create_connector_version(
+                session,
+                principal=principal,
+                environment_public_id=environment.public_id,
+                reference=f"payment-{uuid.uuid4().hex}",
+                kind="PAYMENT",
+                base_url="http://provider.test",
+                capabilities=["payments.effects"],
+                timeout_ms=1000,
+                encryption_key=ENCRYPTION_KEY,
+            )
+
+        class UnhealthyAdapter(HealthyAdapter):
+            def health(self) -> ProviderObservation:
+                return ProviderObservation(503, b"unavailable", {})
+
+        with pytest.raises(RelayPayError) as rejected:
+            verify_connector_version(
+                factory,
+                principal=principal,
+                environment_public_id=environment.public_id,
+                version_public_id=issued.version_public_id,
+                adapter=UnhealthyAdapter(),
+            )
+        assert rejected.value.code == "CONNECTOR_VERIFICATION_FAILED"
+        with factory() as session, session.begin():
+            observation = session.scalar(
+                select(ConnectorHealthObservation)
+                .join(Connector, Connector.id == ConnectorHealthObservation.connector_id)
+                .where(Connector.public_id == issued.connector_public_id)
+                .order_by(ConnectorHealthObservation.created_at.desc())
+            )
+            assert observation is not None
+            assert observation.status == "UNAVAILABLE"
+    finally:
+        engine.dispose()

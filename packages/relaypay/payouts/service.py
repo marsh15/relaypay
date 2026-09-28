@@ -417,7 +417,8 @@ def create_retry(
                     message="The idempotency key was already used for a different request",
                     http_status=409,
                 )
-            assert existing.response_bytes is not None
+            if existing.response_bytes is None:
+                raise RuntimeError("payout retry record is missing its stored response")
             return CommandResult(201, existing.response_bytes, True)
         payout = session.scalar(
             select(Payout)

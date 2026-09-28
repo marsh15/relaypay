@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.connectors.crypto import encrypt_credential
@@ -200,22 +201,28 @@ def verify_connector_version(
                 provider_retry_after_seconds=_header_int(observation.headers, "retry-after"),
             )
         )
+        failure: RelayPayError | None = None
         if not valid:
-            raise RelayPayError(
+            # Defer the raise until this transaction commits so the
+            # UNAVAILABLE observation row survives as durable evidence.
+            failure = RelayPayError(
                 code="CONNECTOR_VERIFICATION_FAILED",
                 message="Connector verification did not return trusted healthy evidence",
                 http_status=409,
             )
-        version.verified_at = datetime.now(UTC)
-        append_audit(
-            session,
-            principal=principal,
-            environment_id=environment.id,
-            action="CONNECTOR_VERSION_VERIFIED",
-            target_type="CONNECTOR_VERSION",
-            target_id=version.public_id,
-            details={},
-        )
+        else:
+            version.verified_at = datetime.now(UTC)
+            append_audit(
+                session,
+                principal=principal,
+                environment_id=environment.id,
+                    action="CONNECTOR_VERSION_VERIFIED",
+                target_type="CONNECTOR_VERSION",
+                target_id=version.public_id,
+                details={},
+            )
+    if failure is not None:
+        raise failure
 
 
 def activate_connector_version(
@@ -373,6 +380,24 @@ def accept_inbound_webhook(
             attempt_count=0,
         )
         session.add(event)
+        try:
+            session.flush()
+        except IntegrityError:
+            # A concurrent submission of the same provider event won the
+            # unique race; treat identical bytes as a replay, mismatched
+            # bytes as the same conflict the dedupe check reports.
+            session.rollback()
+            return accept_inbound_webhook(
+                factory,
+                connector_public_id=connector_public_id,
+                provider_event_id=provider_event_id,
+                timestamp_text=timestamp_text,
+                signature=signature,
+                body=body,
+                secret=secret,
+                replay_seconds=replay_seconds,
+                now=now,
+            )
         return event, False
 
 
