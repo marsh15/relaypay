@@ -2,7 +2,7 @@
 
 ## Reliability boundary
 
-RelayPay treats PostgreSQL as the only correctness authority. Redis and Celery accelerate work but
+RelayPay treats PostgreSQL as the only correctness authority. A single broker-less poller schedules
 cannot create, erase, or finalize a financial outcome. All mutation commands follow the same
 sequence: lock the payment, attach an idempotency record, persist a provider operation as `SENT`,
 commit, perform HTTP, validate evidence, and enter the shared finalizer.
@@ -75,7 +75,7 @@ the RelayPay transaction against its separately credentialed database.
 ## Public surface
 
 Caddy exposes the console, `/api/*`, `/health/*`, and the bundled `/webhooks/relaypay` receiver.
-PostgreSQL, Redis, provider control routes, workers, and internal service ports are not published by
+PostgreSQL, provider control routes, and internal service ports are not published by
 the production overlay.
 ## v0.11 agent runtime boundary
 

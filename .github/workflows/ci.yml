@@ -38,7 +38,7 @@ jobs:
           npx --prefix apps/console playwright install --with-deps chromium
 
       - name: Start clean dependencies
-        run: docker compose up -d --wait postgres redis redpanda
+        run: docker compose up -d --wait postgres redpanda
 
       - name: Prove v0.1 upgrade and deterministic M1 backfill
         run: uv run python -m scripts.verify_m1_upgrade
@@ -172,7 +172,7 @@ jobs:
         run: |
           docker compose down --volumes
           docker compose --profile observability up -d --build --wait \
-            provider bank commerce receiver dispute-network recovery-network merchant-site api console worker \
+            provider bank commerce receiver dispute-network recovery-network merchant-site api console poller \
             otel-collector prometheus grafana
 
       - name: One primary browser journey

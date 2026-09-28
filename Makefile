@@ -55,7 +55,7 @@ compose-check:
 	docker compose --env-file .env.production.example -f compose.yaml -f compose.production.yaml config --quiet
 
 infra-up:
-	docker compose up -d postgres redis
+	docker compose up -d postgres
 
 infra-down:
 	docker compose down

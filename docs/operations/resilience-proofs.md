@@ -6,8 +6,8 @@ proof; nothing on this list is documentation-only.
 
 | Requirement | Proof (test files) | Mechanism exercised |
 | --- | --- | --- |
-| Redis loss tolerance | `tests/unit/test_recovery_worker_config.py` | poller is broker-less; PostgreSQL is the authority for operation state, leases, and delivery progress; Redis is acceleration only |
-| Celery loss / worker shutdown | `tests/unit/test_recovery_worker_config.py` | `acks_late` and `task_reject_on_worker_lost` configuration asserts so an interrupted worker redelivers |
+| Broker loss tolerance | `tests/unit/test_recovery_worker_config.py`, `tests/unit/test_m7_failure_contracts.py` | no broker exists to lose — one broker-less poller owns every batch; PostgreSQL is the authority for operation state, leases, and delivery progress |
+| Worker shutdown | `tests/unit/test_recovery_worker_config.py`, `tests/integration/test_week3_provider_recovery.py` | a crashed poller restarts and reclaims leased work: claims carry lease tokens with expiry under `SKIP LOCKED`, and expired leases are re-issued |
 | Redpanda loss / redelivery dedupe | `tests/integration/test_m10_agent_runtime.py` | `record_consumption`/`consumed_business_events` dedupe makes redelivery idempotent |
 | Broker loss dedupe, version pinning, budget gate | `tests/integration/test_m10_agent_runtime.py` | one consumer effect per event id, pinned schema versions, token/cost ceilings |
 | DB lease reclaim | `tests/integration/test_week3_provider_recovery.py` | expired `lookup_lease_expires_at` is reclaimed with a fresh lease token under `SKIP LOCKED` |
