@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from relaypay.agent_runtime.models import WorkflowRun
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
 from relaypay.identity.models import Environment, Organisation
@@ -14,7 +15,6 @@ from relaypay.merchant_balances.service import ensure_default_merchant_account
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
 from relaypay.provider_operations.models import ProviderOperation
 from relaypay.settlement_intelligence.execution import run_forecast_batch
-from relaypay.agent_runtime.models import WorkflowRun
 from relaypay.settlement_intelligence.models import (
     SettlementForecast,
     SettlementPolicy,
