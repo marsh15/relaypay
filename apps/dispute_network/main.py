@@ -8,7 +8,7 @@ def create_app(network: DeterministicDisputeNetwork | None = None) -> FastAPI:
     resolved = network or DeterministicDisputeNetwork()
     app = FastAPI(
         title="RelayPay synthetic dispute network",
-        version="0.12.0",
+        version="1.0.1",
         description="Synthetic data only. Never send real dispute or customer evidence.",
     )
 

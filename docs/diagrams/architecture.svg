@@ -116,7 +116,7 @@
 <rect x="670" y="912" width="330" height="80" rx="10" fill="#ffffff" stroke="#868e96" stroke-width="2"/>
 <text x="682" y="937.0" font-size="16" font-weight="700" fill="#1e1e1e" xml:space="preserve">Prometheus :9090</text>
 <text x="682" y="958.0" font-size="13" font-weight="400" fill="#343a40" xml:space="preserve">scrapes api, provider, receiver, bank,</text>
-<text x="682" y="974.6" font-size="13" font-weight="400" fill="#343a40" xml:space="preserve">commerce (poller target is misnamed)</text>
+<text x="682" y="974.6" font-size="13" font-weight="400" fill="#343a40" xml:space="preserve">commerce, poller (:9100)</text>
 <rect x="1020" y="912" width="440" height="80" rx="10" fill="#ffffff" stroke="#868e96" stroke-width="2"/>
 <text x="1032" y="937.0" font-size="16" font-weight="700" fill="#1e1e1e" xml:space="preserve">Grafana :3001</text>
 <text x="1032" y="958.0" font-size="13" font-weight="400" fill="#343a40" xml:space="preserve">provisioned 'RelayPay Operations Evidence'</text>

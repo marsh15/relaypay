@@ -77,7 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay Mock Provider", version="0.8.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay Mock Provider", version="1.0.1", lifespan=lifespan)
 
     @app.exception_handler(RelayPayError)
     async def handle_relaypay_error(_, error: RelayPayError):  # type: ignore[no-untyped-def]

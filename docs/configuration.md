@@ -46,7 +46,7 @@ Use the `postgresql+psycopg://` scheme. The development DSNs point at `localhost
 | `CSRF_SECRET` | 32 chars | HMAC key for CSRF tokens |
 | `API_KEY_PEPPER` | 32 chars | Pepper for API key digests; also derives the pagination cursor key |
 | `IDEMPOTENCY_KEY_PEPPER` | 16 chars | Pepper for idempotency key digests |
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | required | Key material for AES-256-GCM encryption of webhook endpoint secrets (SHA-256 derived, so any string works; it is **not** a Fernet key despite the placeholder text in the example files) |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | required | Key material for AES-256-GCM encryption of webhook endpoint secrets (SHA-256 derived, so any string works; it is **not** a Fernet key even though the example value contains the word "fernet") |
 | `CONNECTOR_CREDENTIAL_ENCRYPTION_KEY` | dev default | Encrypts connector credentials |
 | `DISPUTE_PACKAGE_SIGNING_SECRET` | dev default | Signs dispute packages |
 

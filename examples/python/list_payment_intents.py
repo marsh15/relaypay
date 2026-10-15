@@ -8,7 +8,7 @@ def main() -> None:
     if key.environment != "TEST":
         raise SystemExit("This example accepts TEST keys only")
     with RelayPayClient(
-        base_url=os.environ.get("RELAYPAY_BASE_URL", "http://localhost:8080"),
+        base_url=os.environ.get("RELAYPAY_BASE_URL", "http://localhost:8000"),
         api_key=key,
     ) as client:
         for payment in client.iter_payment_intents(page_size=25):

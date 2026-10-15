@@ -11,7 +11,7 @@ import httpx
 def main() -> None:
     parser = argparse.ArgumentParser(description="Send one signed synthetic RelayPay webhook")
     parser.add_argument("--url", default="http://localhost:8002/webhooks/relaypay")
-    parser.add_argument("--secret", default="dev-receiver-webhook-secret")
+    parser.add_argument("--secret", default="dev-receiver-secret-change-me")
     args = parser.parse_args()
 
     event_id = f"evt_{uuid.uuid4().hex}"

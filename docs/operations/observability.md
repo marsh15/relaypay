@@ -17,11 +17,10 @@ persistent trace backend, and no metrics or logs pipeline.
 
 Prometheus (`infra/observability/prometheus.yaml`) scrapes `api:8000`, and `provider`, `receiver`,
 `bank`, and `commerce` on their service ports. It does not scrape the dispute, recovery, or
-merchant-site simulators. Its `relaypay-worker` job targets `worker:9100`, a service that no longer
-exists since the scheduler consolidation in v1.0.1; the poller serves metrics on
-`PROMETHEUS_WORKER_PORT` (default 9100) under the service name `poller`, so this configuration does
-not collect poller metrics until that target is renamed. The Grafana dashboard "RelayPay
-Operations Evidence" is provisioned read-only with anonymous viewer access.
+merchant-site simulators. Its `relaypay-worker` job scrapes the poller at `poller:9100` (the port
+is `PROMETHEUS_WORKER_PORT`, default 9100; before the v1.0.1 scheduler consolidation the target was
+the removed `worker` service). The Grafana dashboard "RelayPay Operations Evidence" is provisioned
+read-only with anonymous viewer access.
 
 `/metrics` on the API and the poller port are unauthenticated and expose route shapes, latencies,
 and counters. Keep them on an internal network ([limitations](../limitations.md)).

@@ -28,7 +28,7 @@ def create_app(
     resolved_payments = payments or DeterministicRecurringPaymentNetwork()
     app = FastAPI(
         title="RelayPay synthetic recovery network",
-        version="0.13.0",
+        version="1.0.1",
         description="Synthetic data only. Never send real customer, message, or payment data.",
     )
 

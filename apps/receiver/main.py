@@ -27,7 +27,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
-    app = FastAPI(title="RelayPay Receiver", version="0.8.0", lifespan=lifespan)
+    app = FastAPI(title="RelayPay Receiver", version="1.0.1", lifespan=lifespan)
 
     @app.get("/health/live")
     def live() -> dict[str, str]:

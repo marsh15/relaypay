@@ -43,12 +43,11 @@ Offline verification of an exact-byte webhook signature:
 uv run python examples/python/verify_webhook.py
 ```
 
-Sending one signed synthetic event to the local receiver. The script's default secret
-(`dev-receiver-webhook-secret`) does not match the development stack's
-`RECEIVER_WEBHOOK_SECRET` (`dev-receiver-secret-change-me`), so pass it explicitly:
+Sending one signed synthetic event to the local receiver. The script's default secret matches the
+development stack's `RECEIVER_WEBHOOK_SECRET`; pass `--secret` if you changed it:
 
 ```bash
-uv run python examples/python/webhook_simulator.py --secret dev-receiver-secret-change-me
+uv run python examples/python/webhook_simulator.py
 ```
 
 The event body in both examples is a minimal fixture (`type: payment.captured`), not the shape
@@ -56,9 +55,9 @@ RelayPay emits (`payment.captured.v1` with `schemaVersion`, `occurredAt`, and `d
 receiver only requires the body `id` to match the header.
 
 Listing payment intents needs the running stack and a TEST key (see the README for how to read the
-seeded key). The script defaults `RELAYPAY_BASE_URL` to port 8080, so set it:
+seeded key). `RELAYPAY_BASE_URL` defaults to `http://localhost:8000`:
 
 ```bash
-RELAYPAY_BASE_URL=http://localhost:8000 RELAYPAY_TEST_API_KEY=rpk_test_... \
+RELAYPAY_TEST_API_KEY=rpk_test_... \
   uv run python examples/python/list_payment_intents.py
 ```

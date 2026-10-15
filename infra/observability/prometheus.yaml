@@ -17,4 +17,4 @@ scrape_configs:
           - "commerce:8004"
   - job_name: relaypay-worker
     static_configs:
-      - targets: ["worker:9100"]
+      - targets: ["poller:9100"]

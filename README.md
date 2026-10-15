@@ -245,8 +245,7 @@ The full list is in [docs/limitations.md](docs/limitations.md). The ones most li
   production overlay.
 - The login rate limiter is per process; API-key routes have no rate limit unless the optional
   edge Worker is placed in front.
-- `/metrics` and the poller metrics port are unauthenticated. The bundled Prometheus config scrapes
-  a `worker:9100` target that no longer exists, so poller metrics are not collected by it.
+- `/metrics` and the poller metrics port are unauthenticated and must stay network-internal.
 - Redpanda runs in `dev-container` mode without a data volume, and no consumer reads it.
 
 ## Repository layout

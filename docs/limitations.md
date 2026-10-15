@@ -81,9 +81,8 @@
 - No multi-region operation, automatic failover, point-in-time recovery, managed KMS, WAF, or
   production observability backend. The bundled collector exports traces to its debug exporter
   only.
-- The bundled Prometheus configuration scrapes `worker:9100`, which no longer exists after the
-  v1.0.1 scheduler consolidation (the service is `poller`), and does not scrape the dispute,
-  recovery, or merchant-site simulators. See [observability](operations/observability.md).
+- The bundled Prometheus configuration does not scrape the dispute, recovery, or merchant-site
+  simulators. See [observability](operations/observability.md).
 - "Single scheduler" is a convention, not an enforced lock. Running several pollers is safe because
   of `SKIP LOCKED` and leases, but it is not a tested scale-out configuration. Work is polled at
   about one-second granularity.
@@ -105,17 +104,16 @@
 
 ## Documentation and tooling inconsistencies
 
-These are known and unchanged in code; the documentation works around them.
+These are known and not changed in code; the documentation works around them.
 
-- Service version strings differ: the API reports `1.0.0`, the provider, receiver, bank, and
-  commerce apps `0.8.0`, the dispute and recovery networks `0.12.0` and `0.13.0`, and
-  `apps/edge/package.json` `0.10.0`, while the project version is `1.0.1`. The OpenAPI contract is
-  `contracts/openapi/v0.9.0.json` with `info.version` `1.0.0`.
-- `PUBLIC_BASE_URL` defaults to port 8080, and `examples/python/list_payment_intents.py` falls back
-  to it, but the API listens on 8000. `examples/python/webhook_simulator.py` defaults to a secret
-  that does not match the development stack. See the [SDK guide](api/python-sdk.md).
-- `WEBHOOK_SECRET_ENCRYPTION_KEY`'s example value mentions Fernet, but the key is hashed for
-  AES-GCM; `LOG_LEVEL` is declared and unused; the `integration` pytest marker text still mentions
-  Redis.
+- The API reports version `1.0.0` because it is pinned to the frozen OpenAPI contract
+  (`contracts/openapi/v0.9.0.json`, `info.version` `1.0.0`); changing it means regenerating the
+  contract and SDK. The simulators and the edge Worker report `1.0.1`, the project version.
+- `PUBLIC_BASE_URL` defaults to port 8080, but nothing listens there; the API is on 8000. The
+  setting is only validated in production.
+- The example value of `WEBHOOK_SECRET_ENCRYPTION_KEY` still contains the word "fernet" (changing
+  it would make existing development databases unable to decrypt their endpoint secrets); the
+  key is hashed for AES-GCM, as the comment in `.env.example` says. `LOG_LEVEL` is declared and
+  unused, and the `integration` pytest marker text still mentions Redis.
 - `docs/vibe-coding/` and `docs/phase-2/` are frozen planning documents that still describe Celery
   and Redis and earlier milestone numbering; see [docs/README.md](README.md).
