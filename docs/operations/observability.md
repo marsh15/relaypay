@@ -10,9 +10,21 @@ known, method, route template, status, duration, and timestamp. Authorization he
 cookies, arbitrary headers, and bodies are never persisted. `REQUEST_LOG_RETENTION` bounds raw
 metadata rows; hourly rollups remain durable.
 
-OpenTelemetry uses OTLP/HTTP and batched span export. API, mock, receiver, poller, and worker
-processes each publish an explicit service name. The poller initializes from
-`worker_process_init` and flushes on worker-process shutdown.
+OpenTelemetry uses OTLP/HTTP and batched span export. The API, simulators, receiver, and poller
+each publish an explicit service name (the poller calls `configure_tracing` at start-up). The
+bundled collector has a traces pipeline only and exports to its `debug` exporter; there is no
+persistent trace backend, and no metrics or logs pipeline.
+
+Prometheus (`infra/observability/prometheus.yaml`) scrapes `api:8000`, and `provider`, `receiver`,
+`bank`, and `commerce` on their service ports. It does not scrape the dispute, recovery, or
+merchant-site simulators. Its `relaypay-worker` job targets `worker:9100`, a service that no longer
+exists since the scheduler consolidation in v1.0.1; the poller serves metrics on
+`PROMETHEUS_WORKER_PORT` (default 9100) under the service name `poller`, so this configuration does
+not collect poller metrics until that target is renamed. The Grafana dashboard "RelayPay
+Operations Evidence" is provisioned read-only with anonymous viewer access.
+
+`/metrics` on the API and the poller port are unauthenticated and expose route shapes, latencies,
+and counters. Keep them on an internal network ([limitations](../limitations.md)).
 
 The canonical gate produces:
 

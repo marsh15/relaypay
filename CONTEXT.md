@@ -148,7 +148,7 @@ _Avoid_: Prompt, editable automation
 
 **Workflow Run**:
 The durable execution record for one activated Workflow Definition and trigger event.
-_Avoid_: Celery task, agent session
+_Avoid_: background task, agent session
 
 **Workflow Step**:
 One leased, retryable unit of a Workflow Run whose state is authoritative in PostgreSQL.

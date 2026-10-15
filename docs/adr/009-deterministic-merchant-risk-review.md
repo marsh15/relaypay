@@ -3,8 +3,8 @@
 Status: accepted for v0.15.0. The synthetic merchant-site service exposes immutable, code-defined
 snapshots only; there is no crawling and no uploaded merchant evidence. Deterministic checks score
 five risk dimensions — completeness (0–20), domain identity and age (0–20), category and content
-(0–30), pricing (0–15) — as unearned maxima, so a trustworthy site scores zero and the worst scores
-one hundred; model claim findings add five risk points each up to fifteen. Severity bands are
+(0–30), pricing (0–15), and model claim findings (five points each, up to 15) — as unearned maxima,
+so a trustworthy site scores zero and the worst scores one hundred. Severity bands are
 LOW 0–29, MEDIUM 30–59, HIGH 60–79, and CRITICAL 80–100. Prohibited-category, impersonation,
 counterfeit, and guaranteed-return findings hard-stop and escalate the review regardless of the
 total score; HIGH and CRITICAL severities escalate otherwise. The model may only return

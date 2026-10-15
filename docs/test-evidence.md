@@ -1,9 +1,13 @@
 # Release test evidence
 
 The release gate is encoded in [CI](../.github/workflows/ci.yml) and runs from empty PostgreSQL
-databases. It installs locked dependencies, applies all three Alembic histories, seeds both tenants,
+databases. It installs locked dependencies, applies all five Alembic histories, seeds both tenants,
 runs backend lint/type/tests, builds and audits the console, starts the complete service graph, and
-runs exactly one Playwright lost-response journey with an axe accessibility scan.
+runs the Playwright console journeys (lost-response, operations views, disputes, recovery,
+risk, settlement), each with an axe accessibility scan.
+
+Later sections are dated records of past release runs. They are not updated when the gate
+changes; the gate itself is `.github/workflows/ci.yml`.
 
 ## Required local evidence
 
@@ -16,6 +20,8 @@ make console-e2e
 uv run alembic -c migrations/relaypay/alembic.ini check
 uv run alembic -c migrations/provider/alembic.ini check
 uv run alembic -c migrations/receiver/alembic.ini check
+uv run alembic -c migrations/bank/alembic.ini check
+uv run alembic -c migrations/commerce/alembic.ini check
 ```
 
 The backend suite covers idempotency/key reuse, creation/singleton/refund races, provider outcome

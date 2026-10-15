@@ -25,3 +25,13 @@ provider 5xx failures may route OpenAI to Claude to Gemini. Artifact and model b
 Broker and worker recovery is deterministic and independently testable. Duplicate delivery is safe.
 PostgreSQL bears additional bounded evidence storage, and every future agent must use these common
 leases, approval hashes, tool boundaries, and trace records rather than inventing another authority.
+
+## Amendment (v1.0.1)
+
+Celery was removed in v1.0.1: the single poller (`apps/worker/poller.py`) now claims every
+background batch, including outbox publication, under database leases, so "Celery is dispatch only"
+no longer applies. Also as of 1.0.1: the leased step engine is not called by the API or poller;
+all model roles are served by deterministic in-process providers; the OpenAI, Claude, Gemini
+fallback order exists only in `scripts/compare_live_providers.py`; and `ModelInvocation` rows are
+written only by settlement intelligence, at zero price. The decision about authority and leases
+stands. See [architecture](../architecture.md).

@@ -1,15 +1,15 @@
-# Resilience proofs — v1.0.0
+# Resilience proofs
 
-Every resilience property required by the v1.0.0 mandate is demonstrated by an executable test in
+Every resilience property below is demonstrated by an executable test in
 the canonical suite (and therefore in the CI release gate). This table maps each requirement to its
 proof; nothing on this list is documentation-only.
 
 | Requirement | Proof (test files) | Mechanism exercised |
 | --- | --- | --- |
-| Broker loss tolerance | `tests/unit/test_recovery_worker_config.py`, `tests/unit/test_m7_failure_contracts.py` | no broker exists to lose — one broker-less poller owns every batch; PostgreSQL is the authority for operation state, leases, and delivery progress |
+| No task-queue dependency | `tests/unit/test_recovery_worker_config.py`, `tests/unit/test_m7_failure_contracts.py` | there is no task queue or Redis to lose: one poller owns every batch, and PostgreSQL is the authority for operation state, leases, and delivery progress. Redpanda carries only the derived outbox stream |
 | Worker shutdown | `tests/unit/test_recovery_worker_config.py`, `tests/integration/test_week3_provider_recovery.py` | a crashed poller restarts and reclaims leased work: claims carry lease tokens with expiry under `SKIP LOCKED`, and expired leases are re-issued |
 | Redpanda loss / redelivery dedupe | `tests/integration/test_m10_agent_runtime.py` | `record_consumption`/`consumed_business_events` dedupe makes redelivery idempotent |
-| Broker loss dedupe, version pinning, budget gate | `tests/integration/test_m10_agent_runtime.py` | one consumer effect per event id, pinned schema versions, token/cost ceilings |
+| Consumer dedupe, version pinning, budget gate | `tests/integration/test_m10_agent_runtime.py` | one consumer effect per event id, pinned schema versions, token/cost ceilings (exercised against the leased step engine, which no API or poller path calls as of 1.0.1) |
 | DB lease reclaim | `tests/integration/test_week3_provider_recovery.py` | expired `lookup_lease_expires_at` is reclaimed with a fresh lease token under `SKIP LOCKED` |
 | Provider outage + fallback | `tests/unit/test_agent_runtime.py` | `ProviderRouter` fails over only on `RetryableProviderError` |
 | Fallback exhaustion | `tests/unit/test_provider_router.py` | all providers failing raises `all configured model providers failed`; empty router rejected |

@@ -1,6 +1,13 @@
 # RelayPay Vibe-Coding Brief
 
-This directory is the implementation source of truth for RelayPay. Read the documents in order before changing code:
+> **Status: frozen Phase 1 design record.** These documents capture the original six-week design.
+> Several parts are superseded: they describe Celery and Redis (removed in v1.0.1), two databases
+> (there are now four plus a schema), and no environments, memberships, payouts, connectors, or
+> later workflows. For the current system see the [architecture](../architecture.md),
+> [database](../database.md), [HTTP API](../api/reference.md), and
+> [limitations](../limitations.md) documents.
+
+This directory was the implementation source of truth for the original six-week build. Read the documents in order for the design background:
 
 1. [01-prd.md](./01-prd.md) — product contract, scope, stories, and success measures
 2. [02-trd.md](./02-trd.md) — frozen stack, architecture, protocols, and constraints
