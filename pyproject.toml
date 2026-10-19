@@ -26,6 +26,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+  "hypothesis>=6.170.2,<7",
   "mypy>=1.17.0,<2",
   "openapi-python-client==0.29.0",
   "pytest>=8.4.0,<9",
@@ -49,6 +50,9 @@ markers = [
   "integration: requires the Compose PostgreSQL and Redis services",
   "concurrency: exercises database locking and race recovery",
   "e2e: exercises the complete deployed process graph",
+  "handwritten: red tests for user-owned modules; excluded from default runs (make handwritten)",
+  "proof: Hypothesis, stateful or high-contention proof tests (make proof)",
+  "chaos: chaos-harness runs (make chaos)",
 ]
 
 [tool.ruff]

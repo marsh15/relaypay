@@ -1,4 +1,4 @@
-.PHONY: install lint format format-check typecheck unit test evaluations portfolio-demo api-contract sdk-drift sdk-example m7-evidence edge-install edge-check compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
+.PHONY: install lint format format-check typecheck unit test handwritten proof chaos chaos-full evaluations portfolio-demo api-contract sdk-drift sdk-example m7-evidence edge-install edge-check compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -19,7 +19,19 @@ unit:
 	uv run pytest tests/unit
 
 test:
-	uv run pytest
+	uv run pytest -m "not handwritten"
+
+handwritten:
+	uv run pytest -m handwritten
+
+proof:
+	uv run pytest -m proof
+
+chaos:
+	uv run python -m scripts.chaos.run --mode ci --seeds 20 --ops 1000
+
+chaos-full:
+	uv run python -m scripts.chaos.run --mode full --seeds 200 --ops 10000
 
 evaluations:
 	uv run python -m scripts.run_evaluations
