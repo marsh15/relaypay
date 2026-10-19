@@ -308,10 +308,14 @@ def test_review_versions_are_immutable_and_appended() -> None:
             assert len(versions) == 1
             assert versions[0].review_sha256 == original_digest
             assert versions[0].total_score == original_total
-        # The database itself refuses any rewrite of the calculated total.
-        from sqlalchemy.exc import IntegrityError
+        # The database itself refuses any rewrite of the version row (0018 immutability trigger).
+        from sqlalchemy.exc import DBAPIError
 
-        with pytest.raises(IntegrityError), factory() as session, session.begin():
+        with (
+            pytest.raises(DBAPIError, match="immutable"),
+            factory() as session,
+            session.begin(),
+        ):
             row = session.scalar(
                 select(RiskReviewVersion).where(
                     RiskReviewVersion.risk_review_id == versions[0].risk_review_id

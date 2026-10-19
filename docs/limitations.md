@@ -64,11 +64,15 @@
   is a database property only.
 - Tenant isolation is enforced by query predicates and composite foreign keys; there is no
   row-level security.
-- Immutability is enforced by database triggers only for tables created through migration 0011
-  and the provider database. Tables added in migrations 0012 to 0017 (outbox, workflow and model
-  records, disputes, subscription recovery, settlement intelligence, risk review) and the bank and
-  commerce databases are append-only by application code and hash constraints; a privileged
-  connection can update them. `TRUNCATE` bypasses every row trigger, which the reset relies on.
+- Immutability is enforced by database triggers for the tables created through migration 0011,
+  the provider database, and (migration 0018) 24 of the 39 tables added in migrations 0012 to
+  0017: 17 reject any `UPDATE` or `DELETE`, and 7 versioned or lifecycle-bearing tables freeze
+  every column except their status or replay columns and reject `DELETE`. The other 15 are
+  mutable workflow state (leased outbox and workflow rows, status machines such as disputes,
+  subscriptions, recovery cases and risk reviews, the hourly usage rollups, and request logs
+  that are pruned by retention), so only application code constrains them. The bank and
+  commerce databases have no triggers either. A privileged connection can still update the
+  unprotected tables. `TRUNCATE` bypasses every row trigger, which the reset relies on.
 - The optional edge origin boundary (opt-in via `EDGE_ORIGIN_SIGNATURE_REQUIRED`) verifies the
   HMAC, timestamp window, and nonce format of each request, but the origin keeps no replay
   store: a captured signed request can be replayed within the timestamp window unless the origin is

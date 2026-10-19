@@ -162,10 +162,26 @@ Evidence tables are protected by `BEFORE UPDATE OR DELETE` triggers that raise a
   tables, the connector credential, health, and inbound-attempt tables, and the payload columns of
   `inbound_webhook_events`. In the provider database: `provider_statement_exports`,
   `provider_statement_items`, and the identity columns of `provider_effects`.
-- **Application-level only** (migrations 0012 to 0017 and the bank and commerce databases): the
-  outbox, workflow and model records, `dispute_*`, subscription-recovery tables,
-  `settlement_forecasts` and items, and `risk_*` tables. They are append-only by code and hash
-  constraints; nothing in the database prevents an `UPDATE` by a privileged connection.
+- **Trigger-protected, migration 0018** (tables from migrations 0012 to 0017 that code never
+  rewrites; classification and evidence are in the `0018_immutability_backfill` docstring):
+  - Full-row (`relaypay_prevent_evidence_mutation`): `pricing_versions`,
+    `consumed_business_events`, `evaluation_datasets`, `prompt_versions`, `workflow_artifacts`,
+    `model_invocations`, `tool_invocations`, `approval_decisions`, `dispute_draft_versions`,
+    `recurring_payment_attempts`, `recovery_opt_outs`, `settlement_forecasts`,
+    `settlement_forecast_items`, `onboarding_snapshots`, `risk_review_versions`,
+    `risk_findings`, `risk_annotations`.
+  - Column-scoped (`relaypay_prevent_frozen_column_mutation`; `DELETE` rejected, only the listed
+    columns may change): `workflow_definitions` and `settlement_policies` and
+    `recovery_policy_versions` and `dispute_package_versions` (`status`), `evaluation_runs`
+    (`status`, `result`, `result_sha256`, `completed_at`), `workflow_dead_letters`
+    (`replay_count`, `last_replayed_at`), `communication_records` (`status`, `response_code`,
+    `response_sha256`).
+- **Application-level only** (mutable workflow state, deliberately unprotected): `request_logs`
+  (retention prune), `usage_rollups` (upsert), `business_event_outbox`, `workflow_runs`,
+  `workflow_steps`, `approval_requests` (leases and status machines), `dispute_cases`,
+  `dispute_submission_attempts`, `subscriptions`, `subscription_invoices`, `recovery_cases`,
+  `scheduled_recovery_actions`, `settlement_questions`, `risk_reviews`, `risk_escalations`, and
+  the bank and commerce databases. A privileged connection can `UPDATE` them.
 - `TRUNCATE` is not blocked by row triggers. `scripts/reset_sandbox.py` relies on this and
   connects with the migrator role.
 
