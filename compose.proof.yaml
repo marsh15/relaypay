@@ -1,0 +1,15 @@
+# Override for the proof harness: lets the 500-way payout race (tests/integration/
+# test_payout_500_way.py) hold hundreds of concurrent connections.
+#
+#   docker compose -f compose.yaml -f compose.proof.yaml up -d postgres
+#
+# compose.yaml defines no postgres command, so this only appends the image default
+# (`postgres`) with a higher connection ceiling and gives the container enough memory
+# for the extra backends. Without it the race test falls back to 80 requests.
+services:
+  postgres:
+    command: ["postgres", "-c", "max_connections=700"]
+    deploy:
+      resources:
+        limits:
+          memory: 2G
