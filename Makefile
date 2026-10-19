@@ -18,8 +18,11 @@ typecheck:
 unit:
 	uv run pytest tests/unit
 
+# CI narrows this to "not handwritten and not proof and not chaos"; the proof-gate job runs the rest.
+PYTEST_MARK ?= not handwritten
+
 test:
-	uv run pytest -m "not handwritten"
+	uv run pytest -m "$(PYTEST_MARK)"
 
 handwritten:
 	uv run pytest -m handwritten

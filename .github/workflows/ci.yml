@@ -4,11 +4,126 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      chaos_full:
+        description: "Run the full chaos sweep (200 seeds x 10,000 ops, real process kills)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  proof-gate:
+    # Hypothesis stateful tests, high-contention races and the CI chaos sweep.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: |
+          cp .env.example .env
+          uv sync --frozen
+
+      - name: Start PostgreSQL with raised connection limit
+        run: docker compose -f compose.yaml -f compose.proof.yaml up -d --wait postgres redpanda
+
+      - name: Migrate and seed
+        run: |
+          make migrate
+          make seed
+
+      - name: Property, stateful and contention proofs
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: uv run pytest -m "(proof or chaos) and not handwritten"
+
+      - name: Chaos sweep (20 seeds x 1,000 ops)
+        run: make chaos
+
+      - name: Upload chaos artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relaypay-chaos-ci
+          path: output/chaos/
+          if-no-files-found: ignore
+
+  handwritten-gate:
+    # Maintainer-written modules (see PROVENANCE.md). Red until each module is implemented.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: |
+          cp .env.example .env
+          uv sync --frozen
+
+      - name: Start PostgreSQL with raised connection limit
+        run: docker compose -f compose.yaml -f compose.proof.yaml up -d --wait postgres redpanda
+
+      - name: Migrate and seed
+        run: |
+          make migrate
+          make seed
+
+      - name: Hand-written module specifications
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: make handwritten
+
+  chaos-full:
+    # Manual only: 200 seeds x 10,000 ops against the real stack with process kills and a Postgres restart.
+    if: github.event_name == 'workflow_dispatch' && inputs.chaos_full
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.4"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: |
+          cp .env.example .env
+          uv sync --frozen
+
+      - name: Start the full stack
+        run: docker compose -f compose.yaml -f compose.proof.yaml up -d --build --wait
+
+      - name: Full chaos sweep
+        run: make chaos-full
+
+      - name: Upload chaos artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relaypay-chaos-full
+          path: output/chaos/
+          if-no-files-found: ignore
+
   release-gate:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -79,6 +194,9 @@ jobs:
       - name: Prove v0.14 merchant-risk-review upgrade preserves evidence
         run: uv run python -m scripts.verify_m14_upgrade
 
+      - name: Prove v2.0 M15 immutability backfill preserves evidence
+        run: uv run python -m scripts.verify_m15_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate
@@ -97,7 +215,7 @@ jobs:
           make api-contract
           make sdk-drift
           make sdk-example
-          make test
+          make test PYTEST_MARK="not handwritten and not proof and not chaos"
           make merchant-balance-demo
 
       - name: Shared agent runtime failure and recovery gate

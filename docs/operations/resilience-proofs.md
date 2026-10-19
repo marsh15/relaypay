@@ -20,3 +20,19 @@ proof; nothing on this list is documentation-only.
 | Prompt injection | `tests/unit/test_agent_runtime.py`, `tests/unit/test_settlement_classification.py`, `tests/integration/test_m14_risk_review.py` | untrusted-evidence delimiters cannot be closed by content; deterministic checks quote verbatim snapshot text only |
 | Tenant / environment isolation | `tests/integration/test_tenant_and_role_boundaries.py`, `tests/integration/test_m14_risk_review.py` | composite tenant keys, `404` for foreign IDs, scope predicates on every read |
 | Cross-workflow adversarial suite | `tests/fixtures/evaluations/v1/adversarial-v1.json` via `scripts/run_evaluations.py` | 20 adversarial cases (prompt injection, cross-tenant access, PII, permission escalation, duplicate effects) with zero violations, asserted in CI |
+
+## v2.0 proof harness (M15)
+
+These proofs run in the CI `proof-gate` job (`pytest -m "(proof or chaos) and not handwritten"`
+plus `make chaos`). Invariant evaluation waits for the maintainer's hand-written checker (see
+[PROVENANCE.md](../../PROVENANCE.md)) and runs in `handwritten-gate`.
+
+| Requirement | Proof (test files) | Mechanism exercised |
+| --- | --- | --- |
+| Generated operation sequences keep money consistent | `tests/integration/test_stateful_payments.py` | Hypothesis state machine over create, authorize, capture, refund, replay, key reuse, recovery and pending resolution, with lost, declined and pending provider outcomes; journals balance, refunds ≤ captured, and one provider mutation per stable key after every step |
+| Refunds never exceed captured, sequentially or concurrently | `tests/integration/test_property_refunds.py` | random partial-refund lists, 8 concurrent workers, exact `REFUND_AMOUNT_EXCEEDS_AVAILABLE` rejections |
+| No payout overdraft under contention | `tests/integration/test_payout_500_way.py` | 500 concurrent reservations against a balance that fits exactly 250 (with `compose.proof.yaml`) |
+| Duplicate HTTP requests are applied once | `tests/integration/test_http_duplicate_requests.py` | 50 concurrent identical POSTs through a real uvicorn server: one row, byte-identical bodies, and exactly one provider mutation for capture |
+| Crash at any protocol step converges | `tests/integration/test_chaos_ci.py`, `make chaos` | seeded schedules with crash points after send preparation, after the provider response, after finalizer commit, around payout bank sends and between poller tasks; quiesce, then snapshot, then the invariant check |
+| Evidence tables from 0012–0017 are immutable | `tests/integration/test_m15_immutability.py`, `scripts/verify_m15_upgrade.py` | full-row and column-scoped triggers (SQLSTATE 55000), with checksums preserved across upgrade |
+| Open: refund cannot spend reserved payout funds (F1) | `tests/integration/test_f1_refund_vs_reserved_payout.py` (strict xfail) | fix scheduled for M16 |
