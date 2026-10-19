@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.payments.models import Authorization, Capture, Refund
+from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.finalizer import (
     ActorType,
     finalize_verified_attempt,
@@ -403,6 +404,7 @@ def dispatch_operation(
             )
         except Exception:
             observation = None
+        maybe_crash("provider.after_lookup_response")
         classified = (
             transport_error_result()
             if observation is None
@@ -421,10 +423,12 @@ def dispatch_operation(
             classified=classified,
         )
     else:
+        maybe_crash("provider.after_prepare_send")
         try:
             observation = transport.mutate(prepared.request_bytes)
         except Exception:
             observation = None
+        maybe_crash("provider.after_mutate_response")
         classified = (
             transport_error_result()
             if observation is None

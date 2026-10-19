@@ -11,6 +11,7 @@ from relaypay.event_delivery.service import append_merchant_event
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.ledger.service import post_capture_journal, post_refund_journal
 from relaypay.payments.models import Authorization, Capture, PaymentIntent, Refund
+from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.models import (
     IdempotencyRecord,
     OperationHistory,
@@ -220,6 +221,7 @@ def finalize_verified_attempt(
                 correlation_id=correlation_id,
             )
         )
+    maybe_crash("finalizer.after_commit")
     return _terminal_result(operation, already=False)
 
 

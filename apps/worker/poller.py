@@ -20,6 +20,7 @@ from relaypay.mock_commerce.service import synchronize_event
 from relaypay.observability.metrics import observe_worker_task, start_worker_metrics_server
 from relaypay.observability.telemetry import configure_tracing
 from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
+from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
 from relaypay.reconciliation.service import run_reconciliation_batch
@@ -154,6 +155,7 @@ def poll_once(
                 results[task] = _process_inbound_webhooks(factory, commerce_factory)
             else:
                 results[task] = _RUNNERS[task](factory, settings)
+            maybe_crash("poller.between_tasks")
         event_publisher = RedpandaPublisher(settings.REDPANDA_BROKERS)
         published = 0
         while published < OUTBOX_DRAIN_CAP and int(

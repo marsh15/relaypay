@@ -5,11 +5,14 @@
 #
 # compose.yaml defines no postgres command, so this only appends the image default
 # (`postgres`) with a higher connection ceiling and gives the container enough memory
-# for the extra backends. Without it the race test falls back to 80 requests.
+# for the extra backends and enough CPU for the chaos sweep, whose cost is dominated by
+# commit-time ledger triggers (the default 1-CPU cap makes `make chaos` CPU-bound).
+# Without it the race test falls back to 80 requests.
 services:
   postgres:
     command: ["postgres", "-c", "max_connections=700"]
     deploy:
       resources:
         limits:
+          cpus: "4.0"
           memory: 2G

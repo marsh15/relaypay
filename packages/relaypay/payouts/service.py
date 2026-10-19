@@ -30,6 +30,7 @@ from relaypay.payouts.models import (
     PayoutHistory,
     PayoutReservationHistory,
 )
+from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.service_types import ProviderObservation
 
 
@@ -845,11 +846,13 @@ def dispatch_payout_attempt(
     bank_signing_secret: str,
     transport: BankTransport,
 ) -> None:
+    maybe_crash("payout.after_reservation")
     prepared = prepare_attempt_send(
         factory, payout_public_id=payout_public_id, bank_account_id=bank_account_id
     )
     if prepared.terminal:
         return
+    maybe_crash("payout.after_prepare_send")
     try:
         observation = (
             transport.lookup(account_id=bank_account_id, stable_key=prepared.stable_key)
@@ -858,6 +861,7 @@ def dispatch_payout_attempt(
         )
     except Exception:
         observation = None
+    maybe_crash("payout.after_bank_response")
     classification = _classify(
         observation,
         expected_request=prepared.request_bytes,

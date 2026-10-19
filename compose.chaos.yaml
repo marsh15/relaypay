@@ -1,0 +1,23 @@
+# Crash points inside the containers for `make chaos-full` (scripts/chaos/full.py).
+#
+#   docker compose -f compose.yaml -f compose.chaos.yaml up -d --build api poller
+#   uv run python -m scripts.chaos.run --mode full --seeds 200 --ops 10000
+#
+# RELAYPAY_CRASH_MODE=exit makes a hit crash point os._exit(137), which is what SIGKILL looks
+# like to everything else; `restart: unless-stopped` in compose.yaml brings the process back.
+# The points are inert unless RELAYPAY_CRASH_POINTS is set and APP_ENV is not production
+# (packages/relaypay/proof/crashpoints.py). Override the probabilities from the environment:
+#   RELAYPAY_CRASH_POINTS="provider.after_mutate_response:0.01" docker compose ... up -d api poller
+x-chaos-environment: &chaos-environment
+  RELAYPAY_CRASH_MODE: exit
+  RELAYPAY_CRASH_SEED: ${RELAYPAY_CRASH_SEED:-1}
+
+services:
+  api:
+    environment:
+      <<: *chaos-environment
+      RELAYPAY_CRASH_POINTS: ${RELAYPAY_CRASH_POINTS:-provider.after_prepare_send:0.002,provider.after_mutate_response:0.004,provider.after_lookup_response:0.002,finalizer.after_commit:0.003}
+  poller:
+    environment:
+      <<: *chaos-environment
+      RELAYPAY_CRASH_POINTS: ${RELAYPAY_CRASH_POINTS:-provider.after_lookup_response:0.002,finalizer.after_commit:0.003,poller.between_tasks:0.002,payout.after_reservation:0.002,payout.after_prepare_send:0.002,payout.after_bank_response:0.004}
