@@ -248,11 +248,14 @@ def run(settings: Settings) -> dict[str, object]:
             provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
             transport=transport,
         )
+        # Scoped to the demo tenant: the database may hold other tenants' work (in CI, the
+        # test suite's leftovers), which this proof must neither process nor depend on.
         run_recovery_batch(
             relay,
             provider_account_id=settings.PROVIDER_ACCOUNT_ID,
             provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
             transport=transport,
+            organisation_id=organisation_id,
         )
         materialize_deliveries(relay)
         claim = claim_delivery(relay, organisation_id=organisation_id)

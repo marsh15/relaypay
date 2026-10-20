@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from relaypay.ledger.models import Journal
-from relaypay.provider_operations.models import ProviderOperation
+from relaypay.provider_operations.models import ProviderAttempt, ProviderOperation
 from relaypay.provider_operations.recovery import (
     claim_unsent_operations,
     dispatch_unsent_operations,
@@ -179,3 +179,41 @@ def test_poller_racing_late_inline_dispatch_sends_exactly_once(
     key = _stable_key(factory, world, operation)
     assert provider.mutation_count(key) == 1
     provider.assert_exactly_once()
+
+
+def test_one_failing_first_send_does_not_block_the_batch(factory: sessionmaker[Session]) -> None:
+    """A poisoned unsent operation is skipped; the rest of the batch is still sent.
+
+    Reproduces the CI failure: an unsent operation that already holds a MUTATION attempt (an
+    inconsistent fixture) makes prepare_first_send raise a unique violation. Uncontained, that
+    exception aborted the whole sweep on every poller tick.
+    """
+    world = build_world(factory, label="f3-poison")
+    provider = FakeProvider()
+    poisoned = authorize(factory, world, create_payment(factory, world))
+    healthy = authorize(factory, world, create_payment(factory, world))
+    with factory() as session, session.begin():
+        operation = session.scalar(
+            select(ProviderOperation).where(
+                ProviderOperation.organisation_id == world.organisation_id,
+                ProviderOperation.public_id == poisoned,
+            )
+        )
+        assert operation is not None
+        session.add(
+            ProviderAttempt(
+                organisation_id=operation.organisation_id,
+                environment_id=operation.environment_id,
+                provider_operation_id=operation.id,
+                sequence=1,
+                attempt_kind="MUTATION",
+                state="SENT",
+                request_sha256=b"\x00" * 32,
+                started_at=operation.created_at,
+            )
+        )
+
+    assert _sweep(factory, world, provider) == 1
+
+    assert operation_status(factory, world, healthy) == "SUCCEEDED"
+    assert operation_status(factory, world, poisoned) == "PROCESSING"

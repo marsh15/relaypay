@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -16,6 +17,8 @@ from relaypay.provider_operations.service import (
     classify_and_record_lookup,
     dispatch_operation,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,19 +157,29 @@ def dispatch_unsent_operations(
         batch_size=batch_size,
         organisation_id=organisation_id,
     )
+    dispatched = 0
     for claim in claims:
-        dispatch_operation(
-            factory,
-            organisation_id=claim.organisation_id,
-            environment_id=claim.environment_id,
-            operation_public_id=claim.operation_public_id,
-            provider_account_id=provider_account_id,
-            transport=transport,
-            provider_signing_secret=provider_signing_secret,
-        )
-    if claims:
-        operations_metrics().recoveries.labels("unsent_dispatch").inc(len(claims))
-    return len(claims)
+        # One bad operation must not poison the batch: the poller runs this every tick, so an
+        # uncontained error would block every later unsent operation. The lease lapses and the
+        # operation is retried; repeated failures stay visible in logs and the metric.
+        try:
+            dispatch_operation(
+                factory,
+                organisation_id=claim.organisation_id,
+                environment_id=claim.environment_id,
+                operation_public_id=claim.operation_public_id,
+                provider_account_id=provider_account_id,
+                transport=transport,
+                provider_signing_secret=provider_signing_secret,
+            )
+        except Exception:
+            logger.exception("first send of unsent operation %s failed", claim.operation_public_id)
+            operations_metrics().recoveries.labels("unsent_dispatch_failed").inc()
+            continue
+        dispatched += 1
+    if dispatched:
+        operations_metrics().recoveries.labels("unsent_dispatch").inc(dispatched)
+    return dispatched
 
 
 def claim_specific_operation(
