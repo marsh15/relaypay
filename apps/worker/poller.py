@@ -54,6 +54,7 @@ def _recover_provider_operations(factory: sessionmaker[Session], settings: Setti
         provider_account_id=settings.PROVIDER_ACCOUNT_ID,
         provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
         transport=HTTPProviderTransport(base_url=settings.PROVIDER_BASE_URL),
+        not_found_grace_seconds=settings.PROVIDER_NOT_FOUND_GRACE_SECONDS,
     )
 
 
@@ -86,6 +87,7 @@ def _dispatch_payouts(factory: sessionmaker[Session], settings: Settings) -> int
         bank_account_id=settings.BANK_ACCOUNT_ID,
         bank_signing_secret=settings.BANK_SIGNING_SECRET.get_secret_value(),
         transport=HTTPBankTransport(base_url=settings.BANK_BASE_URL),
+        not_found_grace_seconds=settings.PROVIDER_NOT_FOUND_GRACE_SECONDS,
     )
 
 

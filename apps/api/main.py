@@ -428,6 +428,7 @@ def create_app(
             provider_signing_secret=resolved.PROVIDER_SIGNING_SECRET.get_secret_value(),
             transport=transport,
             actor_type="ADMIN_LOOKUP",
+            not_found_grace_seconds=resolved.PROVIDER_NOT_FOUND_GRACE_SECONDS,
         )
         result = read_operation(
             session_factory,

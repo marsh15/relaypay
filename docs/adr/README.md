@@ -10,3 +10,4 @@
 - [ADR-008: Settlement intelligence answers are deterministic with a bounded model role](008-deterministic-settlement-intelligence.md)
 - [ADR-009: Merchant risk review scores risk deterministically with cited model findings](009-deterministic-merchant-risk-review.md)
 - [ADR-010: Integrated platform analytics stay in PostgreSQL with low-cardinality gauges only](010-integrated-platform-analytics.md)
+- [ADR-011: A signed "not found" past a grace period is proof of absence](011-signed-not-found-is-proof-of-absence.md)

@@ -584,6 +584,10 @@ def prepare_attempt_send(
     )
 
 
+BANK_NOT_FOUND_CODE = "BANK_EFFECT_NOT_FOUND"
+DEFAULT_NOT_FOUND_GRACE_SECONDS = 600
+
+
 def _classify(
     observation: ProviderObservation | None,
     *,
@@ -615,6 +619,14 @@ def _classify(
         "payoutReference": request["payoutReference"],
         "stableKey": request["stableKey"],
     }
+    if observation.status_code == 404 and response.get("outcome") == "NOT_FOUND":
+        if (response.get("accountId"), response.get("stableKey")) != (
+            request["accountId"],
+            request["stableKey"],
+        ) or set(response) != {"accountId", "outcome", "stableKey"}:
+            return BankClassification(False, False, True, True, "BANK_RESPONSE_MISMATCHED")
+        # Ambiguous until record_bank_observation applies the grace period (ADR-011).
+        return BankClassification(False, False, True, True, BANK_NOT_FOUND_CODE)
     if any(response.get(key) != value for key, value in expected_fields.items()):
         return BankClassification(False, False, True, True, "BANK_RESPONSE_MISMATCHED")
     if response.get("outcome") == "SUCCEEDED":
@@ -684,6 +696,7 @@ def record_bank_observation(
     prepared: PreparedAttempt,
     observation: ProviderObservation | None,
     classification: BankClassification,
+    not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
 ) -> None:
     with factory() as session, session.begin():
         payout = session.scalar(
@@ -696,6 +709,15 @@ def record_bank_observation(
             raise RuntimeError("payout graph is missing")
         if attempt.status in {"SUCCEEDED", "FAILED"}:
             return
+        if (
+            classification.code == BANK_NOT_FOUND_CODE
+            and attempt.last_sent_at is not None
+            and datetime.now(UTC) - attempt.last_sent_at
+            >= timedelta(seconds=not_found_grace_seconds)
+        ):
+            # ADR-011: the bank's signed not-found past the grace period proves the transfer
+            # never happened, so the attempt fails and the reservation is released.
+            classification = BankClassification(True, False, False, True, BANK_NOT_FOUND_CODE)
         _append_evidence(
             session,
             payout,
@@ -845,6 +867,7 @@ def dispatch_payout_attempt(
     bank_account_id: str,
     bank_signing_secret: str,
     transport: BankTransport,
+    not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
 ) -> None:
     maybe_crash("payout.after_reservation")
     prepared = prepare_attempt_send(
@@ -872,6 +895,7 @@ def dispatch_payout_attempt(
         prepared=prepared,
         observation=observation,
         classification=classification,
+        not_found_grace_seconds=not_found_grace_seconds,
     )
 
 
@@ -977,6 +1001,7 @@ def run_payout_batch(
     organisation_id: uuid.UUID | None = None,
     sent_grace_seconds: int = SENT_RECOVERY_GRACE_SECONDS,
     sent_lease_seconds: int = SENT_RECOVERY_LEASE_SECONDS,
+    not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
 ) -> int:
     with factory() as session, session.begin():
         statement = (
@@ -1007,6 +1032,7 @@ def run_payout_batch(
             bank_account_id=bank_account_id,
             bank_signing_secret=bank_signing_secret,
             transport=transport,
+            not_found_grace_seconds=not_found_grace_seconds,
         )
     if payout_ids:
         operations_metrics().payouts.labels("attempted").inc(len(payout_ids))

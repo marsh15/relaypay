@@ -97,7 +97,11 @@ Lookup outcomes: a verified success finalizes; a verified decline finalizes the 
 operation `PROCESSING` with backoff (`min(2^(n-2), 60)` seconds). After five lookups that remain
 indeterminate, or on invalid evidence (bad signature, schema, or mismatched identity), the
 operation moves to `REQUIRES_REVIEW`. An operator can then trigger one more lookup
-(`POST /api/v1/operations/{id}/retry_lookup`); the mutation is never resent.
+(`POST /api/v1/operations/{id}/retry_lookup`); the mutation is never resent. A signed,
+identity-bound "not found" keeps polling without counting toward that limit until
+`PROVIDER_NOT_FOUND_GRACE_SECONDS` after the recorded send. From then on it fails the operation
+with `PROVIDER_EFFECT_NOT_FOUND`, and the same rule fails never-sent payouts
+([ADR-011](adr/011-signed-not-found-is-proof-of-absence.md)).
 
 Other sections of the system reuse the same shape: payouts (`PayoutAttempt`), dispute
 submissions, and recurring-payment retries each commit a send attempt first and recover by lookup.

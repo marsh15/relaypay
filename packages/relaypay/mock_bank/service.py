@@ -62,9 +62,9 @@ def _body(effect: BankEffect, account_id: str) -> bytes:
     )
 
 
-def _reply(body: bytes, signing_secret: str) -> BankReply:
+def _reply(body: bytes, signing_secret: str, *, status_code: int = 200) -> BankReply:
     return BankReply(
-        200,
+        status_code,
         body,
         {
             "Content-Type": "application/json",
@@ -168,11 +168,22 @@ def lookup_transfer(
             )
         )
         if effect is None:
-            raise RelayPayError(
-                code="BANK_EFFECT_NOT_FOUND",
-                message="Synthetic bank effect was not found",
-                http_status=404,
+            # Signed, identity-bound "not found" (ADR-011): proof of absence after a grace period.
+            if (
+                session.scalar(
+                    select(BankAccount.id).where(BankAccount.public_id == account_public_id)
+                )
+                is None
+            ):
+                raise RelayPayError(
+                    code="BANK_ACCOUNT_NOT_FOUND",
+                    message="Synthetic bank account was not found",
+                    http_status=404,
+                )
+            body = canonical_json_bytes(
+                {"accountId": account_public_id, "outcome": "NOT_FOUND", "stableKey": stable_key}
             )
+            return _reply(body, signing_secret, status_code=404)
         return _reply(effect.response_bytes or _body(effect, account_public_id), signing_secret)
 
 

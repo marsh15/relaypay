@@ -225,7 +225,9 @@ disposable-sandbox layout, not a regulated production architecture.
   safe, but it is not a tested scale-out path.
 - **Send-before-HTTP, lookup-only after.** A mutation can reach a provider at most once per stable
   key. After five lookups that stay indeterminate the operation becomes `REQUIRES_REVIEW`; a human
-  decides, and the system never guesses.
+  decides, and the system never guesses. The one exception is the provider's own signed "not
+  found" received after a grace period, which proves the request never arrived. The operation
+  then fails instead of waiting for a human ([ADR-011](docs/adr/011-signed-not-found-is-proof-of-absence.md)).
 - **Immutability by trigger.** Ledger, events, statements, and other evidence tables reject
   `UPDATE` and `DELETE` through database triggers. Tables added in migrations 0012 to 0017
   (agent runtime, disputes, recovery, settlement intelligence, risk review) are append-only by

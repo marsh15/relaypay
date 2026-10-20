@@ -61,7 +61,10 @@ from relaypay.provider_operations.recovery import (
     dispatch_unsent_operations,
     recover_claim,
 )
-from relaypay.provider_operations.service import dispatch_operation
+from relaypay.provider_operations.service import (
+    DEFAULT_NOT_FOUND_GRACE_SECONDS,
+    dispatch_operation,
+)
 from relaypay.provider_operations.service_types import ProviderObservation
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import Session, sessionmaker
@@ -554,7 +557,18 @@ def _expire_leases(ctx: SeedContext) -> None:
         )
 
 
-def _recover(ctx: SeedContext, operation_id: str, *, review: bool = False) -> None:
+# Quiesce stands in for the system resting long enough for every grace period to lapse, so it
+# applies ADR-011 with no grace; during the schedule the production default applies.
+QUIESCED_NOT_FOUND_GRACE_SECONDS = 0
+
+
+def _recover(
+    ctx: SeedContext,
+    operation_id: str,
+    *,
+    review: bool = False,
+    not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
+) -> None:
     claim = claim_specific_operation(
         ctx.factory,
         organisation_id=ctx.world.organisation_id,
@@ -569,6 +583,7 @@ def _recover(ctx: SeedContext, operation_id: str, *, review: bool = False) -> No
         provider_signing_secret=ctx.world.provider_signing_secret,
         transport=ctx.provider,
         actor_type="ADMIN_LOOKUP" if review else "RECOVERY_WORKER",
+        not_found_grace_seconds=not_found_grace_seconds,
     )
 
 
@@ -781,7 +796,9 @@ def quiesce(ctx: SeedContext) -> None:
             if not was_sent:
                 continue
             try:
-                _recover(ctx, operation_id)
+                _recover(
+                    ctx, operation_id, not_found_grace_seconds=QUIESCED_NOT_FOUND_GRACE_SECONDS
+                )
                 progressed += 1
             except RelayPayError as error:
                 ctx.rejections[error.code] += 1
@@ -794,7 +811,12 @@ def quiesce(ctx: SeedContext) -> None:
     for operation_id in _review_operations(ctx):
         _expire_leases(ctx)
         try:
-            _recover(ctx, operation_id, review=True)
+            _recover(
+                ctx,
+                operation_id,
+                review=True,
+                not_found_grace_seconds=QUIESCED_NOT_FOUND_GRACE_SECONDS,
+            )
         except RelayPayError as error:
             ctx.rejections[error.code] += 1
     ctx.result.review_remaining = len(_review_operations(ctx))
@@ -812,6 +834,7 @@ def quiesce(ctx: SeedContext) -> None:
             organisation_id=ctx.world.organisation_id,
             sent_grace_seconds=0,
             sent_lease_seconds=0,
+            not_found_grace_seconds=QUIESCED_NOT_FOUND_GRACE_SECONDS,
         )
     except RelayPayError as error:
         ctx.rejections[error.code] += 1
@@ -874,11 +897,11 @@ def _finish(ctx: SeedContext, *, keep_snapshot: bool = False) -> None:
             )
         )
     known_effects = set(provider.effects)
-    # An operation whose first send was committed but never reached the provider (a crash
-    # between the send record and the mutate) can only ever look up a 404: it rests in review.
-    ctx.findings["review_operations_never_reached_provider"] = sum(
-        1 for key in review_keys if key not in known_effects
-    )
+    # F4 / ADR-011: an operation whose send never reached the provider fails on the signed
+    # not-found once the grace period lapses; resting in review instead is a recovery gap.
+    never_reached = sum(1 for key in review_keys if key not in known_effects)
+    if never_reached:
+        ctx.fail(f"{never_reached} review operations never reached the provider (F4)")
     result.crashes = dict(sorted(ctx.crashes.items()))
     result.rejections = dict(sorted(ctx.rejections.items()))
     result.payouts = dict(sorted(ctx.payout_counts.items()))

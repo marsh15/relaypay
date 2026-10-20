@@ -18,7 +18,7 @@ from enum import Enum
 
 import httpx
 from relaypay.idempotency import canonical_json_bytes
-from relaypay.mock_provider.service import signature
+from relaypay.mock_provider.service import not_found_body, signature
 from relaypay.provider_operations.service_types import ProviderObservation
 
 ACCOUNT_ID = "acct_relaypay_demo"
@@ -175,8 +175,19 @@ class FakeProvider:
         with self._lock:
             self._lookups[stable_key] = self._lookups.get(stable_key, 0) + 1
             effect = self._effects.get(stable_key)
-            if account_id != self.account_id or effect is None:
+            if account_id != self.account_id:
                 return ProviderObservation(404, b"", {})
+            if effect is None:
+                # Same signed, identity-bound not-found as the provider simulator (ADR-011).
+                body = not_found_body(account_id, stable_key)
+                return ProviderObservation(
+                    404,
+                    body,
+                    {
+                        "Content-Type": "application/json",
+                        "X-Provider-Signature": signature(body, self.signing_secret),
+                    },
+                )
             return self._effect_reply(effect)
 
     # ----- internals -------------------------------------------------------------------

@@ -138,6 +138,7 @@ def finalize_verified_attempt(
         if attempt.classification not in {
             "VERIFIED_SUCCESS",
             "VERIFIED_BUSINESS_DECLINE",
+            "VERIFIED_NOT_FOUND_FINAL",  # ADR-011: signed absence past the grace period
         }:
             raise RuntimeError("provider evidence is not a verified terminal outcome")
 

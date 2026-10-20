@@ -13,6 +13,7 @@ ProviderAction = Literal[
     "LOOKUP",
     "PROCESSING",
     "REVIEW",
+    "NOT_FOUND",
 ]
 
 
@@ -38,6 +39,16 @@ class ProviderResult(BaseModel):
         return self
 
 
+class ProviderNotFound(BaseModel):
+    """Signed lookup answer that the provider holds no effect for this stable key (ADR-011)."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    accountId: str
+    stableKey: str
+    outcome: Literal["NOT_FOUND"]
+
+
 @dataclass(frozen=True, slots=True)
 class ExpectedProviderResult:
     account_id: str
@@ -56,6 +67,53 @@ class ClassifiedProviderResult:
     safe_error_code: str | None = None
     decline_code: str | None = None
     effect_id: str | None = None
+
+
+def _signature_valid(observation: ProviderObservation, signing_secret: str) -> bool:
+    supplied = next(
+        (
+            value
+            for name, value in observation.headers.items()
+            if name.lower() == "x-provider-signature"
+        ),
+        None,
+    )
+    expected = hmac.new(
+        signing_secret.encode("utf-8"), observation.body, hashlib.sha256
+    ).hexdigest()
+    return supplied is not None and hmac.compare_digest(supplied, expected)
+
+
+def _classify_not_found(
+    observation: ProviderObservation,
+    *,
+    expected: "ExpectedProviderResult",
+    signing_secret: str,
+) -> ClassifiedProviderResult | None:
+    """Trust a lookup 404 only when it is a signed not-found bound to this account and key.
+
+    Anything else (unsigned, unparseable) returns None and keeps today's "non-business 4xx,
+    keep polling" handling: an unsigned 404 is never evidence that an effect is absent.
+    """
+    if not observation.body or not _signature_valid(observation, signing_secret):
+        return None
+    try:
+        answer = ProviderNotFound.model_validate_json(observation.body)
+    except ValidationError:
+        return None
+    if (answer.accountId, answer.stableKey) != (expected.account_id, expected.stable_key):
+        return ClassifiedProviderResult(
+            action="REVIEW",
+            classification="MISMATCHED_EVIDENCE",
+            signature_valid=True,
+            safe_error_code="INVALID_EVIDENCE",
+        )
+    return ClassifiedProviderResult(
+        action="NOT_FOUND",
+        classification="VERIFIED_NOT_FOUND",
+        signature_valid=True,
+        safe_error_code="PROVIDER_EFFECT_NOT_FOUND",
+    )
 
 
 def transport_error_result() -> ClassifiedProviderResult:
@@ -81,6 +139,12 @@ def classify_provider_observation(
             signature_valid=None,
             safe_error_code="PROVIDER_HTTP_5XX",
         )
+    if is_lookup and observation.status_code == 404:
+        not_found = _classify_not_found(
+            observation, expected=expected, signing_secret=signing_secret
+        )
+        if not_found is not None:
+            return not_found
     if not 200 <= observation.status_code < 300:
         return ClassifiedProviderResult(
             action="LOOKUP" if not is_lookup else "PROCESSING",
@@ -89,20 +153,7 @@ def classify_provider_observation(
             safe_error_code="PROVIDER_NON_BUSINESS_HTTP",
         )
 
-    supplied_signature = next(
-        (
-            value
-            for name, value in observation.headers.items()
-            if name.lower() == "x-provider-signature"
-        ),
-        None,
-    )
-    expected_signature = hmac.new(
-        signing_secret.encode("utf-8"), observation.body, hashlib.sha256
-    ).hexdigest()
-    if supplied_signature is None or not hmac.compare_digest(
-        supplied_signature, expected_signature
-    ):
+    if not _signature_valid(observation, signing_secret):
         return ClassifiedProviderResult(
             action="REVIEW",
             classification="INVALID_SIGNATURE",

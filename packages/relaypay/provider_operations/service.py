@@ -182,6 +182,10 @@ def prepare_first_send(
     )
 
 
+# Default for ADR-011's not-found grace period; the poller passes the configured value.
+DEFAULT_NOT_FOUND_GRACE_SECONDS = 600
+
+
 def _next_lookup(now: datetime, attempt_count: int) -> datetime:
     return now + timedelta(seconds=min(2 ** max(attempt_count - 2, 0), 60))
 
@@ -252,6 +256,7 @@ def record_lookup_observation(
     observation: ProviderObservation | None,
     classified: ClassifiedProviderResult,
     indeterminate_after: int = 5,
+    not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
 ) -> RecordedOutcome | None:
     with factory() as session, session.begin():
         operation = session.scalar(
@@ -298,7 +303,21 @@ def record_lookup_observation(
         lookup_count = sequence - 1
         review_reason = "INVALID_EVIDENCE" if classified.action == "REVIEW" else None
         action = classified.action
-        if action in {"LOOKUP", "PROCESSING"} and lookup_count >= indeterminate_after:
+        if action == "NOT_FOUND":
+            # ADR-011: a signed not-found is proof of absence only after the grace period since
+            # the recorded send (the provider's lookup-consistency window). Until then keep
+            # polling, without counting toward the indeterminate review limit.
+            if operation.last_sent_at is None:
+                raise RuntimeError("lookup recorded for an operation that was never sent")
+            deadline = operation.last_sent_at + timedelta(seconds=not_found_grace_seconds)
+            if now >= deadline:
+                attempt.classification = "VERIFIED_NOT_FOUND_FINAL"
+                action = "FINALIZE_FAILURE"
+            else:
+                attempt.classification = "VERIFIED_NOT_FOUND_WITHIN_GRACE"
+                action = "PROCESSING"
+                operation.next_lookup_at = min(operation.next_lookup_at, deadline)
+        elif action in {"LOOKUP", "PROCESSING"} and lookup_count >= indeterminate_after:
             action = "REVIEW"
             review_reason = "PROVIDER_INDETERMINATE"
         session.flush([attempt])
@@ -350,6 +369,7 @@ def classify_and_record_lookup(
     provider_account_id: str,
     provider_signing_secret: str,
     observation: ProviderObservation | None,
+    not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
 ) -> RecordedOutcome | None:
     expected = _expected_result(
         factory, operation_id=operation_id, provider_account_id=provider_account_id
@@ -370,6 +390,7 @@ def classify_and_record_lookup(
         lease_token=lease_token,
         observation=observation,
         classified=classified,
+        not_found_grace_seconds=not_found_grace_seconds,
     )
 
 

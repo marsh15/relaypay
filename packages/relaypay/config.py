@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     RECOVERY_NETWORK_BASE_URL: str = "http://localhost:8006"
     RISK_SITE_BASE_URL: str = "http://localhost:8007"
     INBOUND_WEBHOOK_REPLAY_SECONDS: int = 300
+    # F4 (ADR-011): a signed provider/bank "not found" this long after the recorded send is proof
+    # the effect never happened, so the operation fails instead of waiting for review.
+    PROVIDER_NOT_FOUND_GRACE_SECONDS: int = Field(default=600, ge=0)
     RECEIVER_BASE_URL: str = "http://localhost:8002"
     RECEIVER_WEBHOOK_SECRET: SecretStr = Field(min_length=16)
     OBSERVABILITY_ENABLED: bool = False

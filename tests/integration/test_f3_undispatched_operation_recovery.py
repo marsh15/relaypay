@@ -146,7 +146,7 @@ def test_recovery_batch_includes_unsent_operations(factory: sessionmaker[Session
         provider_account_id=world.provider_account_id,
         provider_signing_secret=world.provider_signing_secret,
         transport=provider,
-        batch_size=1000,
+        organisation_id=world.organisation_id,
     )
 
     assert operation_status(factory, world, operation) == "SUCCEEDED"

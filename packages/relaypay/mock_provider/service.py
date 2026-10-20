@@ -74,6 +74,12 @@ def _reply(body: bytes, signing_secret: str, *, status_code: int = 200) -> Provi
     )
 
 
+def not_found_body(account_public_id: str, stable_key: str) -> bytes:
+    return canonical_json_bytes(
+        {"accountId": account_public_id, "outcome": "NOT_FOUND", "stableKey": stable_key}
+    )
+
+
 def _effect_body(effect: ProviderEffect, account_public_id: str) -> bytes:
     return canonical_json_bytes(
         {
@@ -214,10 +220,19 @@ def lookup_effect(
             )
         )
         if effect is None:
-            raise RelayPayError(
-                code="PROVIDER_EFFECT_NOT_FOUND",
-                message="Provider effect was not found",
-                http_status=404,
+            # A signed, identity-bound "not found": RelayPay may treat it as proof the effect
+            # never happened once its grace period has passed (ADR-011).
+            account_exists = session.scalar(
+                select(ProviderAccount.id).where(ProviderAccount.public_id == account_public_id)
+            )
+            if account_exists is None:
+                raise RelayPayError(
+                    code="PROVIDER_ACCOUNT_NOT_FOUND",
+                    message="Provider account was not found",
+                    http_status=404,
+                )
+            return _reply(
+                not_found_body(account_public_id, stable_key), signing_secret, status_code=404
             )
         body = effect.response_bytes or _effect_body(effect, account_public_id)
         return _reply(body, signing_secret)
