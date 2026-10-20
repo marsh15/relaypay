@@ -16,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from relaypay.database import Base
+from relaypay.fees import models as _fee_models  # noqa: F401  # registers captures' FK target
 from relaypay.model_mixins import CreatedAtMixin, UpdatedAtMixin, UUIDPrimaryKeyMixin
 
 
