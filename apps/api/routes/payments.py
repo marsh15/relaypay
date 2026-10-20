@@ -205,6 +205,7 @@ def build_payments_router(
                         body=payload,
                     ),
                     key_pepper=settings.IDEMPOTENCY_KEY_PEPPER.get_secret_value(),
+                    hold_seconds=settings.AUTH_HOLD_SECONDS,
                 ),
                 principal,
             )

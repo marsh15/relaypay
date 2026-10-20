@@ -152,7 +152,7 @@ def finalize_verified_attempt(
 
         if isinstance(resource, Authorization):
             resource.status = terminal_status
-            resource.authorized_at = now if succeeded else None
+            resource.authorized_at = now if succeeded else None  # DB derives expires_at
             resource.failure_code = failure_code
             event_type = "payment.authorized.v1"
             transition(

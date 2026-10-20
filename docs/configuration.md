@@ -71,6 +71,7 @@ keys, cursors); rotating an encryption key without re-encrypting makes stored se
 | `RECEIVER_WEBHOOK_SECRET` | required, 16+ chars | yes | Signing secret of the bundled receiver endpoint |
 | `INBOUND_WEBHOOK_REPLAY_SECONDS` | `300` | no | Replay window for inbound connector events |
 | `PROVIDER_NOT_FOUND_GRACE_SECONDS` | `600` | no | Seconds after a recorded send before a signed provider or bank "not found" fails the operation ([ADR-011](adr/011-signed-not-found-is-proof-of-absence.md)) |
+| `AUTH_HOLD_SECONDS` | `604800` | no | How long a succeeded authorization holds funds before an uncaptured payment expires (minimum 60) |
 | `REDPANDA_BROKERS` | `localhost:19092` | no | Outbox publish target (`redpanda:9092` in Compose) |
 
 ### Observability and edge

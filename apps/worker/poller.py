@@ -19,6 +19,7 @@ from relaypay.event_delivery.materializer import materialize_deliveries
 from relaypay.mock_commerce.service import synchronize_event
 from relaypay.observability.metrics import observe_worker_task, start_worker_metrics_server
 from relaypay.observability.telemetry import configure_tracing
+from relaypay.payments.expiry import expire_authorizations
 from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
 from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.recovery import run_recovery_batch
@@ -43,6 +44,7 @@ SCHEDULE_SECONDS: dict[str, float] = {
     "run_subscription_recovery": 1.0,
     "process_inbound_webhooks": 2.0,
     "record_settlement_forecasts": 3600.0,
+    "expire_authorizations": 5.0,
 }
 OUTBOX_DRAIN_CAP = 100
 
@@ -175,6 +177,11 @@ def poll_once(
             owned_commerce_engine.dispose()
 
 
+@observe_worker_task("expire_authorizations")
+def _expire_authorizations(factory: sessionmaker[Session], settings: Settings) -> int:
+    return expire_authorizations(factory)
+
+
 _RUNNERS = {
     "recover_provider_operations": _recover_provider_operations,
     "materialize_webhook_deliveries": _materialize_webhook_deliveries,
@@ -183,6 +190,7 @@ _RUNNERS = {
     "dispatch_payouts": _dispatch_payouts,
     "run_subscription_recovery": _run_subscription_recovery,
     "record_settlement_forecasts": _record_settlement_forecasts,
+    "expire_authorizations": _expire_authorizations,
 }
 
 

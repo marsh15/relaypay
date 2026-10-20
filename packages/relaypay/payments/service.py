@@ -19,6 +19,8 @@ from relaypay.payments.models import Authorization, Capture, Customer, PaymentIn
 from relaypay.payments.transitions import record_creation
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
 
+DEFAULT_AUTH_HOLD_SECONDS = 604_800  # 7 days; the API passes AUTH_HOLD_SECONDS
+
 
 @dataclass(frozen=True, slots=True)
 class HTTPResult:
@@ -359,7 +361,10 @@ def initiate_authorization(
     idempotency_key: str,
     fingerprint: Fingerprint,
     key_pepper: str,
+    hold_seconds: int = DEFAULT_AUTH_HOLD_SECONDS,
 ) -> HTTPResult:
+    if hold_seconds <= 0:
+        raise ValueError("authorization hold must be positive")
     key_digest = digest_secret(idempotency_key, key_pepper)
     try:
         with factory() as session, session.begin():
@@ -420,6 +425,7 @@ def initiate_authorization(
                 payment_intent_id=payment.id,
                 provider_operation_id=operation.id,
                 amount=payment.amount,
+                hold_seconds=hold_seconds,
                 currency="INR",
                 status="PROCESSING",
             )
@@ -532,6 +538,27 @@ def initiate_capture(
                     idempotency_key=idempotency_key,
                     key_digest=key_digest,
                     fingerprint=fingerprint,
+                )
+            # Only a brand-new capture is refused for a dead payment or a lapsed hold; a
+            # retry of the existing capture (above) still converges on it, as in /api/v1.
+            if payment.status in {"cancelled", "expired", "failed"}:
+                raise RelayPayError(
+                    code="PAYMENT_NOT_CAPTURABLE",
+                    message=f"A {payment.status} payment cannot be captured",
+                    http_status=409,
+                    details={"status": payment.status},
+                )
+            database_now = session.scalar(select(func.now()))
+            if (
+                authorization.expires_at is not None
+                and database_now is not None
+                and authorization.expires_at <= database_now
+            ):
+                raise RelayPayError(
+                    code="AUTHORIZATION_EXPIRED",
+                    message="The authorization hold has expired",
+                    http_status=409,
+                    details={"expiresAt": authorization.expires_at.isoformat()},
                 )
             resource_id = new_uuid()
             operation = _new_operation(

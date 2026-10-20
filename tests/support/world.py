@@ -289,6 +289,7 @@ def authorize(
     provider: ProviderTransport | None = None,
     *,
     key: str | None = None,
+    hold_seconds: int | None = None,
 ) -> str:
     """Initiate an authorization (dispatching it when ``provider`` is given); returns op id."""
     result = initiate_authorization(
@@ -299,6 +300,7 @@ def authorize(
         idempotency_key=key or f"authorize-{uuid.uuid4().hex}",
         fingerprint=_command_fingerprint(payment_id, "authorize", EmptyCommand()),
         key_pepper=world.key_pepper,
+        **({} if hold_seconds is None else {"hold_seconds": hold_seconds}),
     )
     operation_id = str(json.loads(result.body)["operationId"])
     if provider is not None:

@@ -191,6 +191,13 @@ class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             "(status = 'FAILED' AND authorized_at IS NULL AND failure_code IS NOT NULL) OR "
             "(status IN ('PROCESSING', 'REQUIRES_REVIEW') AND authorized_at IS NULL)"
         ),
+        CheckConstraint("hold_seconds > 0", name="authorizations_hold_seconds_check"),
+        CheckConstraint(
+            "(status = 'SUCCEEDED') = (expires_at IS NOT NULL)", name="authorizations_expiry_check"
+        ),
+        Index(
+            "ix_authorizations_expiry", "expires_at", postgresql_where=text("status = 'SUCCEEDED'")
+        ),
     )
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -203,6 +210,8 @@ class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="PROCESSING")
     failure_code: Mapped[str | None] = mapped_column(String(64))
     authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    hold_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=604_800)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):

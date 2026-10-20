@@ -47,6 +47,7 @@ from scripts.verify_m2_upgrade import (
 PREVIOUS_REVISION = "0018_immutability_backfill"
 REVISION = "0019_payment_state_machine"
 GUARD_REVISION = "0020_payout_overdraft_guard"
+EXPIRY_REVISION = "0023_authorization_expiry"
 GUARD_TRIGGERS = {
     ("payout_reservation_history", "payout_reservations_covered_at_commit"),
     ("postings", "available_debits_covered_at_commit"),
@@ -359,6 +360,38 @@ def _prove_overdraft_guard(config: Config, database_url: str) -> None:
         engine.dispose()
 
 
+def _prove_authorization_expiry(config: Config, database_url: str) -> None:
+    """0023 backfills expires_at = authorized_at + 7 days for every succeeded authorization."""
+    command.upgrade(config, EXPIRY_REVISION)
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            succeeded = int(
+                connection.scalar(
+                    text("SELECT count(*) FROM authorizations WHERE status = 'SUCCEEDED'")
+                )
+                or 0
+            )
+            wrong = int(
+                connection.scalar(
+                    text(
+                        "SELECT count(*) FROM authorizations WHERE "
+                        "hold_seconds <> 604800 OR "
+                        "(status = 'SUCCEEDED') <> (expires_at IS NOT NULL) OR "
+                        "(status = 'SUCCEEDED' AND "
+                        "expires_at <> authorized_at + interval '7 days')"
+                    )
+                )
+                or 0
+            )
+        assert succeeded > 0, "the seeded data must include succeeded authorizations"
+        assert wrong == 0, f"{wrong} authorizations backfilled incorrectly"
+        command.downgrade(config, GUARD_REVISION)
+        command.upgrade(config, EXPIRY_REVISION)
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     module = _migration_module()
     assert module.SQLSTATE == "RP001"
@@ -371,8 +404,9 @@ def main() -> None:
         os.environ["RELAYPAY_MIGRATION_DATABASE_URL"] = database_url
         config = _configuration(RELAYPAY_CONFIG_PATH, database_url)
 
-        # Seed through the real services at 0019, then step back so the data is a 0018 database.
-        command.upgrade(config, REVISION)
+        # Seed through the real services at head (the services use today's models), then step
+        # back so the data is exactly a 0018 database.
+        command.upgrade(config, "head")
         expected = _seed(database_url)
         engine = create_engine(database_url)
         try:
@@ -419,6 +453,7 @@ def main() -> None:
             _assert_upgraded(engine, baseline, expected, recorded)
             engine.dispose()
             _prove_overdraft_guard(config, database_url)
+            _prove_authorization_expiry(config, database_url)
         finally:
             engine.dispose()
     finally:
@@ -431,7 +466,8 @@ def main() -> None:
         "M16 upgrade proof passed: 0019 backfilled "
         f"{baseline.payment_count} payments across every lifecycle state; "
         "evidence checksums unchanged; downgrade and re-upgrade clean; "
-        "0020 overdraft guard triggers added without changing rows"
+        "0020 overdraft guard triggers added without changing rows; "
+        "0023 authorization expiry backfilled"
     )
 
 
