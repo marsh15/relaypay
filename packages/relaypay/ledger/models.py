@@ -150,6 +150,14 @@ class Posting(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),
         Index("ix_postings_account_created", "organisation_id", "account_id", "created_at", "id"),
+        # Balance reads sum one account's postings by account_id alone; without this they seq-scan.
+        Index("ix_postings_account_balance", "account_id", postgresql_include=["side", "amount"]),
+        # The deferred journal-balance trigger sums one journal's postings at every commit.
+        Index(
+            "ix_postings_journal",
+            "journal_id",
+            postgresql_include=["side", "amount", "currency"],
+        ),
     )
 
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
