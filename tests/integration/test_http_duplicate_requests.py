@@ -229,8 +229,26 @@ def test_concurrent_identical_capture_sends_one_provider_mutation(
         server, world, f"/api/v1/payment_intents/{payment_id}/capture", key, {}
     )
 
-    _assert_identical(replies)
-    assert replies[0].status == 200, replies[0].body
-    assert json.loads(replies[0].body)["status"] == "SUCCEEDED"
+    # A duplicate that arrives while the first request's provider call is still in flight gets
+    # the in-progress 202 envelope; one that arrives after finalization replays the terminal
+    # 200. Both are correct idempotent answers. Within each status the bytes must be identical,
+    # and every reply must name the same operation.
+    by_status: dict[int, list[Reply]] = {}
+    for reply in replies:
+        by_status.setdefault(reply.status, []).append(reply)
+    assert set(by_status) <= {200, 202}, sorted(by_status)
+    for group in by_status.values():
+        assert len({reply.body for reply in group}) == 1, [r.body for r in group][:3]
+    operation_ids = {json.loads(reply.body)["operationId"] for reply in replies}
+    assert len(operation_ids) == 1, operation_ids
+
+    settled = _fire_concurrently(
+        server, world, f"/api/v1/payment_intents/{payment_id}/capture", key, {}
+    )
+    _assert_identical(settled)
+    assert settled[0].status == 200, settled[0].body
+    assert json.loads(settled[0].body)["status"] == "SUCCEEDED"
+    if 200 in by_status:
+        assert by_status[200][0].body == settled[0].body
     assert server.provider.mutation_count() - mutations_before == 1
     server.provider.assert_exactly_once()
