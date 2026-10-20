@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from types import ModuleType
 
 from alembic import command
+from alembic.config import Config
 from sqlalchemy import Connection, create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
@@ -45,6 +46,11 @@ from scripts.verify_m2_upgrade import (
 
 PREVIOUS_REVISION = "0018_immutability_backfill"
 REVISION = "0019_payment_state_machine"
+GUARD_REVISION = "0020_payout_overdraft_guard"
+GUARD_TRIGGERS = {
+    ("payout_reservation_history", "payout_reservations_covered_at_commit"),
+    ("postings", "available_debits_covered_at_commit"),
+}
 MIGRATION_PATH = ROOT / "migrations" / "relaypay" / "versions" / "0019_payment_state_machine.py"
 NEW_COLUMNS = ("status", "status_version")
 NEW_FUNCTION = "relaypay_enforce_payment_status_transition"
@@ -319,6 +325,40 @@ def _assert_trigger_behaviour(connection: Connection, statuses: dict[str, str]) 
         outer.rollback()
 
 
+def _guard_triggers(connection: Connection) -> set[tuple[str, str]]:
+    rows = connection.execute(
+        text(
+            "SELECT c.relname, t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
+            "WHERE t.tgname IN ('payout_reservations_covered_at_commit', "
+            "'available_debits_covered_at_commit') AND t.tgdeferrable"
+            " AND c.relnamespace = to_regnamespace(current_schema())"
+        )
+    ).all()
+    return {(str(row[0]), str(row[1])) for row in rows}
+
+
+def _prove_overdraft_guard(config: Config, database_url: str) -> None:
+    """0020 adds only deferred constraint triggers: no row changes, clean down and up."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            before = _digests(connection)
+            assert _guard_triggers(connection) == set()
+        command.upgrade(config, GUARD_REVISION)
+        with engine.connect() as connection:
+            assert _guard_triggers(connection) == GUARD_TRIGGERS
+            assert _digests(connection) == before, "0020 must not change any row"
+        command.downgrade(config, REVISION)
+        with engine.connect() as connection:
+            assert _guard_triggers(connection) == set()
+            assert _digests(connection) == before
+        command.upgrade(config, GUARD_REVISION)
+        with engine.connect() as connection:
+            assert _guard_triggers(connection) == GUARD_TRIGGERS
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     module = _migration_module()
     assert module.SQLSTATE == "RP001"
@@ -377,6 +417,8 @@ def main() -> None:
             command.upgrade(config, REVISION)
             engine = create_engine(database_url)
             _assert_upgraded(engine, baseline, expected, recorded)
+            engine.dispose()
+            _prove_overdraft_guard(config, database_url)
         finally:
             engine.dispose()
     finally:
@@ -388,7 +430,8 @@ def main() -> None:
     print(
         "M16 upgrade proof passed: 0019 backfilled "
         f"{baseline.payment_count} payments across every lifecycle state; "
-        "evidence checksums unchanged; downgrade and re-upgrade clean"
+        "evidence checksums unchanged; downgrade and re-upgrade clean; "
+        "0020 overdraft guard triggers added without changing rows"
     )
 
 
