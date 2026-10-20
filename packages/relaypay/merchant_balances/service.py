@@ -219,9 +219,28 @@ def _account_balance(session: Session, ledger_account: LedgerAccount) -> int:
     return credit_normal if ledger_account.account_type == "LIABILITY" else -credit_normal
 
 
-def derive_balances(session: Session, merchant: MerchantAccount) -> MerchantBalances:
+def reserved_payout_amount(session: Session, merchant_account_id: uuid.UUID) -> int:
+    """Sum of live payout reservations (paise) held against a merchant's AVAILABLE balance.
+
+    Callers that act on the result must hold the merchant-account row lock, so reservations
+    cannot change between this read and their posting.
+    """
     from relaypay.payouts.models import PayoutReservationHistory
 
+    reserved = int(
+        session.scalar(
+            select(func.coalesce(func.sum(PayoutReservationHistory.amount_delta), 0)).where(
+                PayoutReservationHistory.merchant_account_id == merchant_account_id
+            )
+        )
+        or 0
+    )
+    if reserved < 0:
+        raise RuntimeError("payout reservation history cannot derive a negative reservation")
+    return reserved
+
+
+def derive_balances(session: Session, merchant: MerchantAccount) -> MerchantBalances:
     pending = _account_balance(
         session,
         account(
@@ -252,16 +271,7 @@ def derive_balances(session: Session, merchant: MerchantAccount) -> MerchantBala
             merchant_account_id=merchant.id,
         ),
     )
-    reserved = int(
-        session.scalar(
-            select(func.coalesce(func.sum(PayoutReservationHistory.amount_delta), 0)).where(
-                PayoutReservationHistory.merchant_account_id == merchant.id
-            )
-        )
-        or 0
-    )
-    if reserved < 0:
-        raise RuntimeError("payout reservation history cannot derive a negative reservation")
+    reserved = reserved_payout_amount(session, merchant.id)
     return MerchantBalances(pending, available, receivable, reserved, max(available - reserved, 0))
 
 

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -40,6 +41,17 @@ from tests.integration.test_m3_merchant_balances import (
     _identity,
     _settle,
     _successful_capture,
+)
+from tests.support import world as proof_world
+from tests.support.db import relaypay_factory, require_postgres
+from tests.support.fake_provider import FakeProvider
+from tests.support.world import (
+    build_world,
+    make_beneficiary,
+    paid_payment,
+    refund,
+    request_payout,
+    settle,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.concurrency]
@@ -397,3 +409,49 @@ def test_verified_decline_releases_and_explicit_retry_is_numbered() -> None:
     finally:
         bank_engine.dispose()
         engine.dispose()
+
+
+def test_concurrent_refunds_and_payout_reservation_never_breach_reserved_or_zero() -> None:
+    """Two refunds race a payout reservation on one merchant.
+
+    All three take the merchant-account lock, so whichever order they run in, AVAILABLE never
+    drops below what is reserved (or below zero) and the refunds net out against settlement.
+    """
+    require_postgres()
+    amount = 100_000
+    with relaypay_factory("m4-refund-vs-reservation-tests") as factory:
+        world = build_world(factory, label="m4-refund-vs-reservation")
+        provider = FakeProvider()
+        payments = [paid_payment(factory, world, provider, amount=amount) for _ in range(2)]
+        assert settle(factory, world) == 2 * amount
+        beneficiary = make_beneficiary(factory, world)
+        barrier = threading.Barrier(3)
+
+        def refund_payment(payment_id: str) -> None:
+            barrier.wait()
+            refund(factory, world, payment_id, amount, provider)
+
+        def reserve_payout() -> bool:
+            barrier.wait()
+            try:
+                request_payout(factory, world, beneficiary, amount)
+            except RelayPayError as error:
+                assert error.code == "INSUFFICIENT_PAYOUT_BALANCE"
+                return False
+            return True
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            refunds = [pool.submit(refund_payment, payment.payment_id) for payment in payments]
+            reservation = pool.submit(reserve_payout)
+            for future in refunds:
+                future.result()
+            reserved = reservation.result()
+
+        after = proof_world.balances(factory, world)
+        assert after.available >= 0
+        assert after.available >= after.reserved
+        assert after.reserved == (amount if reserved else 0)
+        # Settled 200000 and refunded 200000: AVAILABLE net of the receivable is exactly zero.
+        assert after.available == after.receivable
+        if reserved:
+            assert (after.available, after.receivable) == (amount, amount)

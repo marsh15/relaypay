@@ -237,8 +237,14 @@ def _refund_sources(
             )
         ).where(Posting.account_id == available_account.id)
     )
+    # Funds reserved for in-flight payouts are not the refund's to take: draw only on the
+    # unreserved (payout-eligible) part of AVAILABLE and book the rest to the receivable.
+    # Local import: merchant_balances.service imports this module at load time.
+    from relaypay.merchant_balances.service import reserved_payout_amount
+
+    unreserved = max(int(available or 0) - reserved_payout_amount(session, merchant_account_id), 0)
     pending_use = min(refund.amount, pending)
-    available_use = min(refund.amount - pending_use, max(int(available or 0), 0))
+    available_use = min(refund.amount - pending_use, unreserved)
     return pending_use, available_use, refund.amount - pending_use - available_use
 
 
@@ -264,9 +270,9 @@ def post_refund_journal(
     )
     if merchant_account_id is None:
         raise RuntimeError("refund payment merchant account is missing")
-    # The payable sourcing below reads live posting sums, so this transaction
-    # must serialize against the other AVAILABLE-debiting writers
-    # (run_settlement, payouts), which all take the same row lock first.
+    # The payable sourcing below reads live posting sums and payout reservations, so this
+    # transaction must serialize against the other writers of either (run_settlement,
+    # create_payout, retry), which all take the same merchant-account row lock first.
     session.scalar(
         select(MerchantAccount).where(MerchantAccount.id == merchant_account_id).with_for_update()
     )

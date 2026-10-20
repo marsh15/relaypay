@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import pytest
 from relaypay.database import build_engine
+from relaypay.merchant_balances.models import BalanceTransaction
 from relaypay.merchant_balances.service import MerchantBalances
 from relaypay.mock_bank.models import BankAccount
 from relaypay.mock_bank.service import apply_transfer, lookup_transfer, parse_command
@@ -148,10 +149,6 @@ def test_control_refund_without_a_payout_draws_on_available(
     assert (after.available, after.receivable, after.reserved) == (0, 0, 0)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="F1: refund consumes funds reserved for an in-flight payout",
-)
 def test_refund_does_not_consume_funds_reserved_for_an_inflight_payout(
     factory: sessionmaker[Session], bank_factory: sessionmaker[Session]
 ) -> None:
@@ -199,6 +196,65 @@ def test_refund_does_not_consume_funds_reserved_for_an_inflight_payout(
     assert _payout_status(factory, world, payout_id) == "SUCCEEDED"
     finished = observe("payout finalized")
     assert (finished.available, finished.reserved) == (0, 0)
+
+
+def test_partial_reservation_refund_splits_between_available_and_receivable(
+    factory: sessionmaker[Session], bank_factory: sessionmaker[Session]
+) -> None:
+    """Reserve 60000 of 100000, refund 100000: only the unreserved 40000 comes from AVAILABLE."""
+    world = build_world(factory, label="f1-partial-reservation")
+    provider = FakeProvider()
+    reserved_amount = 60_000
+
+    def observe(name: str) -> Stage:
+        stage = Stage.of(name, balances(factory, world))
+        assert stage.available >= 0, f"{name}: AVAILABLE went negative: {stage}"
+        assert stage.reserved <= stage.available, f"{name}: reserved exceeds AVAILABLE: {stage}"
+        return stage
+
+    flow = fund_available(factory, world, provider, AMOUNT)
+    beneficiary = make_beneficiary(factory, world)
+    created = request_payout(factory, world, beneficiary, reserved_amount)
+    payout_id = str(json.loads(created.body)["id"])
+    observe("payout reserved")
+
+    refund_op = refund(factory, world, flow.payment_id, AMOUNT, provider)
+    assert operation_status(factory, world, refund_op) == "SUCCEEDED"
+    refunded = observe("refunded")
+    assert (refunded.available, refunded.receivable, refunded.reserved) == (
+        reserved_amount,
+        reserved_amount,
+        reserved_amount,
+    )
+    with factory() as session, session.begin():
+        refund_transaction = session.scalar(
+            select(BalanceTransaction).where(
+                BalanceTransaction.merchant_account_id == world.merchant_account_id,
+                BalanceTransaction.transaction_type == "REFUND",
+            )
+        )
+        assert refund_transaction is not None
+        # The projection mirrors the journal: 40000 from AVAILABLE, 60000 owed as receivable.
+        assert (
+            refund_transaction.pending_delta,
+            refund_transaction.available_delta,
+            refund_transaction.receivable_delta,
+        ) == (0, -(AMOUNT - reserved_amount), reserved_amount)
+
+    dispatch_payout_attempt(
+        factory,
+        payout_public_id=payout_id,
+        bank_account_id=BANK_ACCOUNT,
+        bank_signing_secret=BANK_SECRET,
+        transport=LocalBankTransport(bank_factory),
+    )
+    assert _payout_status(factory, world, payout_id) == "SUCCEEDED"
+    finished = observe("payout finalized")
+    assert (finished.available, finished.reserved, finished.receivable) == (
+        0,
+        0,
+        reserved_amount,
+    )
 
 
 def test_settlement_after_refund_leaves_reservation_covered(
