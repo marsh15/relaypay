@@ -15,7 +15,14 @@ from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.merchant_balances.service import default_merchant_account_id
 from relaypay.pagination import CursorPosition, decode_cursor, encode_cursor
-from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
+from relaypay.payments.models import (
+    Authorization,
+    Capture,
+    Customer,
+    PaymentIntent,
+    Refund,
+    Void,
+)
 from relaypay.payments.transitions import record_creation
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
 
@@ -37,7 +44,7 @@ class CreatedCustomer:
     display_name: str | None
 
 
-CommandKind = Literal["AUTHORIZE", "CAPTURE", "REFUND"]
+CommandKind = Literal["AUTHORIZE", "CAPTURE", "REFUND", "VOID"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,6 +327,11 @@ def _resource_public_id(session: Session, operation: ProviderOperation) -> str:
         if capture is None:
             raise RuntimeError("provider operation resource binding is missing")
         return capture.public_id
+    if operation.resource_type == "VOID":
+        void = session.get(Void, operation.resource_id)
+        if void is None:
+            raise RuntimeError("provider operation resource binding is missing")
+        return void.public_id
     refund = session.get(Refund, operation.resource_id)
     if refund is None:
         raise RuntimeError("provider operation resource binding is missing")
@@ -541,6 +553,20 @@ def initiate_capture(
                 )
             # Only a brand-new capture is refused for a dead payment or a lapsed hold; a
             # retry of the existing capture (above) still converges on it, as in /api/v1.
+            open_void = session.scalar(
+                select(Void.status).where(
+                    Void.organisation_id == organisation_id,
+                    Void.payment_intent_id == payment.id,
+                    Void.status != "FAILED",
+                )
+            )
+            if open_void is not None:
+                raise RelayPayError(
+                    code="VOID_IN_PROGRESS",
+                    message="The authorization is being or has been voided",
+                    http_status=409,
+                    details={"voidStatus": open_void},
+                )
             if payment.status in {"cancelled", "expired", "failed"}:
                 raise RelayPayError(
                     code="PAYMENT_NOT_CAPTURABLE",
@@ -590,6 +616,137 @@ def initiate_capture(
                 environment_id=resolved_environment_id,
                 operation=operation,
                 resource_public_id=capture.public_id,
+                idempotency_key=idempotency_key,
+                key_digest=key_digest,
+                fingerprint=fingerprint,
+            )
+    except RelayPayError:
+        raise
+    except IntegrityError as error:
+        return _recover_operation_race(
+            factory,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            key_digest=key_digest,
+            fingerprint=fingerprint,
+            error=error,
+        )
+
+
+def initiate_void(
+    factory: sessionmaker[Session],
+    *,
+    organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
+    payment_public_id: str,
+    idempotency_key: str,
+    fingerprint: Fingerprint,
+    key_pepper: str,
+) -> HTTPResult:
+    """Release the authorization hold of an authorised, uncaptured payment at the provider.
+
+    The void is the payment's single ``VOID`` operation (stable key ``void:{payment}``). On
+    success the payment moves to ``cancelled``; a declined void leaves it ``authorised``. Void and
+    capture exclude each other under the payment lock: a void needs no capture to exist, and a
+    capture is refused while a non-failed void exists. Cancelling before any authorization exists
+    needs no provider call and is not offered yet (see docs/plans, M16).
+    """
+    key_digest = digest_secret(idempotency_key, key_pepper)
+    try:
+        with factory() as session, session.begin():
+            resolved_environment_id = resolve_environment_id(
+                session, organisation_id=organisation_id, environment_id=environment_id
+            )
+            payment = _locked_payment(
+                session, organisation_id, resolved_environment_id, payment_public_id
+            )
+            existing_key = _existing_key(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                key_digest=key_digest,
+            )
+            if existing_key is not None:
+                return _existing_operation_result(
+                    session, record=existing_key, fingerprint=fingerprint
+                )
+            existing_void = session.scalar(
+                select(Void).where(
+                    Void.organisation_id == organisation_id,
+                    Void.environment_id == resolved_environment_id,
+                    Void.payment_intent_id == payment.id,
+                )
+            )
+            if existing_void is not None:
+                operation = _lock_operation_then_resource(
+                    session, existing_void.provider_operation_id, Void
+                )
+                return _attach_key(
+                    session,
+                    organisation_id=organisation_id,
+                    environment_id=resolved_environment_id,
+                    operation=operation,
+                    resource_public_id=existing_void.public_id,
+                    idempotency_key=idempotency_key,
+                    key_digest=key_digest,
+                    fingerprint=fingerprint,
+                )
+            authorization = session.scalar(
+                select(Authorization).where(
+                    Authorization.organisation_id == organisation_id,
+                    Authorization.environment_id == resolved_environment_id,
+                    Authorization.payment_intent_id == payment.id,
+                )
+            )
+            if authorization is None or authorization.status != "SUCCEEDED":
+                raise RelayPayError(
+                    code="VOID_REQUIRES_SUCCEEDED_AUTHORIZATION",
+                    message="Void requires a verified succeeded authorization",
+                    http_status=409,
+                )
+            captured = session.scalar(
+                select(Capture.id).where(
+                    Capture.organisation_id == organisation_id,
+                    Capture.payment_intent_id == payment.id,
+                )
+            )
+            if captured is not None or payment.status != "authorised":
+                raise RelayPayError(
+                    code="PAYMENT_NOT_VOIDABLE",
+                    message="Only an authorised, uncaptured payment can be voided",
+                    http_status=409,
+                    details={"status": payment.status},
+                )
+            resource_id = new_uuid()
+            operation = _new_operation(
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                payment=payment,
+                resource_id=resource_id,
+                resource_type="VOID",
+                kind="VOID",
+                stable_provider_key=f"void:{payment.public_id}",
+            )
+            void = Void(
+                id=resource_id,
+                public_id=new_public_id("vod"),
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                payment_intent_id=payment.id,
+                authorization_id=authorization.id,
+                provider_operation_id=operation.id,
+                amount=authorization.amount,
+                currency="INR",
+                status="PROCESSING",
+            )
+            session.add_all([operation, void])
+            session.flush([operation, void])
+            return _attach_key(
+                session,
+                organisation_id=organisation_id,
+                environment_id=resolved_environment_id,
+                operation=operation,
+                resource_public_id=void.public_id,
                 idempotency_key=idempotency_key,
                 key_digest=key_digest,
                 fingerprint=fingerprint,
@@ -738,7 +895,7 @@ def _locked_payment(
 def _lock_operation_then_resource(
     session: Session,
     operation_id: uuid.UUID,
-    resource_model: type[Authorization] | type[Capture],
+    resource_model: type[Authorization] | type[Capture] | type[Void],
 ) -> ProviderOperation:
     operation = session.scalar(
         select(ProviderOperation).where(ProviderOperation.id == operation_id).with_for_update()

@@ -74,7 +74,7 @@ class StatementItem(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         UniqueConstraint("statement_import_id", "ordinal"),
         UniqueConstraint("statement_import_id", "provider_item_id"),
         CheckConstraint("ordinal > 0"),
-        CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND')"),
+        CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND', 'VOID')"),
         CheckConstraint("amount > 0"),
         CheckConstraint("currency ~ '^[A-Z]{3}$'"),
         CheckConstraint("provider_status IN ('PENDING', 'SUCCEEDED', 'DECLINED')"),

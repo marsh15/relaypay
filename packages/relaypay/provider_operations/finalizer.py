@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from relaypay.event_delivery.service import append_merchant_event
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.ledger.service import post_capture_journal, post_refund_journal
-from relaypay.payments.models import Authorization, Capture, PaymentIntent, Refund
+from relaypay.payments.models import Authorization, Capture, PaymentIntent, Refund, Void
 from relaypay.payments.transitions import PaymentStatus, transition
 from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.models import (
@@ -33,8 +33,8 @@ class FinalizedResult:
 
 def _resource(
     session: Session, operation: ProviderOperation, *, lock: bool
-) -> Authorization | Capture | Refund:
-    resource: Authorization | Capture | Refund | None
+) -> Authorization | Capture | Refund | Void:
+    resource: Authorization | Capture | Refund | Void | None
     if operation.resource_type == "AUTHORIZATION":
         statement = select(Authorization).where(Authorization.id == operation.resource_id)
         resource = session.scalar(statement.with_for_update() if lock else statement)
@@ -43,6 +43,9 @@ def _resource(
         resource = session.scalar(
             capture_statement.with_for_update() if lock else capture_statement
         )
+    elif operation.resource_type == "VOID":
+        void_statement = select(Void).where(Void.id == operation.resource_id)
+        resource = session.scalar(void_statement.with_for_update() if lock else void_statement)
     else:
         refund_statement = select(Refund).where(Refund.id == operation.resource_id)
         resource = session.scalar(refund_statement.with_for_update() if lock else refund_statement)
@@ -58,7 +61,7 @@ def _locked_graph(
 ) -> tuple[
     PaymentIntent,
     ProviderOperation,
-    Authorization | Capture | Refund,
+    Authorization | Capture | Refund | Void,
     list[IdempotencyRecord],
 ]:
     initial = session.get(ProviderOperation, operation_id)
@@ -185,6 +188,22 @@ def finalize_verified_attempt(
                 reason="CAPTURE_SUCCEEDED" if succeeded else "CAPTURE_DECLINED",
                 actor=actor_type,
             )
+        elif isinstance(resource, Void):
+            # A void releases the hold: nothing is posted, and no merchant event type exists for
+            # it yet (merchant events gain non-capture parents in M17).
+            event_type = None
+            resource.status = terminal_status
+            resource.voided_at = now if succeeded else None
+            resource.failure_code = failure_code
+            if succeeded:
+                # A declined void leaves the payment authorised and capturable.
+                transition(
+                    session,
+                    payment,
+                    PaymentStatus.CANCELLED,
+                    reason="VOID_SUCCEEDED",
+                    actor=actor_type,
+                )
         else:
             event_type = "refund.succeeded.v1"
             if succeeded:
@@ -210,7 +229,7 @@ def finalize_verified_attempt(
                     actor=actor_type,
                 )
 
-        if succeeded:
+        if succeeded and event_type is not None:
             append_merchant_event(
                 session,
                 payment=payment,

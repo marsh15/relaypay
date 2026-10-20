@@ -35,7 +35,7 @@ class ProviderEffect(ProviderBase):
     __tablename__ = "provider_effects"
     __table_args__ = (
         UniqueConstraint("provider_account_id", "stable_key"),
-        CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND')"),
+        CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND', 'VOID')"),
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),
         CheckConstraint("outcome IN ('PENDING', 'SUCCEEDED', 'DECLINED')"),
@@ -125,7 +125,7 @@ class ProviderStatementItem(ProviderBase):
         UniqueConstraint("statement_export_id", "ordinal"),
         UniqueConstraint("statement_export_id", "provider_item_id"),
         CheckConstraint("ordinal > 0"),
-        CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND')"),
+        CheckConstraint("operation_kind IN ('AUTHORIZE', 'CAPTURE', 'REFUND', 'VOID')"),
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),
         CheckConstraint("provider_status IN ('PENDING', 'SUCCEEDED', 'DECLINED')"),

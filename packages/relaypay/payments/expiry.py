@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from relaypay.payments.models import Authorization, Capture, PaymentIntent
+from relaypay.payments.models import Authorization, Capture, PaymentIntent, Void
 from relaypay.payments.transitions import PaymentStatus, transition
 
 EXPIRY_ACTOR = "EXPIRY_WORKER"
@@ -34,6 +34,9 @@ def expire_authorizations(
                 Authorization.status == "SUCCEEDED",
                 Authorization.expires_at <= func.now(),
                 ~exists().where(Capture.payment_intent_id == PaymentIntent.id),
+                ~exists().where(
+                    Void.payment_intent_id == PaymentIntent.id, Void.status != "FAILED"
+                ),
             )
             .order_by(Authorization.expires_at, PaymentIntent.id)
             .limit(batch_size)

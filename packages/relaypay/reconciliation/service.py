@@ -17,7 +17,7 @@ from relaypay.identity.security import Principal
 from relaypay.identity.service import append_audit, require_organisation_admin
 from relaypay.ids import new_public_id, new_uuid
 from relaypay.ledger.models import Journal
-from relaypay.payments.models import Authorization, Capture, Refund
+from relaypay.payments.models import Authorization, Capture, Refund, Void
 from relaypay.provider_operations.models import ProviderOperation
 from relaypay.reconciliation.models import (
     MismatchEvidenceVersion,
@@ -115,7 +115,7 @@ def _parse_row(row: dict[str, object]) -> ParsedStatementItem:
     if amount <= 0:
         raise _invalid_statement("Statement field amount must be positive")
     operation_kind = _required_text(row, "operationKind", max_length=16)
-    if operation_kind not in {"AUTHORIZE", "CAPTURE", "REFUND"}:
+    if operation_kind not in {"AUTHORIZE", "CAPTURE", "REFUND", "VOID"}:
         raise _invalid_statement("Statement operation kind is unsupported")
     currency = _required_text(row, "currency", max_length=3)
     if len(currency) != 3 or not currency.isalpha() or not currency.isupper():
@@ -378,6 +378,10 @@ def _internal_effects(
             capture.status,
             capture.journal_id,
             capture.public_id,
+        )
+    for void in session.scalars(select(Void).where(Void.provider_operation_id.in_(operation_ids))):
+        effects[void.provider_operation_id] = InternalEffect(
+            void.amount, void.currency, void.status, None, void.public_id
         )
     for refund in session.scalars(
         select(Refund).where(Refund.provider_operation_id.in_(operation_ids))

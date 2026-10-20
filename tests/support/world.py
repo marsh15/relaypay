@@ -43,6 +43,7 @@ from relaypay.payments.service import (
     initiate_authorization,
     initiate_capture,
     initiate_refund,
+    initiate_void,
 )
 from relaypay.payouts.service import CommandResult, create_beneficiary, create_payout
 from relaypay.provider_operations.models import ProviderOperation
@@ -330,6 +331,30 @@ def capture(
         fingerprint=_command_fingerprint(payment_id, "capture", EmptyCommand()),
         key_pepper=world.key_pepper,
         amount=amount,
+    )
+    operation_id = str(json.loads(result.body)["operationId"])
+    if provider is not None:
+        dispatch(factory, world, operation_id, provider)
+    return operation_id
+
+
+def void(
+    factory: sessionmaker[Session],
+    world: World,
+    payment_id: str,
+    provider: ProviderTransport | None = None,
+    *,
+    key: str | None = None,
+) -> str:
+    """Initiate a void (dispatching it when ``provider`` is given); returns op id."""
+    result = initiate_void(
+        factory,
+        organisation_id=world.organisation_id,
+        environment_id=world.environment_id,
+        payment_public_id=payment_id,
+        idempotency_key=key or f"void-{uuid.uuid4().hex}",
+        fingerprint=_command_fingerprint(payment_id, "void", EmptyCommand()),
+        key_pepper=world.key_pepper,
     )
     operation_id = str(json.loads(result.body)["operationId"])
     if provider is not None:

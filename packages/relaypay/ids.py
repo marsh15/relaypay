@@ -70,6 +70,7 @@ PublicIdPrefix = Literal[
     "rfd",
     "res",
     "ran",
+    "vod",
 ]
 
 _PUBLIC_ID_SEPARATOR: Final = "_"

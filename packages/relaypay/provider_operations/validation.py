@@ -22,7 +22,7 @@ class ProviderResult(BaseModel):
 
     accountId: str
     stableKey: str
-    operationKind: Literal["AUTHORIZE", "CAPTURE", "REFUND"]
+    operationKind: Literal["AUTHORIZE", "CAPTURE", "REFUND", "VOID"]
     reference: str
     amount: int
     currency: Literal["INR"]

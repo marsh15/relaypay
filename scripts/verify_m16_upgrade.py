@@ -48,6 +48,7 @@ PREVIOUS_REVISION = "0018_immutability_backfill"
 REVISION = "0019_payment_state_machine"
 GUARD_REVISION = "0020_payout_overdraft_guard"
 EXPIRY_REVISION = "0023_authorization_expiry"
+VOID_REVISION = "0024_void"
 GUARD_TRIGGERS = {
     ("payout_reservation_history", "payout_reservations_covered_at_commit"),
     ("postings", "available_debits_covered_at_commit"),
@@ -392,6 +393,26 @@ def _prove_authorization_expiry(config: Config, database_url: str) -> None:
         engine.dispose()
 
 
+def _prove_void(config: Config, database_url: str) -> None:
+    """0024 adds the empty voids table and widens kind CHECKs without changing any row."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            before = _digests(connection)
+        command.upgrade(config, VOID_REVISION)
+        with engine.connect() as connection:
+            after = _digests(connection)
+            assert after.pop("voids", None) is not None, "0024 must create voids"
+            assert after == before, "0024 must not change any existing row"
+            assert connection.scalar(text("SELECT count(*) FROM voids")) == 0
+        command.downgrade(config, EXPIRY_REVISION)
+        with engine.connect() as connection:
+            assert _digests(connection) == before
+        command.upgrade(config, VOID_REVISION)
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     module = _migration_module()
     assert module.SQLSTATE == "RP001"
@@ -454,6 +475,7 @@ def main() -> None:
             engine.dispose()
             _prove_overdraft_guard(config, database_url)
             _prove_authorization_expiry(config, database_url)
+            _prove_void(config, database_url)
         finally:
             engine.dispose()
     finally:
@@ -467,7 +489,7 @@ def main() -> None:
         f"{baseline.payment_count} payments across every lifecycle state; "
         "evidence checksums unchanged; downgrade and re-upgrade clean; "
         "0020 overdraft guard triggers added without changing rows; "
-        "0023 authorization expiry backfilled"
+        "0023 authorization expiry backfilled; 0024 void added without changing rows"
     )
 
 

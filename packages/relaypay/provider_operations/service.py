@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import canonical_json_bytes
-from relaypay.payments.models import Authorization, Capture, Refund
+from relaypay.payments.models import Authorization, Capture, Refund, Void
 from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.finalizer import (
     ActorType,
@@ -85,6 +85,11 @@ def _resource_facts(session: Session, operation: ProviderOperation) -> tuple[str
         if capture is None:
             raise RuntimeError("provider operation resource is missing")
         return capture.public_id, capture.amount, capture.currency
+    elif operation.resource_type == "VOID":
+        void = session.get(Void, operation.resource_id)
+        if void is None:
+            raise RuntimeError("provider operation resource is missing")
+        return void.public_id, void.amount, void.currency
     refund = session.get(Refund, operation.resource_id)
     if refund is None:
         raise RuntimeError("provider operation resource is missing")

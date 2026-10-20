@@ -27,7 +27,7 @@ class EffectRequest(BaseModel):
 
     account_id: str = Field(alias="accountId", min_length=1, max_length=64)
     stable_key: str = Field(alias="stableKey", min_length=1, max_length=128)
-    operation_kind: Literal["AUTHORIZE", "CAPTURE", "REFUND"] = Field(alias="operationKind")
+    operation_kind: Literal["AUTHORIZE", "CAPTURE", "REFUND", "VOID"] = Field(alias="operationKind")
     reference: str = Field(min_length=1, max_length=128)
     amount: int = Field(strict=True, gt=0)
     currency: Literal["INR"]

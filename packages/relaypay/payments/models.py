@@ -300,6 +300,71 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Void(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
+    """Release of an authorization hold at the provider; never posts to the ledger."""
+
+    __tablename__ = "voids"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id"],
+            ["environments.organisation_id", "environments.id"],
+        ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "authorization_id"],
+            [
+                "authorizations.organisation_id",
+                "authorizations.environment_id",
+                "authorizations.id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "provider_operation_id"],
+            [
+                "provider_operations.organisation_id",
+                "provider_operations.environment_id",
+                "provider_operations.id",
+            ],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        UniqueConstraint("organisation_id", "environment_id", "id"),
+        UniqueConstraint("organisation_id", "payment_intent_id"),
+        UniqueConstraint("provider_operation_id"),
+        CheckConstraint("amount > 0", name="voids_amount_check"),
+        CheckConstraint("currency = 'INR'", name="voids_currency_check"),
+        CheckConstraint(
+            "status IN ('PROCESSING', 'SUCCEEDED', 'FAILED', 'REQUIRES_REVIEW')",
+            name="voids_status_check",
+        ),
+        CheckConstraint(
+            "(status = 'SUCCEEDED' AND voided_at IS NOT NULL AND failure_code IS NULL) OR "
+            "(status = 'FAILED' AND voided_at IS NULL AND failure_code IS NOT NULL) OR "
+            "(status IN ('PROCESSING', 'REQUIRES_REVIEW') AND voided_at IS NULL)",
+            name="voids_status_fields_check",
+        ),
+    )
+
+    public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    authorization_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="PROCESSING")
+    failure_code: Mapped[str | None] = mapped_column(String(64))
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Refund(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     __tablename__ = "refunds"
     __table_args__ = (
