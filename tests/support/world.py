@@ -313,8 +313,12 @@ def capture(
     provider: ProviderTransport | None = None,
     *,
     key: str | None = None,
+    amount: int | None = None,
 ) -> str:
-    """Initiate a capture (dispatching it when ``provider`` is given); returns op id."""
+    """Initiate a capture (dispatching it when ``provider`` is given); returns op id.
+
+    ``amount`` defaults to the full authorization (the /api/v1 behaviour).
+    """
     result = initiate_capture(
         factory,
         organisation_id=world.organisation_id,
@@ -323,6 +327,7 @@ def capture(
         idempotency_key=key or f"capture-{uuid.uuid4().hex}",
         fingerprint=_command_fingerprint(payment_id, "capture", EmptyCommand()),
         key_pepper=world.key_pepper,
+        amount=amount,
     )
     operation_id = str(json.loads(result.body)["operationId"])
     if provider is not None:

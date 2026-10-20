@@ -457,7 +457,14 @@ def initiate_capture(
     idempotency_key: str,
     fingerprint: Fingerprint,
     key_pepper: str,
+    amount: int | None = None,
 ) -> HTTPResult:
+    """Initiate the payment's single capture.
+
+    ``amount`` defaults to the full authorized amount (the frozen /api/v1 behaviour). A smaller
+    amount captures part of the authorization and releases the rest; nothing is posted for the
+    released remainder because authorization holds never touch the ledger.
+    """
     key_digest = digest_secret(idempotency_key, key_pepper)
     try:
         with factory() as session, session.begin():
@@ -490,6 +497,14 @@ def initiate_capture(
                     message="Capture requires a verified succeeded authorization",
                     http_status=409,
                 )
+            capture_amount = authorization.amount if amount is None else amount
+            if not 0 < capture_amount <= authorization.amount:
+                raise RelayPayError(
+                    code="CAPTURE_AMOUNT_EXCEEDS_AUTHORIZED",
+                    message="Capture amount must be positive and at most the authorized amount",
+                    http_status=422,
+                    details={"authorizedAmount": authorization.amount},
+                )
             existing_resource = session.scalar(
                 select(Capture).where(
                     Capture.organisation_id == organisation_id,
@@ -498,6 +513,13 @@ def initiate_capture(
                 )
             )
             if existing_resource is not None:
+                if existing_resource.amount != capture_amount:
+                    raise RelayPayError(
+                        code="CAPTURE_ALREADY_EXISTS",
+                        message="The payment already has a capture for a different amount",
+                        http_status=409,
+                        details={"capturedAmount": existing_resource.amount},
+                    )
                 operation = _lock_operation_then_resource(
                     session, existing_resource.provider_operation_id, Capture
                 )
@@ -529,7 +551,7 @@ def initiate_capture(
                 payment_intent_id=payment.id,
                 authorization_id=authorization.id,
                 provider_operation_id=operation.id,
-                amount=payment.amount,
+                amount=capture_amount,
                 currency="INR",
                 status="PROCESSING",
             )
