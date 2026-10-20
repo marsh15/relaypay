@@ -16,6 +16,7 @@ from relaypay.ids import new_public_id, new_uuid
 from relaypay.merchant_balances.service import default_merchant_account_id
 from relaypay.pagination import CursorPosition, decode_cursor, encode_cursor
 from relaypay.payments.models import Authorization, Capture, Customer, PaymentIntent, Refund
+from relaypay.payments.transitions import record_creation
 from relaypay.provider_operations.models import IdempotencyRecord, ProviderOperation
 
 
@@ -175,6 +176,7 @@ def create_payment_intent(
                     "status": "REQUIRES_AUTHORIZATION",
                 }
             )
+            record_creation(session, payment, actor="REQUEST")
             session.add(payment)
             session.add(
                 IdempotencyRecord(

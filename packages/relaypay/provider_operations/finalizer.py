@@ -4,13 +4,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.event_delivery.service import append_merchant_event
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.ledger.service import post_capture_journal, post_refund_journal
 from relaypay.payments.models import Authorization, Capture, PaymentIntent, Refund
+from relaypay.payments.transitions import PaymentStatus, transition
 from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.models import (
     IdempotencyRecord,
@@ -85,6 +86,26 @@ def _locked_graph(
     return payment, operation, resource, records
 
 
+def _refund_target_status(session: Session, payment: PaymentIntent) -> PaymentStatus:
+    """``refunded`` once SUCCEEDED refunds sum to the captured amount, else ``partially_refunded``.
+
+    Called after the refund row was set SUCCEEDED in this session (the query autoflushes it).
+    """
+    captured = session.scalar(
+        select(Capture.amount).where(
+            Capture.payment_intent_id == payment.id, Capture.status == "SUCCEEDED"
+        )
+    )
+    refunded = session.scalar(
+        select(func.coalesce(func.sum(Refund.amount), 0)).where(
+            Refund.payment_intent_id == payment.id, Refund.status == "SUCCEEDED"
+        )
+    )
+    if captured is not None and int(refunded or 0) == captured:
+        return PaymentStatus.REFUNDED
+    return PaymentStatus.PARTIALLY_REFUNDED
+
+
 def _terminal_result(operation: ProviderOperation, *, already: bool) -> FinalizedResult:
     if operation.terminal_http_status is None or operation.terminal_response_bytes is None:
         raise RuntimeError("terminal operation is missing canonical response evidence")
@@ -133,6 +154,13 @@ def finalize_verified_attempt(
             resource.authorized_at = now if succeeded else None
             resource.failure_code = failure_code
             event_type = "payment.authorized.v1"
+            transition(
+                session,
+                payment,
+                PaymentStatus.AUTHORISED if succeeded else PaymentStatus.FAILED,
+                reason="AUTHORIZATION_SUCCEEDED" if succeeded else "AUTHORIZATION_DECLINED",
+                actor=actor_type,
+            )
         elif isinstance(resource, Capture):
             event_type = "payment.captured.v1"
             if succeeded:
@@ -148,6 +176,14 @@ def finalize_verified_attempt(
             resource.status = terminal_status
             resource.captured_at = now if succeeded else None
             resource.failure_code = failure_code
+            # A declined capture is terminal for the singleton capture, so the payment fails.
+            transition(
+                session,
+                payment,
+                PaymentStatus.CAPTURED if succeeded else PaymentStatus.FAILED,
+                reason="CAPTURE_SUCCEEDED" if succeeded else "CAPTURE_DECLINED",
+                actor=actor_type,
+            )
         else:
             event_type = "refund.succeeded.v1"
             if succeeded:
@@ -163,6 +199,15 @@ def finalize_verified_attempt(
             resource.status = terminal_status
             resource.refunded_at = now if succeeded else None
             resource.failure_code = failure_code
+            if succeeded:
+                # A declined refund leaves the payment status unchanged.
+                transition(
+                    session,
+                    payment,
+                    _refund_target_status(session, payment),
+                    reason="REFUND_SUCCEEDED",
+                    actor=actor_type,
+                )
 
         if succeeded:
             append_merchant_event(

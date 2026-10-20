@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     UniqueConstraint,
     text,
@@ -66,7 +67,20 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         UniqueConstraint("organisation_id", "id"),
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),
+        CheckConstraint(
+            "status IN ('created', 'requires_action', 'authorised', 'captured', "
+            "'partially_refunded', 'refunded', 'failed', 'expired', 'cancelled')",
+            name="payment_intents_status_check",
+        ),
         Index("ix_payment_intents_organisation_created", "organisation_id", "created_at"),
+        Index(
+            "ix_payment_intents_scope_status_created_id",
+            "organisation_id",
+            "environment_id",
+            "status",
+            text("created_at DESC"),
+            "id",
+        ),
         Index(
             "ix_payment_intents_scope_created_id",
             "organisation_id",
@@ -84,6 +98,50 @@ class PaymentIntent(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     merchant_reference: Mapped[str] = mapped_column(String(128), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
+    # Written only by payments.transitions.transition(); a trigger enforces the transition table.
+    # The Python-side default keeps hand-built rows (tests, fixtures) valid; service code sets it
+    # through transitions.record_creation(), which also writes the initial history row.
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="created")
+    status_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+
+
+class PaymentStatusHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """Immutable record of every payment status change (trigger from migration 0001)."""
+
+    __tablename__ = "payment_status_history"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payment_intent_id"],
+            [
+                "payment_intents.organisation_id",
+                "payment_intents.environment_id",
+                "payment_intents.id",
+            ],
+        ),
+        UniqueConstraint("payment_intent_id", "status_version"),
+        CheckConstraint("status_version >= 0"),
+        CheckConstraint(
+            "to_status IN ('created', 'requires_action', 'authorised', 'captured', "
+            "'partially_refunded', 'refunded', 'failed', 'expired', 'cancelled')",
+            name="payment_status_history_to_status_check",
+        ),
+        CheckConstraint(
+            "from_status IS NULL OR from_status IN ('created', 'requires_action', 'authorised', "
+            "'captured', 'partially_refunded', 'refunded', 'failed', 'expired', 'cancelled')",
+            name="payment_status_history_from_status_check",
+        ),
+    )
+
+    organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(24))
+    to_status: Mapped[str] = mapped_column(String(24), nullable=False)
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor: Mapped[str] = mapped_column(String(64), nullable=False)
+    status_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):

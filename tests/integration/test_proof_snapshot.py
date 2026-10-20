@@ -201,7 +201,23 @@ def test_snapshot_rows_match_what_the_services_wrote(
     assert captured and all(c.journal_id in journal_ids for c in captured)
     assert all(refund_row.journal_id in journal_ids for refund_row in snapshot.refunds)
     assert {p.journal_id for p in snapshot.postings} <= journal_ids
-    assert all(payment.status is None for payment in snapshot.payment_intents)
+    # Migration 0019 persists payment status; every payment here finished capture, so its
+    # status follows from its SUCCEEDED refunds.
+    for payment in snapshot.payment_intents:
+        (capture_row,) = (c for c in captured if c.payment_intent_id == payment.id)
+        refunded = sum(
+            r.amount
+            for r in snapshot.refunds
+            if r.payment_intent_id == payment.id and r.status == "SUCCEEDED"
+        )
+        expected = (
+            "captured"
+            if refunded == 0
+            else "refunded"
+            if refunded == capture_row.amount
+            else "partially_refunded"
+        )
+        assert payment.status == expected
     assert all(c.fee_amount == c.gst_amount == 0 for c in snapshot.captures)
 
     for effect in snapshot.provider_effects:
