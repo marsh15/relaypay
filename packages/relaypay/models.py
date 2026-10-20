@@ -40,6 +40,7 @@ from relaypay.event_delivery.models import (
     WebhookEndpoint,
     WebhookEndpointVersion,
 )
+from relaypay.fees.models import FeeScheduleVersion
 from relaypay.identity.models import APIKey, Organisation, SessionRecord, User
 from relaypay.ledger.models import Journal, LedgerAccount, Posting
 from relaypay.merchant_balances.models import (
@@ -123,6 +124,7 @@ __all__ = [
     "EvaluationDataset",
     "EvaluationRun",
     "EventRecipient",
+    "FeeScheduleVersion",
     "IdempotencyRecord",
     "InboundWebhookAttempt",
     "InboundWebhookEvent",

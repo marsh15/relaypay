@@ -268,6 +268,15 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             ["organisation_id", "environment_id", "journal_id"],
             ["journals.organisation_id", "journals.environment_id", "journals.id"],
         ),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "fee_schedule_version_id"],
+            [
+                "fee_schedule_versions.organisation_id",
+                "fee_schedule_versions.environment_id",
+                "fee_schedule_versions.id",
+            ],
+            name="captures_fee_schedule_version_fkey",
+        ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("organisation_id", "payment_intent_id"),
@@ -284,6 +293,14 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             "(status IN ('PROCESSING', 'REQUIRES_REVIEW') AND captured_at IS NULL "
             "AND journal_id IS NULL)"
         ),
+        CheckConstraint(
+            "fee_amount >= 0 AND gst_amount >= 0 AND fee_amount + gst_amount <= amount",
+            name="captures_fee_split_check",
+        ),
+        CheckConstraint(
+            "fee_schedule_version_id IS NOT NULL OR (fee_amount = 0 AND gst_amount = 0)",
+            name="captures_fee_schedule_check",
+        ),
     )
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -298,6 +315,14 @@ class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="PROCESSING")
     failure_code: Mapped[str | None] = mapped_column(String(64))
     captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fee_amount: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    gst_amount: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    fee_schedule_version_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+
+    @property
+    def net_amount(self) -> int:
+        """What the merchant is owed for this capture: gross minus platform fee and GST."""
+        return self.amount - self.fee_amount - self.gst_amount
 
 
 class Void(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):

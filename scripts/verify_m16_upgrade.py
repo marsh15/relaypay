@@ -47,8 +47,10 @@ from scripts.verify_m2_upgrade import (
 PREVIOUS_REVISION = "0018_immutability_backfill"
 REVISION = "0019_payment_state_machine"
 GUARD_REVISION = "0020_payout_overdraft_guard"
+FEE_COLUMNS = ("fee_amount", "gst_amount", "fee_schedule_version_id")
 EXPIRY_REVISION = "0023_authorization_expiry"
 VOID_REVISION = "0024_void"
+FEES_REVISION = "0025_fees_gst"
 GUARD_TRIGGERS = {
     ("payout_reservation_history", "payout_reservations_covered_at_commit"),
     ("postings", "available_debits_covered_at_commit"),
@@ -413,6 +415,33 @@ def _prove_void(config: Config, database_url: str) -> None:
         engine.dispose()
 
 
+def _prove_fees(config: Config, database_url: str) -> None:
+    """0025 gives every existing capture a zero fee and changes no other existing row."""
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            before = _digests(connection)
+            captures = int(connection.scalar(text("SELECT count(*) FROM captures")) or 0)
+        command.upgrade(config, FEES_REVISION)
+        with engine.connect() as connection:
+            after = _digests(connection, strip={"captures": FEE_COLUMNS})
+            assert after.pop("fee_schedule_versions", None) is not None
+            assert after == before, "0025 must not change existing rows beyond the fee columns"
+            unfee = connection.scalar(
+                text(
+                    "SELECT count(*) FROM captures WHERE fee_amount = 0 AND gst_amount = 0 "
+                    "AND fee_schedule_version_id IS NULL"
+                )
+            )
+            assert captures > 0 and unfee == captures, "existing captures must carry no fee"
+        command.downgrade(config, VOID_REVISION)
+        with engine.connect() as connection:
+            assert _digests(connection) == before
+        command.upgrade(config, FEES_REVISION)
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     module = _migration_module()
     assert module.SQLSTATE == "RP001"
@@ -476,6 +505,7 @@ def main() -> None:
             _prove_overdraft_guard(config, database_url)
             _prove_authorization_expiry(config, database_url)
             _prove_void(config, database_url)
+            _prove_fees(config, database_url)
         finally:
             engine.dispose()
     finally:
@@ -489,7 +519,8 @@ def main() -> None:
         f"{baseline.payment_count} payments across every lifecycle state; "
         "evidence checksums unchanged; downgrade and re-upgrade clean; "
         "0020 overdraft guard triggers added without changing rows; "
-        "0023 authorization expiry backfilled; 0024 void added without changing rows"
+        "0023 authorization expiry backfilled; 0024 void and 0025 fees added without "
+        "changing existing rows"
     )
 
 

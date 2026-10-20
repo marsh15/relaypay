@@ -396,7 +396,7 @@ def unsettled_payments(
     numbers = _policy_numbers(window)
     captures = _unsettled_captures(session, scope, max_captured_at=as_of)
     numbers["unsettledCount"] = len(captures)
-    numbers["unsettledTotal"] = sum(capture.amount for capture in captures)
+    numbers["unsettledTotal"] = sum(capture.net_amount for capture in captures)  # owed to merchant
     steps = [
         "Selected succeeded captures in scope with no settlement item.",
         f"Summed {numbers['unsettledTotal']} paise across {len(captures)} unsettled captures.",

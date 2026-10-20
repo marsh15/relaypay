@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from sqlalchemy import case, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from relaypay.errors import RelayPayError
@@ -50,6 +51,39 @@ def account(
             details={"account_code": code},
         )
     return item
+
+
+PLATFORM_FEE_REVENUE = "PLATFORM_FEE_REVENUE"
+GST_PAYABLE = "GST_PAYABLE_LIABILITY"
+_PLATFORM_ACCOUNTS = {
+    PLATFORM_FEE_REVENUE: ("INCOME", "Platform fee revenue"),
+    GST_PAYABLE: ("LIABILITY", "GST payable on platform fees"),
+}
+
+
+def platform_account(
+    session: Session, organisation_id: uuid.UUID, environment_id: uuid.UUID, code: str
+) -> LedgerAccount:
+    """Return a global fee account, creating it on first use (race-safe via the unique index)."""
+    account_type, name = _PLATFORM_ACCOUNTS[code]
+    session.execute(
+        pg_insert(LedgerAccount)
+        .values(
+            id=new_uuid(),
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            merchant_account_id=None,
+            code=code,
+            name=name,
+            account_type=account_type,
+            currency="INR",
+        )
+        .on_conflict_do_nothing(
+            index_elements=["organisation_id", "environment_id", "code", "currency"],
+            index_where=LedgerAccount.merchant_account_id.is_(None),
+        )
+    )
+    return account(session, organisation_id, environment_id, code)
 
 
 def post_journal(
@@ -141,7 +175,13 @@ def post_capture_journal(
     provider_operation_id: uuid.UUID,
     capture_id: uuid.UUID,
     amount: int,
+    fee_amount: int = 0,
+    gst_amount: int = 0,
 ) -> JournalResult:
+    """Post one capture: Dr provider clearing (gross); Cr pending payable (net), fee, GST."""
+    net = amount - fee_amount - gst_amount
+    if fee_amount < 0 or gst_amount < 0 or net < 0:
+        raise ValueError("capture fee split must be non-negative and within the gross amount")
     resolved_environment_id = resolve_environment_id(
         session, organisation_id=organisation_id, environment_id=environment_id
     )
@@ -152,6 +192,32 @@ def post_capture_journal(
     )
     if merchant_account_id is None:
         raise RuntimeError("capture payment merchant account is missing")
+    entries: list[tuple[LedgerAccount, Literal["DEBIT", "CREDIT"], int]] = [
+        (
+            account(session, organisation_id, resolved_environment_id, "PROVIDER_CLEARING_ASSET"),
+            "DEBIT",
+            amount,
+        )
+    ]
+    if net:
+        pending = account(
+            session,
+            organisation_id,
+            resolved_environment_id,
+            "PENDING_PAYABLE_LIABILITY",
+            merchant_account_id=merchant_account_id,
+        )
+        entries.append((pending, "CREDIT", net))
+    if fee_amount:
+        fee_account = platform_account(
+            session, organisation_id, resolved_environment_id, PLATFORM_FEE_REVENUE
+        )
+        entries.append((fee_account, "CREDIT", fee_amount))
+    if gst_amount:
+        gst_account = platform_account(
+            session, organisation_id, resolved_environment_id, GST_PAYABLE
+        )
+        entries.append((gst_account, "CREDIT", gst_amount))
     result = post_journal(
         session,
         organisation_id=organisation_id,
@@ -161,29 +227,7 @@ def post_capture_journal(
         journal_type="CAPTURE",
         reference_type="CAPTURE",
         reference_id=capture_id,
-        entries=[
-            (
-                account(
-                    session,
-                    organisation_id,
-                    resolved_environment_id,
-                    "PROVIDER_CLEARING_ASSET",
-                ),
-                "DEBIT",
-                amount,
-            ),
-            (
-                account(
-                    session,
-                    organisation_id,
-                    resolved_environment_id,
-                    "PENDING_PAYABLE_LIABILITY",
-                    merchant_account_id=merchant_account_id,
-                ),
-                "CREDIT",
-                amount,
-            ),
-        ],
+        entries=entries,
     )
     add_balance_transaction(
         session,
@@ -192,7 +236,7 @@ def post_capture_journal(
         merchant_account_id=merchant_account_id,
         journal_id=result.journal_id,
         transaction_type="CAPTURE",
-        pending_delta=amount,
+        pending_delta=net,
     )
     return result
 
@@ -218,10 +262,12 @@ def _refund_sources(
             Refund.payment_intent_id == refund.payment_intent_id,
         )
     )
-    capture_amount = session.scalar(select(Capture.amount).where(Capture.id == refund.capture_id))
-    if capture_amount is None:
+    captured = session.get(Capture, refund.capture_id)
+    if captured is None:
         raise RuntimeError("refund capture is missing")
-    pending = max(int(capture_amount) - int(settled or 0) - int(prior_pending_refunds or 0), 0)
+    # Pending holds the merchant's net; with the RETAIN policy the merchant bears the whole
+    # refund, so any amount beyond its remaining payable falls to the receivable.
+    pending = max(captured.net_amount - int(settled or 0) - int(prior_pending_refunds or 0), 0)
     available_account = account(
         session,
         refund.organisation_id,

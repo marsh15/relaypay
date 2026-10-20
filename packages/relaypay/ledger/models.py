@@ -35,7 +35,7 @@ class LedgerAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
-        CheckConstraint("account_type IN ('ASSET', 'LIABILITY')"),
+        CheckConstraint("account_type IN ('ASSET', 'LIABILITY', 'INCOME')"),
         CheckConstraint("currency = 'INR'"),
         Index(
             "uq_ledger_accounts_global_code",

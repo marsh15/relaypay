@@ -175,6 +175,8 @@ def finalize_verified_attempt(
                     provider_operation_id=operation.id,
                     capture_id=resource.id,
                     amount=resource.amount,
+                    fee_amount=resource.fee_amount,
+                    gst_amount=resource.gst_amount,
                 )
                 resource.journal_id = journal.journal_id
             resource.status = terminal_status

@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.contracts import CustomerCreate, PaymentIntentCreate, RefundCreate
 from relaypay.errors import RelayPayError, not_found
+from relaypay.fees.calculator import compute_capture_fee
+from relaypay.fees.service import FeeCalculator, capture_fee
 from relaypay.idempotency import Fingerprint, canonical_json_bytes, digest_secret, key_hint
 from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
@@ -476,6 +478,7 @@ def initiate_capture(
     fingerprint: Fingerprint,
     key_pepper: str,
     amount: int | None = None,
+    fee_calculator: FeeCalculator = compute_capture_fee,
 ) -> HTTPResult:
     """Initiate the payment's single capture.
 
@@ -596,6 +599,12 @@ def initiate_capture(
                 kind="CAPTURE",
                 stable_provider_key=f"capture:{payment.public_id}",
             )
+            fee = capture_fee(
+                session,
+                merchant_account_id=payment.merchant_account_id,
+                amount=capture_amount,
+                calculator=fee_calculator,
+            )
             capture = Capture(
                 id=resource_id,
                 public_id=new_public_id("cap"),
@@ -605,6 +614,9 @@ def initiate_capture(
                 authorization_id=authorization.id,
                 provider_operation_id=operation.id,
                 amount=capture_amount,
+                fee_amount=fee.fee_amount,
+                gst_amount=fee.gst_amount,
+                fee_schedule_version_id=fee.fee_schedule_version_id,
                 currency="INR",
                 status="PROCESSING",
             )

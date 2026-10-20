@@ -226,7 +226,8 @@ def record_pre_cutoff_forecast(
         cutoff = cutoff_at(window, business_date)
     scope = QueryScope(organisation_id, environment_id, merchant_account_id)
     captures = _unsettled_captures(session, scope, max_captured_at=cutoff)
-    capture_total = sum(capture.amount for capture in captures)
+    # Settlement pays the merchant's net (gross minus platform fee and GST), so forecast it.
+    capture_total = sum(capture.net_amount for capture in captures)
     capture_ids = {capture.id for capture in captures}
     refunds = [
         refund
@@ -327,7 +328,7 @@ def record_pre_cutoff_forecast(
                 forecast_id=item.id,
                 item_type="CAPTURE",
                 capture_id=capture.id,
-                amount=capture.amount,
+                amount=capture.net_amount,
                 currency="INR",
             )
         )

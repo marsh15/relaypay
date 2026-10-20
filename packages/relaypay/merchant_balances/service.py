@@ -216,7 +216,10 @@ def _account_balance(session: Session, ledger_account: LedgerAccount) -> int:
         ).where(Posting.account_id == ledger_account.id)
     )
     credit_normal = int(value or 0)
-    return credit_normal if ledger_account.account_type == "LIABILITY" else -credit_normal
+    # LIABILITY and INCOME are credit-normal; ASSET is debit-normal.
+    return (
+        credit_normal if ledger_account.account_type in {"LIABILITY", "INCOME"} else -credit_normal
+    )
 
 
 def reserved_payout_amount(session: Session, merchant_account_id: uuid.UUID) -> int:
@@ -450,7 +453,8 @@ def _run_settlement_transaction(
     receivable_balance = max(derive_balances(session, merchant).receivable, 0)
     item_bodies: list[dict[str, object]] = []
     for capture in captures:
-        amount = capture.amount - refunded_by_capture.get(capture.id, 0)
+        # Pending was credited with the merchant's net (gross minus platform fee and GST).
+        amount = capture.net_amount - refunded_by_capture.get(capture.id, 0)
         if amount <= 0:
             continue
         receivable_offset = min(receivable_balance, amount)

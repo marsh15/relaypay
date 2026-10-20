@@ -17,6 +17,7 @@ from functools import cache
 from pydantic import BaseModel
 from relaypay.config import get_settings
 from relaypay.contracts import CustomerCreate, EmptyCommand, PaymentIntentCreate, RefundCreate
+from relaypay.fees.service import FeeCalculator
 from relaypay.idempotency import Fingerprint, build_fingerprint
 from relaypay.identity.models import (
     APIKey,
@@ -317,6 +318,7 @@ def capture(
     *,
     key: str | None = None,
     amount: int | None = None,
+    fee_calculator: FeeCalculator | None = None,
 ) -> str:
     """Initiate a capture (dispatching it when ``provider`` is given); returns op id.
 
@@ -331,6 +333,7 @@ def capture(
         fingerprint=_command_fingerprint(payment_id, "capture", EmptyCommand()),
         key_pepper=world.key_pepper,
         amount=amount,
+        **({} if fee_calculator is None else {"fee_calculator": fee_calculator}),
     )
     operation_id = str(json.loads(result.body)["operationId"])
     if provider is not None:

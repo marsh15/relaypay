@@ -71,6 +71,7 @@ PublicIdPrefix = Literal[
     "res",
     "ran",
     "vod",
+    "fee",
 ]
 
 _PUBLIC_ID_SEPARATOR: Final = "_"
