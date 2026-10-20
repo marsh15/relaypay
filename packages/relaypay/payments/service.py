@@ -1011,6 +1011,98 @@ def read_payment(
         return HTTPResult(200, body, {"Content-Type": "application/json"})
 
 
+def read_payment_v2(
+    factory: sessionmaker[Session],
+    *,
+    organisation_id: uuid.UUID,
+    environment_id: uuid.UUID | None = None,
+    payment_public_id: str,
+) -> HTTPResult:
+    """The /api/v2 view: persisted status, the hold, the capture's fee split, and any void."""
+    with factory() as session, session.begin():
+        resolved_environment_id = resolve_environment_id(
+            session, organisation_id=organisation_id, environment_id=environment_id
+        )
+        payment = session.scalar(
+            select(PaymentIntent).where(
+                PaymentIntent.organisation_id == organisation_id,
+                PaymentIntent.environment_id == resolved_environment_id,
+                PaymentIntent.public_id == payment_public_id,
+            )
+        )
+        if payment is None:
+            raise not_found("Payment intent")
+
+        authorization = session.scalar(
+            select(Authorization).where(
+                Authorization.organisation_id == organisation_id,
+                Authorization.environment_id == resolved_environment_id,
+                Authorization.payment_intent_id == payment.id,
+            )
+        )
+        capture = session.scalar(
+            select(Capture).where(
+                Capture.organisation_id == organisation_id,
+                Capture.environment_id == resolved_environment_id,
+                Capture.payment_intent_id == payment.id,
+            )
+        )
+        void = session.scalar(
+            select(Void).where(
+                Void.organisation_id == organisation_id,
+                Void.environment_id == resolved_environment_id,
+                Void.payment_intent_id == payment.id,
+            )
+        )
+        reserved = int(
+            session.scalar(
+                select(func.coalesce(func.sum(Refund.amount), 0)).where(
+                    Refund.organisation_id == organisation_id,
+                    Refund.payment_intent_id == payment.id,
+                    Refund.status.in_(("PROCESSING", "REQUIRES_REVIEW", "SUCCEEDED")),
+                )
+            )
+            or 0
+        )
+        captured_amount = capture.amount if capture and capture.status == "SUCCEEDED" else 0
+        body = canonical_json_bytes(
+            {
+                "id": payment.public_id,
+                "merchantReference": payment.merchant_reference,
+                "amount": payment.amount,
+                "currency": payment.currency,
+                "status": payment.status,
+                "statusVersion": payment.status_version,
+                "authorization": None
+                if authorization is None
+                else {
+                    "id": authorization.public_id,
+                    "status": authorization.status,
+                    "amount": authorization.amount,
+                    "holdSeconds": authorization.hold_seconds,
+                    "expiresAt": None
+                    if authorization.expires_at is None
+                    else authorization.expires_at.isoformat(),
+                },
+                "capture": None
+                if capture is None
+                else {
+                    "id": capture.public_id,
+                    "status": capture.status,
+                    "amount": capture.amount,
+                    "feeAmount": capture.fee_amount,
+                    "gstAmount": capture.gst_amount,
+                    "netAmount": capture.net_amount,
+                },
+                "void": None if void is None else {"id": void.public_id, "status": void.status},
+                "capturedAmount": captured_amount,
+                "reservedOrRefundedAmount": reserved,
+                "refundableAmount": max(0, captured_amount - reserved),
+            }
+        )
+        return HTTPResult(200, body, {"Content-Type": "application/json"})
+
+
 def list_payments(
     factory: sessionmaker[Session],
     *,

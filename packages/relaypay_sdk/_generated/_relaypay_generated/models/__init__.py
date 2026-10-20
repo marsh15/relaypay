@@ -4,9 +4,11 @@ from .api_key_create import APIKeyCreate
 from .api_key_scopes_update import APIKeyScopesUpdate
 from .approval_decision_create import ApprovalDecisionCreate
 from .approval_decision_create_decision import ApprovalDecisionCreateDecision
+from .authorize_command_v2 import AuthorizeCommandV2
 from .beneficiary_create import BeneficiaryCreate
 from .body_post_statement_import_api_admin_v1_environments_environment_id_statement_imports_post import BodyPostStatementImportApiAdminV1EnvironmentsEnvironmentIdStatementImportsPost
 from .body_post_statement_import_api_admin_v1_environments_environment_id_statement_imports_post_sourceformat import BodyPostStatementImportApiAdminV1EnvironmentsEnvironmentIdStatementImportsPostSourceformat
+from .capture_command_v2 import CaptureCommandV2
 from .citation import Citation
 from .connector_verify import ConnectorVerify
 from .connector_verify_kind import ConnectorVerifyKind
@@ -118,9 +120,11 @@ __all__ = (
     "APIKeyScopesUpdate",
     "ApprovalDecisionCreate",
     "ApprovalDecisionCreateDecision",
+    "AuthorizeCommandV2",
     "BeneficiaryCreate",
     "BodyPostStatementImportApiAdminV1EnvironmentsEnvironmentIdStatementImportsPost",
     "BodyPostStatementImportApiAdminV1EnvironmentsEnvironmentIdStatementImportsPostSourceformat",
+    "CaptureCommandV2",
     "Citation",
     "ConnectorVerify",
     "ConnectorVerifyKind",

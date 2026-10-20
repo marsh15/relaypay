@@ -163,6 +163,56 @@ class RelayPayClient:
             ).json(),
         )
 
+    def get_payment_intent_v2(self, payment_intent_id: str) -> dict[str, Any]:
+        """v2 view: persisted status, authorization hold, capture fee split, and any void."""
+        return cast(
+            dict[str, Any],
+            self._request("GET", f"/api/v2/payment_intents/{payment_intent_id}").json(),
+        )
+
+    def authorize(
+        self,
+        payment_intent_id: str,
+        *,
+        idempotency_key: IdempotencyKey,
+        hold_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        """Authorize (v2); ``hold_seconds`` overrides how long the funds stay held."""
+        body: dict[str, Any] = {} if hold_seconds is None else {"hold_seconds": hold_seconds}
+        return self._command(payment_intent_id, "authorize", idempotency_key, body)
+
+    def capture(
+        self,
+        payment_intent_id: str,
+        *,
+        idempotency_key: IdempotencyKey,
+        amount: int | None = None,
+    ) -> dict[str, Any]:
+        """Capture (v2); a smaller ``amount`` captures part and releases the rest."""
+        body: dict[str, Any] = {} if amount is None else {"amount": amount}
+        return self._command(payment_intent_id, "capture", idempotency_key, body)
+
+    def void(self, payment_intent_id: str, *, idempotency_key: IdempotencyKey) -> dict[str, Any]:
+        """Release an authorised, uncaptured payment's hold (v2)."""
+        return self._command(payment_intent_id, "void", idempotency_key, {})
+
+    def _command(
+        self,
+        payment_intent_id: str,
+        command: str,
+        idempotency_key: IdempotencyKey,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        return cast(
+            dict[str, Any],
+            self._request(
+                "POST",
+                f"/api/v2/payment_intents/{payment_intent_id}/{command}",
+                headers={"Idempotency-Key": idempotency_key.value},
+                json=body,
+            ).json(),
+        )
+
     def iter_payment_intents(
         self,
         *,

@@ -36,6 +36,18 @@ class EmptyCommand(StrictRequest):
     pass
 
 
+class AuthorizeCommandV2(StrictRequest):
+    """/api/v2 authorize: optionally hold funds for a custom period (default AUTH_HOLD_SECONDS)."""
+
+    hold_seconds: Annotated[int, Field(strict=True, ge=60, le=2_592_000)] | None = None
+
+
+class CaptureCommandV2(StrictRequest):
+    """/api/v2 capture: optionally capture less than the authorization (the rest is released)."""
+
+    amount: PositivePaise | None = None
+
+
 class RefundCreate(StrictRequest):
     amount: PositivePaise
     currency: Currency = "INR"

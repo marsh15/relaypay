@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from apps.api.routes.admin import build_admin_router
 from apps.api.routes.inbound import build_inbound_router
 from apps.api.routes.payments import build_payments_router
+from apps.api.routes.payments_v2 import build_payments_v2_router
 
 logger = logging.getLogger("relaypay.api")
 
@@ -105,7 +106,7 @@ def create_app(
 
     app = FastAPI(
         title="RelayPay API",
-        version="1.0.0",
+        version="2.0.0",
         description=(
             "Synthetic-data-only RelayPay merchant and operator API. "
             "Never submit real payment, bank-account, identity, or customer data."
@@ -125,6 +126,13 @@ def create_app(
     )
     app.include_router(
         build_payments_router(
+            settings=resolved,
+            session_factory=session_factory,
+            provider_transport=transport,
+        )
+    )
+    app.include_router(
+        build_payments_v2_router(
             settings=resolved,
             session_factory=session_factory,
             provider_transport=transport,

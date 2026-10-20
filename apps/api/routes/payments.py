@@ -1,4 +1,6 @@
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, Request
@@ -34,14 +36,21 @@ def _http_response(result: HTTPResult) -> Response:
     return Response(content=result.body, status_code=result.status_code, headers=result.headers)
 
 
-def build_payments_router(
+@dataclass(frozen=True, slots=True)
+class MerchantDependencies:
+    """Auth, Idempotency-Key and dispatch helpers shared by the /api/v1 and /api/v2 routers."""
+
+    principal: Callable[..., Principal]
+    idempotency_key: Callable[..., str]
+    dispatch_after_commit: Callable[[HTTPResult, Principal], HTTPResult]
+
+
+def merchant_dependencies(
     *,
     settings: Settings,
     session_factory: sessionmaker[Session],
     provider_transport: ProviderTransport,
-) -> APIRouter:
-    router = APIRouter(prefix="/api/v1", tags=["payments"])
-
+) -> MerchantDependencies:
     def merchant_principal(
         request: Request,
         authorization: Annotated[str | None, Header(alias="Authorization")] = None,
@@ -78,9 +87,6 @@ def build_payments_router(
             )
         return normalized
 
-    PrincipalDep = Annotated[Principal, Depends(merchant_principal)]
-    IdempotencyKeyDep = Annotated[str, Depends(required_idempotency_key)]
-
     def dispatch_after_commit(result: HTTPResult, principal: Principal) -> HTTPResult:
         if result.status_code == 202:
             operation_id = str(json.loads(result.body)["operationId"])
@@ -100,6 +106,30 @@ def build_payments_router(
                 operation_public_id=operation_id,
             )
         return result
+
+    return MerchantDependencies(
+        principal=merchant_principal,
+        idempotency_key=required_idempotency_key,
+        dispatch_after_commit=dispatch_after_commit,
+    )
+
+
+def build_payments_router(
+    *,
+    settings: Settings,
+    session_factory: sessionmaker[Session],
+    provider_transport: ProviderTransport,
+) -> APIRouter:
+    router = APIRouter(prefix="/api/v1", tags=["payments"])
+
+    deps = merchant_dependencies(
+        settings=settings,
+        session_factory=session_factory,
+        provider_transport=provider_transport,
+    )
+    PrincipalDep = Annotated[Principal, Depends(deps.principal)]
+    IdempotencyKeyDep = Annotated[str, Depends(deps.idempotency_key)]
+    dispatch_after_commit = deps.dispatch_after_commit
 
     @router.post("/customers", status_code=201)
     def post_customer(payload: CustomerCreate, principal: PrincipalDep) -> Response:

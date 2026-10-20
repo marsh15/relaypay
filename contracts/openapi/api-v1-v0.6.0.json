@@ -76,6 +76,27 @@
         "title": "ApprovalDecisionCreate",
         "type": "object"
       },
+      "AuthorizeCommandV2": {
+        "additionalProperties": false,
+        "description": "/api/v2 authorize: optionally hold funds for a custom period (default AUTH_HOLD_SECONDS).",
+        "properties": {
+          "hold_seconds": {
+            "anyOf": [
+              {
+                "maximum": 2592000.0,
+                "minimum": 60.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Seconds"
+          }
+        },
+        "title": "AuthorizeCommandV2",
+        "type": "object"
+      },
       "BeneficiaryCreate": {
         "additionalProperties": false,
         "properties": {
@@ -152,6 +173,27 @@
           "statement"
         ],
         "title": "Body_post_statement_import_api_admin_v1_environments__environment_id__statement_imports_post",
+        "type": "object"
+      },
+      "CaptureCommandV2": {
+        "additionalProperties": false,
+        "description": "/api/v2 capture: optionally capture less than the authorization (the rest is released).",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9.223372036854776e+18,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          }
+        },
+        "title": "CaptureCommandV2",
         "type": "object"
       },
       "Citation": {
@@ -8257,6 +8299,308 @@
         "summary": "Post Delivery Replay",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v2/payment_intents/{payment_intent_id}": {
+      "get": {
+        "operationId": "get_payment_intent_api_v2_payment_intents__payment_intent_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Payment Intent",
+        "tags": [
+          "payments-v2"
+        ]
+      }
+    },
+    "/api/v2/payment_intents/{payment_intent_id}/authorize": {
+      "post": {
+        "operationId": "post_authorize_api_v2_payment_intents__payment_intent_id__authorize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeCommandV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Authorize",
+        "tags": [
+          "payments-v2"
+        ]
+      }
+    },
+    "/api/v2/payment_intents/{payment_intent_id}/capture": {
+      "post": {
+        "operationId": "post_capture_api_v2_payment_intents__payment_intent_id__capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureCommandV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Capture",
+        "tags": [
+          "payments-v2"
+        ]
+      }
+    },
+    "/api/v2/payment_intents/{payment_intent_id}/void": {
+      "post": {
+        "operationId": "post_void_api_v2_payment_intents__payment_intent_id__void_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_intent_id",
+            "required": true,
+            "schema": {
+              "title": "Payment Intent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Void",
+        "tags": [
+          "payments-v2"
         ]
       }
     },

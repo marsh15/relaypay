@@ -107,3 +107,40 @@ def test_webhook_verification_uses_exact_request_bytes() -> None:
         signature=f"v1={digest}",
         secret=secret,
     )
+
+
+def test_v2_commands_use_v2_paths_idempotency_keys_and_optional_bodies() -> None:
+    seen: list[tuple[str, str, str | None, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(
+            (
+                request.method,
+                request.url.path,
+                request.headers.get("Idempotency-Key"),
+                request.content,
+            )
+        )
+        return httpx.Response(202, json={"status": "PROCESSING"}, request=request)
+
+    client = RelayPayClient(
+        base_url="https://relaypay.test",
+        api_key="rpk_test_abcdefgh.secret",
+        transport=httpx.MockTransport(handler),
+    )
+    payment = "pay_" + "b" * 32
+    client.authorize(payment, idempotency_key=IdempotencyKey("k1"), hold_seconds=3600)
+    client.capture(payment, idempotency_key=IdempotencyKey("k2"), amount=60_000)
+    client.capture(payment, idempotency_key=IdempotencyKey("k3"))
+    client.void(payment, idempotency_key=IdempotencyKey("k4"))
+    client.get_payment_intent_v2(payment)
+    client.close()
+
+    base = f"/api/v2/payment_intents/{payment}"
+    assert seen == [
+        ("POST", f"{base}/authorize", "k1", b'{"hold_seconds":3600}'),
+        ("POST", f"{base}/capture", "k2", b'{"amount":60000}'),
+        ("POST", f"{base}/capture", "k3", b"{}"),
+        ("POST", f"{base}/void", "k4", b"{}"),
+        ("GET", base, None, b""),
+    ]
