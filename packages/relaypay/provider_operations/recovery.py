@@ -13,6 +13,7 @@ from relaypay.provider_operations.service import (
     ProviderTransport,
     apply_recorded_outcome,
     classify_and_record_lookup,
+    dispatch_operation,
 )
 
 
@@ -30,28 +31,30 @@ def claim_due_operations(
     *,
     batch_size: int = 20,
     lease_seconds: int = 30,
+    organisation_id: uuid.UUID | None = None,
 ) -> list[RecoveryClaim]:
     now = datetime.now(UTC)
     claims: list[RecoveryClaim] = []
     reclaimed = 0
     with factory() as session, session.begin():
-        operations = list(
-            session.scalars(
-                select(ProviderOperation)
-                .where(
-                    ProviderOperation.status == "PROCESSING",
-                    ProviderOperation.last_sent_at.is_not(None),
-                    ProviderOperation.next_lookup_at <= now,
-                    or_(
-                        ProviderOperation.lookup_lease_expires_at.is_(None),
-                        ProviderOperation.lookup_lease_expires_at <= now,
-                    ),
-                )
-                .order_by(ProviderOperation.next_lookup_at, ProviderOperation.id)
-                .limit(batch_size)
-                .with_for_update(skip_locked=True)
+        statement = (
+            select(ProviderOperation)
+            .where(
+                ProviderOperation.status == "PROCESSING",
+                ProviderOperation.last_sent_at.is_not(None),
+                ProviderOperation.next_lookup_at <= now,
+                or_(
+                    ProviderOperation.lookup_lease_expires_at.is_(None),
+                    ProviderOperation.lookup_lease_expires_at <= now,
+                ),
             )
+            .order_by(ProviderOperation.next_lookup_at, ProviderOperation.id)
+            .limit(batch_size)
+            .with_for_update(skip_locked=True)
         )
+        if organisation_id is not None:
+            statement = statement.where(ProviderOperation.organisation_id == organisation_id)
+        operations = list(session.scalars(statement))
         for operation in operations:
             if (
                 operation.lookup_lease_expires_at is not None
@@ -73,6 +76,96 @@ def claim_due_operations(
     if reclaimed:
         operations_metrics().recoveries.labels("expired_lease_reclaimed").inc(reclaimed)
     return claims
+
+
+# An operation the API committed but never sent (the process died between commit and dispatch)
+# has no ``last_sent_at``, so ``claim_due_operations`` never sees it. Inline dispatch follows the
+# commit within milliseconds, so one still unsent after the grace period has lost its dispatcher.
+UNSENT_DISPATCH_GRACE_SECONDS = 30
+
+
+@dataclass(frozen=True, slots=True)
+class UnsentClaim:
+    organisation_id: uuid.UUID
+    environment_id: uuid.UUID
+    operation_public_id: str
+
+
+def claim_unsent_operations(
+    factory: sessionmaker[Session],
+    *,
+    grace_seconds: int = UNSENT_DISPATCH_GRACE_SECONDS,
+    batch_size: int = 20,
+    lease_seconds: int = 30,
+    organisation_id: uuid.UUID | None = None,
+) -> list[UnsentClaim]:
+    """Lease PROCESSING operations still unsent ``grace_seconds`` after creation.
+
+    The lease only stops two pollers dispatching the same operation. Exactly-once sending comes
+    from ``prepare_first_send``, which re-locks the row and turns any caller that finds
+    ``last_sent_at`` already set (the API's own late dispatch, or another poller) into a lookup.
+    """
+    now = datetime.now(UTC)
+    with factory() as session, session.begin():
+        statement = (
+            select(ProviderOperation)
+            .where(
+                ProviderOperation.status == "PROCESSING",
+                ProviderOperation.last_sent_at.is_(None),
+                ProviderOperation.created_at <= now - timedelta(seconds=grace_seconds),
+                or_(
+                    ProviderOperation.lookup_lease_expires_at.is_(None),
+                    ProviderOperation.lookup_lease_expires_at <= now,
+                ),
+            )
+            .order_by(ProviderOperation.created_at, ProviderOperation.id)
+            .limit(batch_size)
+            .with_for_update(skip_locked=True)
+        )
+        if organisation_id is not None:
+            statement = statement.where(ProviderOperation.organisation_id == organisation_id)
+        claims: list[UnsentClaim] = []
+        for operation in session.scalars(statement):
+            operation.lookup_lease_token = uuid.uuid4()
+            operation.lookup_lease_expires_at = now + timedelta(seconds=lease_seconds)
+            claims.append(
+                UnsentClaim(
+                    operation.organisation_id, operation.environment_id, operation.public_id
+                )
+            )
+    return claims
+
+
+def dispatch_unsent_operations(
+    factory: sessionmaker[Session],
+    *,
+    provider_account_id: str,
+    provider_signing_secret: str,
+    transport: ProviderTransport,
+    grace_seconds: int = UNSENT_DISPATCH_GRACE_SECONDS,
+    batch_size: int = 20,
+    organisation_id: uuid.UUID | None = None,
+) -> int:
+    """First-send operations whose dispatcher died after the API committed them."""
+    claims = claim_unsent_operations(
+        factory,
+        grace_seconds=grace_seconds,
+        batch_size=batch_size,
+        organisation_id=organisation_id,
+    )
+    for claim in claims:
+        dispatch_operation(
+            factory,
+            organisation_id=claim.organisation_id,
+            environment_id=claim.environment_id,
+            operation_public_id=claim.operation_public_id,
+            provider_account_id=provider_account_id,
+            transport=transport,
+            provider_signing_secret=provider_signing_secret,
+        )
+    if claims:
+        operations_metrics().recoveries.labels("unsent_dispatch").inc(len(claims))
+    return len(claims)
 
 
 def claim_specific_operation(
@@ -175,6 +268,13 @@ def run_recovery_batch(
     transport: ProviderTransport,
     batch_size: int = 20,
 ) -> int:
+    dispatched = dispatch_unsent_operations(
+        factory,
+        provider_account_id=provider_account_id,
+        provider_signing_secret=provider_signing_secret,
+        transport=transport,
+        batch_size=batch_size,
+    )
     claims = claim_due_operations(factory, batch_size=batch_size)
     for claim in claims:
         recover_claim(
@@ -186,4 +286,4 @@ def run_recovery_batch(
         )
     if claims:
         operations_metrics().recoveries.labels("provider_lookup").inc(len(claims))
-    return len(claims)
+    return dispatched + len(claims)

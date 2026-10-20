@@ -413,16 +413,19 @@ def test_expired_recovery_lease_is_reclaimed_and_network_holds_no_database_trans
     transport = DeterministicTransport(lose_mutation_response=True, factory=factory)
     _dispatch(factory, organisation_id, operation_id, transport)
 
-    first_claims = claim_due_operations(factory)
+    first_claims = claim_due_operations(factory, organisation_id=organisation_id)
     first = next(claim for claim in first_claims if claim.operation_public_id == operation_id)
-    assert all(claim.operation_public_id != operation_id for claim in claim_due_operations(factory))
+    assert all(
+        claim.operation_public_id != operation_id
+        for claim in claim_due_operations(factory, organisation_id=organisation_id)
+    )
     with factory() as session, session.begin():
         operation = session.get(ProviderOperation, first.operation_id)
         assert operation is not None
         operation.lookup_lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
     reclaimed = next(
         claim
-        for claim in claim_due_operations(factory)
+        for claim in claim_due_operations(factory, organisation_id=organisation_id)
         if claim.operation_public_id == operation_id
     )
     assert reclaimed.lease_token != first.lease_token

@@ -52,11 +52,15 @@ from relaypay.payments.service import (
     read_operation,
 )
 from relaypay.payouts.models import Payout, PayoutAttempt
-from relaypay.payouts.service import create_payout, dispatch_payout_attempt
+from relaypay.payouts.service import create_payout, dispatch_payout_attempt, run_payout_batch
 from relaypay.proof import AckedOp, capture_snapshot, check_invariants
 from relaypay.proof.crashpoints import SimulatedCrash, crash_plan, maybe_crash
 from relaypay.provider_operations.models import ProviderOperation
-from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
+from relaypay.provider_operations.recovery import (
+    claim_specific_operation,
+    dispatch_unsent_operations,
+    recover_claim,
+)
 from relaypay.provider_operations.service import dispatch_operation
 from relaypay.provider_operations.service_types import ProviderObservation
 from sqlalchemy import create_engine, select, update
@@ -741,8 +745,20 @@ def quiesce(ctx: SeedContext) -> None:
     for key in sorted(k for k, e in provider.effects.items() if e.outcome == "PENDING"):
         provider.resolve(key, Outcome.SUCCEED if rng.random() < 0.75 else Outcome.DECLINE)
 
+    # F3: the poller first-sends operations whose dispatcher died after the API committed them.
+    # Run it before any client retry, so client retries cannot mask a recovery gap.
+    dispatch_unsent_operations(
+        ctx.factory,
+        provider_account_id=ctx.world.provider_account_id,
+        provider_signing_secret=ctx.world.provider_signing_secret,
+        transport=provider,
+        grace_seconds=0,
+        batch_size=100_000,
+        organisation_id=ctx.world.organisation_id,
+    )
     unsent = [name for name, was_sent in _processing_operations(ctx) if not was_sent]
-    ctx.findings["unsent_operations_before_client_retry"] = len(unsent)
+    if unsent:
+        ctx.fail(f"{len(unsent)} operations still unsent after the poller sweep: {unsent[:5]}")
     for spec in sorted(ctx.unacked.values(), key=lambda s: s.op_index):
         ctx.result.unacked_retried += 1
         try:
@@ -784,15 +800,24 @@ def quiesce(ctx: SeedContext) -> None:
     ctx.result.review_remaining = len(_review_operations(ctx))
     ctx.result.quiesced = not _processing_operations(ctx)
 
-    # The poller's payout batch only picks PREPARED and AMBIGUOUS attempts. Anything still
-    # SENT (a worker died after committing the send) is invisible to it; an operator looks it up.
+    # F2: the poller's payout batch recovers SENT attempts (worker died after committing the
+    # send) by lookup only. Anything still SENT afterwards is a recovery gap.
+    try:
+        run_payout_batch(
+            ctx.factory,
+            bank_account_id=BANK_ACCOUNT,
+            bank_signing_secret=BANK_SECRET,
+            transport=LocalBankTransport(ctx.bank),
+            limit=100_000,
+            organisation_id=ctx.world.organisation_id,
+            sent_grace_seconds=0,
+            sent_lease_seconds=0,
+        )
+    except RelayPayError as error:
+        ctx.rejections[error.code] += 1
     stuck = _payouts_with_attempt_status(ctx, ("SENT",))
-    ctx.findings["payouts_stuck_sent_after_worker_sweeps"] = len(stuck)
-    for payout_id in stuck + _payouts_with_attempt_status(ctx, ("PREPARED", "AMBIGUOUS")):
-        try:
-            _dispatch_payout(ctx, payout_id)
-        except RelayPayError as error:
-            ctx.rejections[error.code] += 1
+    if stuck:
+        ctx.fail(f"{len(stuck)} payouts still SENT after the poller payout batch: {stuck[:5]}")
     with ctx.factory() as session, session.begin():
         rows = session.execute(
             select(Payout.status, PayoutAttempt.status)

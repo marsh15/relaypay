@@ -3,11 +3,11 @@ import hmac
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import httpx
-from sqlalchemy import Integer, func, select
+from sqlalchemy import Integer, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -917,6 +917,56 @@ def list_beneficiaries(
     )
 
 
+# A SENT attempt means a worker committed the send and then either is still talking to the bank
+# or died. Bank calls time out in seconds, so an attempt SENT for longer than the grace period
+# has lost its dispatcher; it is then recovered by a lookup only (never a second transfer).
+SENT_RECOVERY_GRACE_SECONDS = 30
+SENT_RECOVERY_LEASE_SECONDS = 30
+
+
+def claim_stale_sent_attempts(
+    factory: sessionmaker[Session],
+    *,
+    organisation_id: uuid.UUID | None = None,
+    grace_seconds: int = SENT_RECOVERY_GRACE_SECONDS,
+    lease_seconds: int = SENT_RECOVERY_LEASE_SECONDS,
+    limit: int = 25,
+) -> list[str]:
+    """Lease SENT attempts whose send is older than the grace period; returns payout ids.
+
+    ``payout_attempts`` has no lease columns (and recovery adds no migration), so the lease is
+    the attempt's ``updated_at``: claiming stamps it, and an attempt is claimable only once both
+    the send and the last stamp are older than their windows. Claim rows are taken
+    ``FOR UPDATE SKIP LOCKED``, so concurrent sweeps never claim the same attempt; a sweep that
+    dies simply lets the lease lapse. The lease only avoids duplicate lookups: correctness comes
+    from ``record_bank_observation``, which re-locks the payout and attempt and ignores a
+    terminal attempt, and from the recovery being lookup-only (``last_sent_at`` is set).
+    """
+    with factory() as session, session.begin():
+        statement = (
+            select(PayoutAttempt.id, Payout.public_id)
+            .join(Payout, Payout.id == PayoutAttempt.payout_id)
+            .where(
+                PayoutAttempt.status == "SENT",
+                PayoutAttempt.last_sent_at <= func.now() - timedelta(seconds=grace_seconds),
+                PayoutAttempt.updated_at <= func.now() - timedelta(seconds=lease_seconds),
+            )
+            .order_by(PayoutAttempt.last_sent_at, PayoutAttempt.id)
+            .limit(limit)
+            .with_for_update(of=PayoutAttempt, skip_locked=True)
+        )
+        if organisation_id is not None:
+            statement = statement.where(Payout.organisation_id == organisation_id)
+        rows = session.execute(statement).all()
+        if rows:
+            session.execute(
+                update(PayoutAttempt)
+                .where(PayoutAttempt.id.in_([row[0] for row in rows]))
+                .values(updated_at=func.now())
+            )
+        return [str(row[1]) for row in rows]
+
+
 def run_payout_batch(
     factory: sessionmaker[Session],
     *,
@@ -924,17 +974,32 @@ def run_payout_batch(
     bank_signing_secret: str,
     transport: BankTransport,
     limit: int = 25,
+    organisation_id: uuid.UUID | None = None,
+    sent_grace_seconds: int = SENT_RECOVERY_GRACE_SECONDS,
+    sent_lease_seconds: int = SENT_RECOVERY_LEASE_SECONDS,
 ) -> int:
     with factory() as session, session.begin():
-        payout_ids = list(
-            session.scalars(
-                select(Payout.public_id)
-                .join(PayoutAttempt, PayoutAttempt.payout_id == Payout.id)
-                .where(PayoutAttempt.status.in_(("PREPARED", "AMBIGUOUS")))
-                .order_by(PayoutAttempt.updated_at, PayoutAttempt.id)
-                .limit(limit)
-            )
+        statement = (
+            select(Payout.public_id)
+            .join(PayoutAttempt, PayoutAttempt.payout_id == Payout.id)
+            .where(PayoutAttempt.status.in_(("PREPARED", "AMBIGUOUS")))
+            .order_by(PayoutAttempt.updated_at, PayoutAttempt.id)
+            .limit(limit)
         )
+        if organisation_id is not None:
+            statement = statement.where(Payout.organisation_id == organisation_id)
+        payout_ids = list(session.scalars(statement))
+    # F2: a worker that died after the bank answered leaves the attempt SENT. Dispatching it
+    # takes the lookup-only path (``prepare_attempt_send`` sees ``last_sent_at``), never a resend.
+    payout_ids.extend(
+        claim_stale_sent_attempts(
+            factory,
+            organisation_id=organisation_id,
+            grace_seconds=sent_grace_seconds,
+            lease_seconds=sent_lease_seconds,
+            limit=limit,
+        )
+    )
     for payout_id in payout_ids:
         dispatch_payout_attempt(
             factory,
