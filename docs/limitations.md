@@ -110,9 +110,9 @@
 
 These are known and not changed in code; the documentation works around them.
 
-- The API reports version `1.0.0` because it is pinned to the frozen OpenAPI contract
-  (`contracts/openapi/v0.9.0.json`, `info.version` `1.0.0`); changing it means regenerating the
-  contract and SDK. The simulators and the edge Worker report `1.0.1`, the project version.
+- The API reports version `2.0.0` (`contracts/openapi/v2.0.0.json`) while v2.0 is being built
+  milestone by milestone; the simulators and the edge Worker still report `1.0.1`, the last
+  released project version.
 - `PUBLIC_BASE_URL` defaults to port 8080, but nothing listens there; the API is on 8000. The
   setting is only validated in production.
 - The example value of `WEBHOOK_SECRET_ENCRYPTION_KEY` still contains the word "fernet" (changing

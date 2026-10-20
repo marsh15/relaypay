@@ -1,7 +1,7 @@
 # RelayPay Python SDK
 
 The public `relaypay_sdk` package (`packages/relaypay_sdk`) is a hand-written facade over a private
-client generated from [`contracts/openapi/v0.9.0.json`](../../contracts/openapi/v0.9.0.json). The
+client generated from [`contracts/openapi/v2.0.0.json`](../../contracts/openapi/v2.0.0.json). The
 generator is pinned (`openapi-python-client==0.29.0`, configured in `openapi-python-client.yml`)
 and `make sdk-drift` fails if the generated code no longer matches the contract. The contract
 file name and the generator's `package_version_override: 0.9.0` predate the 1.x releases; the
@@ -60,4 +60,15 @@ seeded key). `RELAYPAY_BASE_URL` defaults to `http://localhost:8000`:
 ```bash
 RELAYPAY_TEST_API_KEY=rpk_test_... \
   uv run python examples/python/list_payment_intents.py
+```
+
+## v2 commands
+
+`RelayPayClient` also wraps `/api/v2`. Each command takes an `IdempotencyKey`:
+
+```python
+client.authorize(payment_id, idempotency_key=IdempotencyKey.new(), hold_seconds=3600)
+client.capture(payment_id, idempotency_key=IdempotencyKey.new(), amount=60_000)  # partial
+client.void(payment_id, idempotency_key=IdempotencyKey.new())
+client.get_payment_intent_v2(payment_id)  # status, hold, fee split, void
 ```

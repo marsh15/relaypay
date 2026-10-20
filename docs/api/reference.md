@@ -1,9 +1,11 @@
 # HTTP API reference
 
-The API is a FastAPI application (`apps/api`, port 8000). The frozen OpenAPI document is
-[`contracts/openapi/v0.9.0.json`](../../contracts/openapi/v0.9.0.json) (the file name predates the
-1.x line; its `info.version` is `1.0.0`). It describes 80 operations on 71 paths and is checked
-against the code by `make api-contract`. `/metrics` is deliberately excluded from it. This page
+The API is a FastAPI application (`apps/api`, port 8000). The current OpenAPI document is
+[`contracts/openapi/v2.0.0.json`](../../contracts/openapi/v2.0.0.json) (`info.version` `2.0.0`).
+It describes 84 operations on 75 paths and is checked against the code by `make api-contract`.
+`/api/v1` is frozen: every v1 operation must stay byte-identical to the
+[`api-v1-v0.6.0.json`](../../contracts/openapi/api-v1-v0.6.0.json) baseline.
+[`v0.9.0.json`](../../contracts/openapi/v0.9.0.json) is the v1.0.x document, kept for history. `/metrics` is deliberately excluded from it. This page
 summarizes the surface; the OpenAPI document is the contract for request and response shapes.
 
 All amounts are integer paise in `INR`. Every response includes `X-Request-ID` (the inbound value is
@@ -180,3 +182,21 @@ requires the matching `X-*-Control` secret header.
 
 The dispute, recovery, and merchant-site simulators use FastAPI's default `{"detail": ...}` error
 shape rather than the RelayPay envelope.
+
+## /api/v2 (v2.0)
+
+v2 adds the payment commands whose behaviour v2.0 changed. Creating payments, refunds, listing and
+operation reads are unchanged and stay on `/api/v1`. Every v2 command takes an `Idempotency-Key`.
+v2 fingerprints are versioned, so a key already used on a v1 route returns
+`409 IDEMPOTENCY_KEY_REUSED` on v2 and never replays across versions.
+
+| Method and path | Body | Notes |
+| --- | --- | --- |
+| `GET /api/v2/payment_intents/{id}` | | Persisted `status` and `statusVersion`, `authorization` (`holdSeconds`, `expiresAt`), `capture` (`amount`, `feeAmount`, `gstAmount`, `netAmount`), `void`, and the v1 refund fields |
+| `POST /api/v2/payment_intents/{id}/authorize` | `{"hold_seconds"?: 60..2592000}` | Hold defaults to `AUTH_HOLD_SECONDS` (7 days); an uncaptured payment expires afterwards |
+| `POST /api/v2/payment_intents/{id}/capture` | `{"amount"?: paise}` | One capture per payment, up to the authorized amount; the remainder is released. `409 VOID_IN_PROGRESS`, `409 AUTHORIZATION_EXPIRED`, `409 PAYMENT_NOT_CAPTURABLE`, `409 CAPTURE_ALREADY_EXISTS`, `422 CAPTURE_AMOUNT_EXCEEDS_AUTHORIZED` |
+| `POST /api/v2/payment_intents/{id}/void` | `{}` | Releases an authorised, uncaptured hold; the payment becomes `cancelled`. `409 VOID_REQUIRES_SUCCEEDED_AUTHORIZATION`, `409 PAYMENT_NOT_VOIDABLE` |
+
+Payment `status` is one of `created`, `requires_action`, `authorised`, `captured`,
+`partially_refunded`, `refunded`, `failed`, `expired` or `cancelled`. Transitions are enforced in
+code and by a database trigger.
