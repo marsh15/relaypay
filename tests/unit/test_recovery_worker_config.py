@@ -40,6 +40,7 @@ def test_single_broker_less_scheduler_owns_every_background_batch(
         "process_inbound_webhooks": 2.0,
         "record_settlement_forecasts": 3600.0,
         "expire_authorizations": 5.0,
+        "apply_psp_events": 1.0,
     }
     assert expected == poller.SCHEDULE_SECONDS
     assert set(poller._RUNNERS) | {"process_inbound_webhooks"} == set(expected)

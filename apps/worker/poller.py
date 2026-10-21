@@ -24,6 +24,7 @@ from relaypay.payouts.service import HTTPBankTransport, run_payout_batch
 from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
+from relaypay.psp.applier import run_psp_event_batch
 from relaypay.reconciliation.service import run_reconciliation_batch
 from relaypay.settlement_intelligence.execution import run_forecast_batch
 from relaypay.subscriptions.execution import run_recovery_action_batch
@@ -45,6 +46,7 @@ SCHEDULE_SECONDS: dict[str, float] = {
     "process_inbound_webhooks": 2.0,
     "record_settlement_forecasts": 3600.0,
     "expire_authorizations": 5.0,
+    "apply_psp_events": 1.0,
 }
 OUTBOX_DRAIN_CAP = 100
 
@@ -182,6 +184,11 @@ def _expire_authorizations(factory: sessionmaker[Session], settings: Settings) -
     return expire_authorizations(factory)
 
 
+@observe_worker_task("apply_psp_events")
+def _apply_psp_events(factory: sessionmaker[Session], settings: Settings) -> int:
+    return run_psp_event_batch(factory, provider_account_id=settings.PROVIDER_ACCOUNT_ID)
+
+
 _RUNNERS = {
     "recover_provider_operations": _recover_provider_operations,
     "materialize_webhook_deliveries": _materialize_webhook_deliveries,
@@ -191,6 +198,7 @@ _RUNNERS = {
     "run_subscription_recovery": _run_subscription_recovery,
     "record_settlement_forecasts": _record_settlement_forecasts,
     "expire_authorizations": _expire_authorizations,
+    "apply_psp_events": _apply_psp_events,
 }
 
 

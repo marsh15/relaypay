@@ -112,7 +112,7 @@ class ProviderAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id", "sequence"),
         CheckConstraint("sequence > 0"),
-        CheckConstraint("attempt_kind IN ('MUTATION', 'LOOKUP')"),
+        CheckConstraint("attempt_kind IN ('MUTATION', 'LOOKUP', 'WEBHOOK')"),
         CheckConstraint(
             "state IN ('SENT', 'RESPONSE_RECEIVED', 'TRANSPORT_ERROR', 'VALIDATION_REJECTED')"
         ),
@@ -121,6 +121,13 @@ class ProviderAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             "provider_operation_id",
             unique=True,
             postgresql_where=text("attempt_kind = 'MUTATION'"),
+        ),
+        Index(
+            "uq_provider_attempts_one_webhook_payload",
+            "provider_operation_id",
+            "response_sha256",
+            unique=True,
+            postgresql_where=text("attempt_kind = 'WEBHOOK'"),
         ),
     )
 
@@ -174,7 +181,7 @@ class OperationHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         CheckConstraint(
-            "actor_type IN ('REQUEST', 'RECOVERY_WORKER', 'ADMIN_LOOKUP', 'FINALIZER')"
+            "actor_type IN ('REQUEST', 'RECOVERY_WORKER', 'ADMIN_LOOKUP', 'FINALIZER', 'WEBHOOK')"
         ),
         Index("ix_operation_history_operation_created", "provider_operation_id", "created_at"),
     )

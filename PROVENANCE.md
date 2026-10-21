@@ -26,7 +26,7 @@ specification. It never produced an implementation. Until a module is implemente
 | [`packages/relaypay/proof/invariants.py`](packages/relaypay/proof/invariants.py) | Whether a system snapshot breaks any of the 15 money invariants | M15 | Pending |
 | [`packages/relaypay/payouts/locking/pessimistic.py`](packages/relaypay/payouts/locking/pessimistic.py), [`optimistic.py`](packages/relaypay/payouts/locking/optimistic.py), [`constraint_guard.py`](packages/relaypay/payouts/locking/constraint_guard.py) | How concurrent payout reservations are serialised without overdraft | M15 stubs, M19 wired | Pending |
 | [`packages/relaypay/fees/calculator.py`](packages/relaypay/fees/calculator.py) | Integer-paise MDR fee, GST on the fee, merchant net (`compute_capture_fee`) | M16 | Pending |
-| `packages/relaypay/psp/ordering.py` | Applying duplicate and out-of-order PSP webhooks once, in a valid order | M17 | Not yet scaffolded |
+| [`packages/relaypay/psp/ordering.py`](packages/relaypay/psp/ordering.py) | What one verified PSP webhook means for its operation: apply, ignore as duplicate or stale, or review (`decide`) | M17 | Pending |
 
 When a module is implemented, its row changes to the commit that implemented it, and the CI
 `handwritten-gate` job for that module must be green.
@@ -34,7 +34,8 @@ When a module is implemented, its row changes to the commit that implemented it,
 The supporting code is AI-assisted, not hand-written. That covers the snapshot reader
 (`proof/snapshot.py`), the interfaces (`proof/snapshot_types.py`, `payouts/locking/types.py`),
 the legacy control reserver (`payouts/locking/legacy.py`), the fee types and service
-(`fees/types.py`, `fees/service.py`), and every test. Ledger tests use a constant fee test
+(`fees/types.py`, `fees/service.py`), the PSP inbox, event types and applier (`psp/inbox.py`,
+`psp/types.py`, `psp/applier.py`), and every test. Ledger tests use a constant fee test
 double, so they never encode the calculator's rules.
 
 ## Checking the claim

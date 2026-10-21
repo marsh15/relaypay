@@ -3,7 +3,9 @@
 0026 adds the raw PSP webhook inbox. The proof seeds payments in every lifecycle state through the
 real services at head (the services use today's models), steps back to 0025, and then shows that
 0026 creates the empty ``psp_events`` table with its frozen-column trigger and changes no existing
-row. A downgrade must restore the 0025 database exactly, and the re-upgrade must be clean.
+row. 0027 lets webhooks be provider evidence (the WEBHOOK attempt kind and actor, and the unique
+webhook-payload index) and must also change no row. A downgrade must restore the 0025 database
+exactly, and the re-upgrade must be clean.
 """
 
 from __future__ import annotations
@@ -26,6 +28,12 @@ from scripts.verify_m16_upgrade import _digests, _seed
 
 PREVIOUS_REVISION = "0025_fees_gst"
 INBOX_REVISION = "0026_psp_inbox"
+WEBHOOK_EVIDENCE_REVISION = "0027_webhook_evidence"
+WEBHOOK_INDEX_COUNT = """
+    SELECT count(*) FROM pg_indexes
+    WHERE tablename = 'provider_attempts' AND schemaname = current_schema()
+      AND indexname = 'uq_provider_attempts_one_webhook_payload'
+"""
 FROZEN_TRIGGER_COUNT = """
     SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
     WHERE c.relname = 'psp_events' AND t.tgname = 'psp_events_frozen_columns'
@@ -61,10 +69,17 @@ def main() -> None:
                 assert connection.scalar(text("SELECT count(*) FROM psp_events")) == 0
                 assert connection.scalar(text(FROZEN_TRIGGER_COUNT)) == 1
 
+            command.upgrade(config, WEBHOOK_EVIDENCE_REVISION)
+            with engine.connect() as connection:
+                evidence = _digests(connection)
+                evidence.pop("psp_events", None)
+                assert evidence == before, "0027 must not change any existing row"
+                assert connection.scalar(text(WEBHOOK_INDEX_COUNT)) == 1
+
             command.downgrade(config, PREVIOUS_REVISION)
             with engine.connect() as connection:
                 assert _digests(connection) == before, "downgrade must restore 0025 exactly"
-            command.upgrade(config, INBOX_REVISION)
+            command.upgrade(config, "head")
         finally:
             engine.dispose()
     finally:
@@ -74,8 +89,8 @@ def main() -> None:
             os.environ["RELAYPAY_MIGRATION_DATABASE_URL"] = original
         _drop_schema(base_url, schema)
     print(
-        f"M17 upgrade proof passed: 0026 added the PSP inbox over {payments} seeded payments; "
-        "existing rows unchanged; downgrade and re-upgrade clean"
+        f"M17 upgrade proof passed: 0026 added the PSP inbox and 0027 webhook evidence over "
+        f"{payments} seeded payments; existing rows unchanged; downgrade and re-upgrade clean"
     )
 
 

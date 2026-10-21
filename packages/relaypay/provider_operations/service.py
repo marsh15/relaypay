@@ -106,15 +106,22 @@ def _expected_result(
         operation = session.get(ProviderOperation, operation_id)
         if operation is None:
             raise RuntimeError("provider operation is missing")
-        reference, amount, currency = _resource_facts(session, operation)
-        return ExpectedProviderResult(
-            account_id=provider_account_id,
-            stable_key=operation.stable_provider_key,
-            operation_kind=operation.kind,
-            reference=reference,
-            amount=amount,
-            currency=currency,
-        )
+        return expected_result_for(session, operation, provider_account_id=provider_account_id)
+
+
+def expected_result_for(
+    session: Session, operation: ProviderOperation, *, provider_account_id: str
+) -> ExpectedProviderResult:
+    """The identity any provider evidence for ``operation`` must carry."""
+    reference, amount, currency = _resource_facts(session, operation)
+    return ExpectedProviderResult(
+        account_id=provider_account_id,
+        stable_key=operation.stable_provider_key,
+        operation_kind=operation.kind,
+        reference=reference,
+        amount=amount,
+        currency=currency,
+    )
 
 
 def prepare_first_send(
@@ -282,6 +289,17 @@ def record_lookup_observation(
             )
             + 1
         )
+        # This lookup plus the earlier ones; webhook evidence must not count toward the
+        # indeterminate-review limit.
+        lookup_count = 1 + int(
+            session.scalar(
+                select(func.count()).where(
+                    ProviderAttempt.provider_operation_id == operation.id,
+                    ProviderAttempt.attempt_kind == "LOOKUP",
+                )
+            )
+            or 0
+        )
         now = datetime.now(UTC)
         request_sha = hashlib.sha256(
             canonical_json_bytes(
@@ -305,7 +323,6 @@ def record_lookup_observation(
         operation.lookup_lease_expires_at = None
         operation.next_lookup_at = _next_lookup(now, operation.attempt_count)
 
-        lookup_count = sequence - 1
         review_reason = "INVALID_EVIDENCE" if classified.action == "REVIEW" else None
         action = classified.action
         if action == "NOT_FOUND":

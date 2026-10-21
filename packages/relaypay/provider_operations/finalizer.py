@@ -20,7 +20,7 @@ from relaypay.provider_operations.models import (
     ProviderOperation,
 )
 
-ActorType = Literal["REQUEST", "RECOVERY_WORKER", "ADMIN_LOOKUP", "FINALIZER"]
+ActorType = Literal["REQUEST", "RECOVERY_WORKER", "ADMIN_LOOKUP", "FINALIZER", "WEBHOOK"]
 
 
 @dataclass(frozen=True, slots=True)
