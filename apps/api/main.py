@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.routes.admin import build_admin_router
 from apps.api.routes.inbound import build_inbound_router
+from apps.api.routes.inbound_psp import build_inbound_psp_router
 from apps.api.routes.payments import build_payments_router
 from apps.api.routes.payments_v2 import build_payments_v2_router
 
@@ -139,6 +140,7 @@ def create_app(
         )
     )
     app.include_router(build_inbound_router(settings=resolved, session_factory=session_factory))
+    app.include_router(build_inbound_psp_router(settings=resolved, session_factory=session_factory))
 
     @app.exception_handler(RelayPayError)
     async def handle_relaypay_error(_: Request, error: RelayPayError) -> JSONResponse:

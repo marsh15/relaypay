@@ -20,6 +20,7 @@ def _settings(app_env: str = "test") -> Settings:
         WEBHOOK_SECRET_ENCRYPTION_KEY="synthetic-key",
         PROVIDER_SIGNING_SECRET="provider-signing",
         PROVIDER_CONTROL_SECRET="provider-control",
+        PROVIDER_WEBHOOK_SECRET="provider-webhook-test",
         RECEIVER_WEBHOOK_SECRET="receiver-webhook",
         BANK_SIGNING_SECRET="bank-signing",
         BANK_CONTROL_SECRET="bank-control",

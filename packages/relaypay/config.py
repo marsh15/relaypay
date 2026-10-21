@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     PROVIDER_ACCOUNT_ID: str = "acct_relaypay_demo"
     PROVIDER_SIGNING_SECRET: SecretStr = Field(min_length=16)
     PROVIDER_CONTROL_SECRET: SecretStr = Field(min_length=16)
+    # Signs the provider's webhook envelopes; separate from PROVIDER_SIGNING_SECRET, which signs
+    # API responses, as real PSPs do (M17).
+    PROVIDER_WEBHOOK_SECRET: SecretStr = Field(
+        default=SecretStr("dev-provider-webhook-secret-change-me"), min_length=16
+    )
+    PSP_WEBHOOK_REPLAY_SECONDS: int = Field(default=300, ge=30)
     BANK_BASE_URL: str = "http://localhost:8003"
     BANK_ACCOUNT_ID: str = "bank_relaypay_demo"
     BANK_SIGNING_SECRET: SecretStr = SecretStr("dev-bank-signing-secret-change-me")
@@ -88,6 +94,7 @@ class Settings(BaseSettings):
             dev_default_secrets = {
                 "PROVIDER_SIGNING_SECRET": "dev-provider-signing-secret-change-me",
                 "PROVIDER_CONTROL_SECRET": "dev-provider-control-secret-change-me",
+                "PROVIDER_WEBHOOK_SECRET": "dev-provider-webhook-secret-change-me",
                 "BANK_SIGNING_SECRET": "dev-bank-signing-secret-change-me",
                 "BANK_CONTROL_SECRET": "dev-bank-control-secret-change-me",
                 "COMMERCE_CONTROL_SECRET": "dev-commerce-control-secret-change-me",

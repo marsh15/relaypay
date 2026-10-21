@@ -66,6 +66,7 @@ from relaypay.provider_operations.models import (
     ProviderAttempt,
     ProviderOperation,
 )
+from relaypay.psp.models import PspEvent
 from relaypay.reconciliation.models import (
     MismatchEvidenceVersion,
     MismatchWorkflowHistory,
@@ -150,6 +151,7 @@ __all__ = [
     "PromptVersion",
     "ProviderAttempt",
     "ProviderOperation",
+    "PspEvent",
     "ReconciliationMatch",
     "ReconciliationMismatch",
     "ReconciliationRun",

@@ -21,6 +21,7 @@ x-app-environment: &app-environment
   PROVIDER_BASE_URL: http://provider:8001
   PROVIDER_ACCOUNT_ID: ${PROVIDER_ACCOUNT_ID:-acct_relaypay_demo}
   PROVIDER_SIGNING_SECRET: ${PROVIDER_SIGNING_SECRET:-dev-provider-signing-secret-change-me}
+  PROVIDER_WEBHOOK_SECRET: ${PROVIDER_WEBHOOK_SECRET:-dev-provider-webhook-secret-change-me}
   PROVIDER_CONTROL_SECRET: ${PROVIDER_CONTROL_SECRET:-dev-provider-control-secret-change-me}
   BANK_BASE_URL: http://bank:8003
   BANK_ACCOUNT_ID: ${BANK_ACCOUNT_ID:-bank_relaypay_demo}

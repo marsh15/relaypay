@@ -200,6 +200,9 @@ jobs:
       - name: Prove v2.0 M16 payment-model migrations preserve evidence
         run: uv run python -m scripts.verify_m16_upgrade
 
+      - name: Prove v2.0 M17 migrations preserve evidence
+        run: uv run python -m scripts.verify_m17_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate

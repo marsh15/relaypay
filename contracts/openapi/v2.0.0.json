@@ -7294,6 +7294,46 @@
         ]
       }
     },
+    "/api/inbound/v1/psp/{provider}": {
+      "post": {
+        "operationId": "post_psp_event_api_inbound_v1_psp__provider__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Psp Event",
+        "tags": [
+          "inbound-psp-webhooks"
+        ]
+      }
+    },
     "/api/session/login": {
       "post": {
         "operationId": "login_api_session_login_post",
