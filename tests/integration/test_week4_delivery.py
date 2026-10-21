@@ -6,6 +6,7 @@ import pytest
 from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.crypto import encrypt_webhook_secret
 from relaypay.event_delivery.delivery import (
+    MAX_ATTEMPTS,
     DeliveryResponse,
     claim_delivery,
     deliver_claim,
@@ -226,7 +227,7 @@ def test_retry_budget_ends_in_dead_letter(
     organisation_id, _ = _create_event(relaypay)
     materialize_deliveries(relaypay)
     delivery_id = None
-    for sequence in range(1, 6):
+    for sequence in range(1, MAX_ATTEMPTS + 1):
         claim = claim_delivery(relaypay, organisation_id=organisation_id)
         assert claim is not None
         delivery_id = claim.delivery_id
@@ -240,7 +241,7 @@ def test_retry_budget_ends_in_dead_letter(
             delivery = session.get(WebhookDelivery, claim.delivery_id)
             assert delivery is not None
             assert delivery.attempt_count == sequence
-            if sequence < 5:
+            if sequence < MAX_ATTEMPTS:
                 assert delivery.status == "RETRY_WAIT"
                 delivery.next_attempt_at = datetime.now(UTC)
     with relaypay() as session, session.begin():

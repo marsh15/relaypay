@@ -159,8 +159,9 @@ call; redirects are not followed) with:
 | `X-RelayPay-Signature` | `v1=` plus hex HMAC-SHA256 of `"<timestamp>." + exact event bytes`, keyed with the endpoint version's secret |
 
 Endpoint secrets are stored AES-256-GCM encrypted. A `2xx` acknowledges; `408`, `429`, `5xx`, and
-transport errors retry; any other status is permanent. At most 5 attempts, waiting 1, 2, 4, and 8
-seconds between them, then `DEAD_LETTER`. An unreadable secret dead-letters immediately. The
+transport errors retry; any other status is permanent. At most 8 attempts, then `DEAD_LETTER`.
+Retry *n* waits a random delay in `[0, min(3600, 5 * 2^(n-1))]` seconds (full jitter, reproducible
+per delivery), which rides out about 10 minutes of receiver failure in the worst case. An unreadable secret dead-letters immediately. The
 receiver rejects timestamps more than 300 seconds old, requires the body `id` to match the header,
 returns `200 {duplicate: true}` for a repeat of the same bytes, and `409 EVENT_CONTRADICTION` for
 the same event id with a different digest. Verification code: `packages/relaypay_sdk/webhooks.py`.

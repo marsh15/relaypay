@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import random
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -20,7 +21,25 @@ from relaypay.event_delivery.models import (
 from relaypay.ids import new_uuid
 from relaypay.observability.metrics import operations_metrics
 
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 8
+RETRY_BASE_SECONDS = 5
+RETRY_CAP_SECONDS = 3600
+
+
+def next_backoff(sequence: int, delivery_id: uuid.UUID) -> timedelta:
+    """Delay before retry ``sequence + 1`` after ``sequence`` failed attempts (full jitter).
+
+    The ceiling doubles per attempt from ``RETRY_BASE_SECONDS`` up to ``RETRY_CAP_SECONDS``, and
+    the delay is uniform in ``[0, ceiling]``. That spreads retries after a receiver outage instead
+    of retrying every failed delivery in lockstep. The draw is seeded by the delivery and attempt
+    number, so it is reproducible for a given delivery but differs across deliveries. With 8
+    attempts, the worst case rides out about 10 minutes of receiver failure.
+    """
+    if sequence < 1:
+        raise ValueError("backoff applies after at least one failed attempt")
+    ceiling = min(RETRY_CAP_SECONDS, RETRY_BASE_SECONDS * 2 ** (sequence - 1))
+    rng = random.Random(f"{delivery_id}:{sequence}")  # noqa: S311 - jitter, not security
+    return timedelta(milliseconds=rng.randint(0, ceiling * 1000))
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,7 +225,7 @@ def _record_attempt(
             metric_outcome = "dead_letter"
         else:
             delivery.status = "RETRY_WAIT"
-            delivery.next_attempt_at = now + timedelta(seconds=min(60, 2 ** (sequence - 1)))
+            delivery.next_attempt_at = now + next_backoff(sequence, delivery.id)
             metric_outcome = "retry"
     operations_metrics().webhooks.labels(metric_outcome).inc()
     return True
