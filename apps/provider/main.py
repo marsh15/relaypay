@@ -1,7 +1,11 @@
+import asyncio
 import hmac
-from contextlib import asynccontextmanager
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Literal
 
+import httpx
 from fastapi import FastAPI, Header
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -9,6 +13,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.errors import RelayPayError
+from relaypay.mock_provider.chaos import ChaosSettings, configure_chaos
 from relaypay.mock_provider.models import ProviderAccount, ProviderEffect
 from relaypay.mock_provider.service import (
     EffectCommand,
@@ -17,9 +22,13 @@ from relaypay.mock_provider.service import (
     export_statement,
     lookup_effect,
 )
+from relaypay.mock_provider.webhooks import http_webhook_transport, push_webhook_batch
 from relaypay.observability.metrics import install_asgi_metrics
 from relaypay.observability.telemetry import instrument_fastapi
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 
 class EffectRequest(BaseModel):
@@ -49,6 +58,34 @@ class FaultRequest(BaseModel):
     ] = Field(alias="faultType")
 
 
+Bps = Annotated[int, Field(ge=0, le=10_000)]
+
+
+class ChaosRequest(BaseModel):
+    """A seeded chaos profile for one account; ``enabled: false`` removes it."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    account_id: str = Field(alias="accountId", min_length=1, max_length=64)
+    enabled: bool = True
+    seed: int = Field(default=0, ge=0, le=2**62)
+    error_before_bps: Bps = Field(default=0, alias="errorBeforeBps")
+    error_after_bps: Bps = Field(default=0, alias="errorAfterBps")
+    lose_response_bps: Bps = Field(default=0, alias="loseResponseBps")
+    slow_bps: Bps = Field(default=0, alias="slowBps")
+    slow_ms: int = Field(default=0, ge=0, le=10_000, alias="slowMs")
+    pending_bps: Bps = Field(default=0, alias="pendingBps")
+    decline_bps: Bps = Field(default=0, alias="declineBps")
+    webhook_drop_bps: Bps = Field(default=0, alias="webhookDropBps")
+    webhook_duplicate_bps: Bps = Field(default=0, alias="webhookDuplicateBps")
+    webhook_max_delay_ms: int = Field(default=0, ge=0, le=600_000, alias="webhookMaxDelayMs")
+
+    def settings(self) -> ChaosSettings | None:
+        if not self.enabled:
+            return None
+        return ChaosSettings(**self.model_dump(exclude={"account_id", "enabled"}, by_alias=False))
+
+
 class StatementExportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -73,8 +110,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     factory = build_session_factory(engine)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI):  # type: ignore[no-untyped-def]
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        pusher = None
+        if resolved.PROVIDER_WEBHOOK_URL is not None:
+            pusher = asyncio.create_task(_push_webhooks(factory, resolved))
         yield
+        if pusher is not None:
+            pusher.cancel()
+            with suppress(asyncio.CancelledError):
+                await pusher
         engine.dispose()
 
     app = FastAPI(title="RelayPay Mock Provider", version="1.0.1", lifespan=lifespan)
@@ -116,6 +160,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 currency=payload.currency,
             ),
             signing_secret=resolved.PROVIDER_SIGNING_SECRET.get_secret_value(),
+            webhooks=resolved.PROVIDER_WEBHOOK_URL is not None,
         )
         return Response(content=result.body, status_code=result.status_code, headers=result.headers)
 
@@ -145,6 +190,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             stable_key=payload.stable_key,
             fault_type=payload.fault_type,
         )
+        return Response(status_code=204)
+
+    @app.post("/control/chaos", status_code=204)
+    def chaos(
+        payload: ChaosRequest,
+        control_secret: Annotated[str | None, Header(alias="X-Provider-Control")] = None,
+    ) -> Response:
+        expected = resolved.PROVIDER_CONTROL_SECRET.get_secret_value()
+        if control_secret is None or not hmac.compare_digest(control_secret, expected):
+            raise RelayPayError(
+                code="UNAUTHENTICATED", message="Authentication required", http_status=401
+            )
+        configure_chaos(factory, account_public_id=payload.account_id, chaos=payload.settings())
         return Response(status_code=204)
 
     @app.get("/control/effects/{stable_key}/proof")
@@ -200,3 +258,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_asgi_metrics(app, resolved, service="provider")
     instrument_fastapi(app, resolved, service_name="relaypay-provider", engine=engine)
     return app
+
+
+async def _push_webhooks(factory: sessionmaker[Session], settings: Settings) -> None:
+    """Deliver due webhooks until cancelled; a failed round is logged and retried."""
+    url = settings.PROVIDER_WEBHOOK_URL
+    if url is None:
+        return
+    secret = settings.PROVIDER_WEBHOOK_SECRET.get_secret_value()
+    with httpx.Client(timeout=5.0) as client:
+        transport = http_webhook_transport(client)
+        while True:
+            try:
+                await asyncio.to_thread(
+                    push_webhook_batch, factory, url=url, secret=secret, transport=transport
+                )
+            except Exception:  # the push is best effort; RelayPay's polling is the guarantee
+                logger.exception("provider_webhook_push_failed")
+            await asyncio.sleep(settings.PROVIDER_WEBHOOK_PUSH_SECONDS)

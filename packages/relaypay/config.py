@@ -44,6 +44,9 @@ class Settings(BaseSettings):
         default=SecretStr("dev-provider-webhook-secret-change-me"), min_length=16
     )
     PSP_WEBHOOK_REPLAY_SECONDS: int = Field(default=300, ge=30)
+    # Where the provider simulator pushes its signed webhooks; unset disables the push.
+    PROVIDER_WEBHOOK_URL: str | None = None
+    PROVIDER_WEBHOOK_PUSH_SECONDS: float = Field(default=0.5, gt=0)
     BANK_BASE_URL: str = "http://localhost:8003"
     BANK_ACCOUNT_ID: str = "bank_relaypay_demo"
     BANK_SIGNING_SECRET: SecretStr = SecretStr("dev-bank-signing-secret-change-me")

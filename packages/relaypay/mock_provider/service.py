@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.ids import new_uuid
+from relaypay.mock_provider.chaos import EffectChaos, account_profile, effect_chaos
 from relaypay.mock_provider.models import (
     ProviderAccount,
     ProviderEffect,
@@ -19,6 +20,9 @@ from relaypay.mock_provider.models import (
     ProviderStatementExport,
     ProviderStatementItem,
 )
+from relaypay.mock_provider.webhooks import enqueue_effect_webhook
+
+UNAVAILABLE_BODY = b'{"error":"PROVIDER_UNAVAILABLE"}'
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,10 +105,17 @@ def apply_effect(
     *,
     command: EffectCommand,
     signing_secret: str,
+    webhooks: bool = False,
 ) -> ProviderReply:
+    """Create (or replay) the effect for a stable key.
+
+    ``webhooks`` enqueues the effect's signed webhook in the same transaction. With no one-shot
+    fault directive, the account's chaos profile (if any) decides the outcome and response.
+    """
     request_bytes = command.canonical_bytes()
     request_sha = hashlib.sha256(request_bytes).digest()
     selected_fault: str | None = None
+    chaos: EffectChaos | None = None
     try:
         with factory() as session, session.begin():
             account = session.scalar(
@@ -145,12 +156,20 @@ def apply_effect(
             if directive is not None:
                 selected_fault = directive.fault_type
                 directive.remaining_uses -= 1
+            else:
+                profile = account_profile(session, account.id)
+                chaos = effect_chaos(profile, command.stable_key) if profile else None
+                if chaos is not None and chaos.error_before:
+                    return ProviderReply(
+                        503, UNAVAILABLE_BODY, {"Content-Type": "application/json"}
+                    )
 
             outcome = "PENDING" if selected_fault == "PENDING" else "SUCCEEDED"
-            decline_code = None
             if selected_fault == "DECLINE":
                 outcome = "DECLINED"
-                decline_code = "DO_NOT_HONOR"
+            elif chaos is not None:
+                outcome = chaos.outcome
+            decline_code = "DO_NOT_HONOR" if outcome == "DECLINED" else None
             effect = ProviderEffect(
                 id=new_uuid(),
                 provider_account_id=account.id,
@@ -167,6 +186,16 @@ def apply_effect(
             correct_body = _effect_body(effect, account.public_id)
             effect.response_bytes = None if outcome == "PENDING" else correct_body
             session.add(effect)
+            if webhooks:
+                session.flush([effect])
+                enqueue_effect_webhook(
+                    session,
+                    account_id=account.id,
+                    effect_id=effect.id,
+                    stable_key=command.stable_key,
+                    effect_body=correct_body,
+                    now=datetime.now(UTC),
+                )
     except RelayPayError:
         raise
     except IntegrityError as error:
@@ -176,6 +205,13 @@ def apply_effect(
             http_status=409,
         ) from error
 
+    if chaos is not None:
+        if chaos.slow_ms:
+            time.sleep(chaos.slow_ms / 1000)
+        if chaos.lose_response:
+            return ProviderReply(599, b"", {})
+        if chaos.error_after:
+            return ProviderReply(503, UNAVAILABLE_BODY, {"Content-Type": "application/json"})
     if selected_fault == "LOSE_RESPONSE":
         return ProviderReply(599, b"", {})
     if selected_fault == "SLOW_RESPONSE":

@@ -173,7 +173,7 @@ requires the matching `X-*-Control` secret header.
 
 | Service | Endpoints |
 | --- | --- |
-| provider `:8001` | `POST /v1/effects`, `GET /v1/effects/{stable_key}?account_id=`, control: `POST /control/faults`, `GET /control/effects/{stable_key}/proof`, `POST /control/statements`. Faults: `LOSE_RESPONSE`, `DECLINE`, `MALFORMED`, `UNSIGNED`, `MISMATCHED`, `PENDING`, `SLOW_RESPONSE` |
+| provider `:8001` | `POST /v1/effects`, `GET /v1/effects/{stable_key}?account_id=`, control: `POST /control/faults`, `POST /control/chaos`, `GET /control/effects/{stable_key}/proof`, `POST /control/statements`. Faults: `LOSE_RESPONSE`, `DECLINE`, `MALFORMED`, `UNSIGNED`, `MISMATCHED`, `PENDING`, `SLOW_RESPONSE`. A chaos profile (basis points per aspect, plus `seed`) draws each decision from `sha256(seed\|stable key\|aspect)`; one-shot faults win. With `PROVIDER_WEBHOOK_URL` set, every effect pushes one signed `effect.updated` webhook, which the profile may drop, duplicate or delay |
 | bank `:8003` | `POST /v1/transfers`, `GET /v1/transfers/{stable_key}`, control: `POST /control/faults` (`LOSE_RESPONSE`, `DECLINE`, `PENDING`) |
 | commerce `:8004` | control-secret protected: `POST /v1/orders`, `/v1/orders/{id}/payment-links`, `/v1/events/{id}` |
 | dispute network `:8005` | `POST /v1/submissions`, `GET /v1/submissions/{stable_key}` |

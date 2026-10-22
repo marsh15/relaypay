@@ -146,3 +146,83 @@ class ProviderStatementItem(ProviderBase):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ProviderChaosProfile(ProviderBase):
+    """Seeded probabilistic faults for one account (M17). Each decision is a pure function of
+    ``(seed, stable key, aspect)``, so a chaos run replays exactly from its seed."""
+
+    __tablename__ = "provider_chaos_profiles"
+    __table_args__ = (
+        UniqueConstraint("provider_account_id"),
+        CheckConstraint(
+            "error_before_bps BETWEEN 0 AND 10000 AND error_after_bps BETWEEN 0 AND 10000 "
+            "AND lose_response_bps BETWEEN 0 AND 10000 AND slow_bps BETWEEN 0 AND 10000 "
+            "AND pending_bps BETWEEN 0 AND 10000 AND decline_bps BETWEEN 0 AND 10000 "
+            "AND webhook_drop_bps BETWEEN 0 AND 10000 "
+            "AND webhook_duplicate_bps BETWEEN 0 AND 10000",
+            name="provider_chaos_profiles_bps_check",
+        ),
+        CheckConstraint(
+            "slow_ms BETWEEN 0 AND 10000 AND webhook_max_delay_ms BETWEEN 0 AND 600000",
+            name="provider_chaos_profiles_timing_check",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    provider_account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("provider_accounts.id"), nullable=False
+    )
+    seed: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    error_before_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_after_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    lose_response_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    slow_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    slow_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pending_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    decline_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webhook_drop_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webhook_duplicate_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    webhook_max_delay_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ProviderWebhookOutbox(ProviderBase):
+    """One signed webhook event per effect, written in the effect's transaction (M17).
+
+    ``copies_remaining`` > 1 models a PSP that delivers the same event more than once;
+    ``DROPPED`` events are kept so a chaos run can show they never arrived.
+    """
+
+    __tablename__ = "provider_webhook_outbox"
+    __table_args__ = (
+        UniqueConstraint("event_id"),
+        CheckConstraint(
+            "status IN ('PENDING', 'DELIVERED', 'DROPPED', 'DEAD')",
+            name="provider_webhook_outbox_status_check",
+        ),
+        CheckConstraint("copies_remaining >= 0", name="provider_webhook_outbox_copies_check"),
+        CheckConstraint("attempt_count >= 0", name="provider_webhook_outbox_attempts_check"),
+        Index("ix_provider_webhook_outbox_due", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    provider_account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("provider_accounts.id"), nullable=False
+    )
+    provider_effect_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("provider_effects.id"), nullable=False
+    )
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    copies_remaining: Mapped[int] = mapped_column(Integer, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_http_status: Mapped[int | None] = mapped_column(Integer)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
