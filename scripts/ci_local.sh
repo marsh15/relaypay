@@ -10,6 +10,7 @@ step types make typecheck
 step contract make api-contract
 step sdk make sdk-drift
 step sdk-example make sdk-example
+step verify-m7 uv run python -m scripts.verify_m7_upgrade
 step migrate-check bash -c 'make migrate >/dev/null && for t in relaypay provider receiver bank commerce; do uv run alembic -c migrations/$t/alembic.ini check || exit 1; done'
 for m in 15 16 17; do step "verify-m$m" uv run python -m "scripts.verify_m${m}_upgrade"; done
 step release-tests make test PYTEST_MARK="not handwritten and not proof and not chaos"

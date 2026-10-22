@@ -1,7 +1,8 @@
 # Codex handoff report
 
-Date: 2026-10-22. Execution stopped at C0's remote release gate, following the
-handoff instruction to stop when a gate fails outside the task's owned files.
+Date: 2026-10-22. Execution initially stopped at C0's remote release gate, following
+the handoff's scope boundary. The maintainer subsequently requested continuation;
+the narrow historical-proof correction described below has been verified locally.
 
 ## Task results
 
@@ -81,6 +82,33 @@ historical provider proof, then rerun remote CI before C1 begins.
 The same command was reproduced locally and exited 1 at the same assertion. The provided
 `scripts/ci_local.sh` runs only M15–M17 upgrade proofs and therefore does not catch
 this M7 failure; consider adding the earlier release upgrade proofs in that follow-up.
+
+## Continuation: historical M7 proof correction
+
+After the maintainer requested continuation, the provider upgrade target was pinned
+to `0003_slow_fault`, the provider revision that shipped with M7. The count assertion
+is retained unchanged. This follows the existing RelayPay-side historical boundary
+and the rationale in commit `e71aadd`. A Luna subagent independently reviewed the
+revision chain and confirmed the boundary. `scripts/ci_local.sh` now runs M7 too.
+
+The corrected `uv run python -m scripts.verify_m7_upgrade` passed locally. The full
+gate ran again (`output/codex/m7-fix-ci-local.log`): lint, format, typing, contracts,
+SDK checks, M7/M15–M17 proofs, migrations, 536 release tests, isolated tests,
+evaluations, 9 proof tests, and all six chaos seeds passed. Chaos exercised 6,000
+operations with 296 crashes and 454 faults in 103.1 seconds; the handwritten
+invariant checker was still not evaluated.
+
+The script's final result was FAILURES because `make merchant-balance-demo` alone
+hit a transient environment failure: `Failed to query Python interpreter`, with
+`No such file or directory` at `/Users/santoshkumar/.cache/uv/.tmp4uV8Zr`.
+The cache directory disappeared while verification was running. The exact failed
+command was rerun without code changes and exited 0; its output is in
+`output/codex/m7-fix-demo-retry.log`. Thus every gate command has a passing result,
+but the original full-run log is retained with its failure rather than relabeled.
+
+Starting dependencies initially exposed a full-disk error in Redpanda. Removing
+770.1 MB of unused Docker build cache restored healthy startup; application data,
+volumes, and source files were preserved.
 
 ## Measurements and remaining boundaries
 

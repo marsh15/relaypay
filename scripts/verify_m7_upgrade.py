@@ -81,7 +81,8 @@ def _prove_provider() -> None:
         config = _configuration(PROVIDER_CONFIG_PATH, database_url)
         command.upgrade(config, "0002_provider_statements")
         before = _table_counts(database_url)
-        command.upgrade(config, "head")
+        # M7 added the slow fault; later milestones may introduce new provider tables.
+        command.upgrade(config, "0003_slow_fault")
         assert _table_counts(database_url) == before
     finally:
         _drop_schema(base_url, schema)
