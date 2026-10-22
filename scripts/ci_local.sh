@@ -13,7 +13,7 @@ step sdk-example make sdk-example
 step verify-m7 uv run python -m scripts.verify_m7_upgrade
 step migrate-check bash -c 'make migrate >/dev/null && for t in relaypay provider receiver bank commerce; do uv run alembic -c migrations/$t/alembic.ini check || exit 1; done'
 for m in 15 16 17; do step "verify-m$m" uv run python -m "scripts.verify_m${m}_upgrade"; done
-step release-tests make test PYTEST_MARK="not handwritten and not proof and not chaos"
+step release-tests make test PYTEST_MARK="not handwritten and not proof and not chaos and not live_psp"
 step demo make merchant-balance-demo
 uv run python - <<'PY' > /tmp/ci_isolated.sh
 import re, yaml
@@ -26,7 +26,7 @@ for st in wf["jobs"]["release-gate"]["steps"]:
 PY
 while read -r cmd; do step "isolated: ${cmd:0:70}" bash -c "$cmd"; done < /tmp/ci_isolated.sh
 step evaluations uv run python -m scripts.run_evaluations
-step proof-tests uv run pytest -q -p no:cacheprovider -m "(proof or chaos) and not handwritten"
+step proof-tests uv run pytest -q -p no:cacheprovider -m "(proof or chaos) and not handwritten and not live_psp"
 step chaos uv run python -m scripts.chaos.run --mode ci --seeds 6 --ops 1000
 echo "== RESULT: $([ $fail = 0 ] && echo ALL PASS || echo FAILURES)"
 exit $fail

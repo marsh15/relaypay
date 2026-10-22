@@ -53,6 +53,7 @@ markers = [
   "handwritten: red tests for user-owned modules; excluded from default runs (make handwritten)",
   "proof: Hypothesis, stateful or high-contention proof tests (make proof)",
   "chaos: chaos-harness runs (make chaos)",
+  "live_psp: explicit sandbox PSP smoke checks; never selected by CI",
 ]
 
 [tool.ruff]

@@ -16,19 +16,19 @@ typecheck:
 	uv run mypy packages apps scripts
 
 unit:
-	uv run pytest tests/unit
+	uv run pytest tests/unit -m "not live_psp"
 
 # CI narrows this to "not handwritten and not proof and not chaos"; the proof-gate job runs the rest.
-PYTEST_MARK ?= not handwritten
+PYTEST_MARK ?= not handwritten and not live_psp
 
 test:
-	uv run pytest -m "$(PYTEST_MARK)"
+	uv run pytest -m "($(PYTEST_MARK)) and not live_psp"
 
 handwritten:
-	uv run pytest -m handwritten
+	uv run pytest -m "handwritten and not live_psp"
 
 proof:
-	uv run pytest -m proof
+	uv run pytest -m "proof and not live_psp"
 
 chaos:
 	uv run python -m scripts.chaos.run --mode ci --seeds 20 --ops 1000

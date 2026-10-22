@@ -2,14 +2,15 @@
 
 Date: 2026-10-22. Execution initially stopped at C0's remote release gate, following
 the handoff's scope boundary. The maintainer subsequently requested continuation;
-the narrow historical-proof correction described below has been verified locally.
+the narrow historical-proof correction described below passed local verification and CI.
 
 ## Task results
 
 | Task | Commit | Local gate | CI |
 | --- | --- | --- | --- |
 | C0: provider chaos, webhook push, local gate script | `302ffe6c54e07f6b3d0182e8d79c99ef336317f8` | `bash scripts/ci_local.sh`: ALL PASS | [Run 39810083150](https://github.com/marsh15/relaypay/actions/runs/39810083150): release-gate failure; proof-gate success; handwritten-gate failure as expected; chaos-full skipped |
-| C1: PSP adapters | Not started | Not run | Not run |
+| Historical proof follow-up | `aa91728c02b3060aff83958667e593d8bef12b95` | Full gate plus unchanged-code demo retry, detailed below | [Run 39826423138](https://github.com/marsh15/relaypay/actions/runs/39826423138): release-gate success, proof-gate success, handwritten-gate expected failure |
+| C1: PSP adapters | Razorpay `9ed1a3e`; Cashfree/smoke commit containing this update | Full local gate ALL PASS | Pending push |
 | C2: seller reconciliation CLI | Not started | Not run | Not run |
 | C3: load-test kit | Not started | Not run | Not run |
 | C4: money-path query plans | Not started | Not run | Not run |
@@ -110,15 +111,78 @@ Starting dependencies initially exposed a full-disk error in Redpanda. Removing
 770.1 MB of unused Docker build cache restored healthy startup; application data,
 volumes, and source files were preserved.
 
+## C1 adapter implementation and limits
+
+Two Luna agents implemented the independent Razorpay and Cashfree adapters; a third
+reviewed the result. They remain pure code with no inbox wiring or configuration
+changes. Both normalize event outcomes per provider operation; a successful
+authorization is not a capture. `EventOutcome` is reused from `psp/types.py`.
+
+Focused tests cover raw-byte signature verification, replay windows, every mapped
+event, malformed payloads, exact paise conversion, CSV errors with physical line
+numbers, and numeric/timestamp boundary cases. A temporary inversion of the
+Razorpay signature check caused its valid-signature test to fail, then the original
+source was restored. The mutation log is `output/codex/c1-signature-mutation.log`.
+
+Final focused coverage: 61 adapter tests passed (26 Razorpay, 35 Cashfree), four
+offline smoke guards passed and the optional real sandbox test skipped. Repository
+lint, formatting, and strict typing passed. The initial C1 gate was interrupted to
+correct event timestamp semantics; `occurred_at` now consistently uses the signed
+provider envelope timestamp, while entity timestamps are separate data.
+
+The final full gate (`output/codex/c1-ci-local-final.log`) ended ALL PASS:
+597 release tests, the demo, all isolated CI tests, deterministic evaluations,
+9 proof tests, and six chaos seeds. Chaos ran 6,000 operations in 112.8 seconds
+with 297 crashes, 456 faults, and zero harness failures. The invariant checker was
+not evaluated. Summary: `output/chaos/summary-ci-20261022T182147Z.json`.
+
+Known limits and interpretations:
+
+- Wrong-secret and tampered-body failures both return `INVALID_WEBHOOK_SIGNATURE`:
+  an HMAC mismatch cannot distinguish those causes. Missing headers, malformed
+  timestamps, and stale timestamps have distinct codes.
+- `parse_event(raw_body, headers=...)` optionally accepts headers because provider
+  event identities are supplied there (`x-razorpay-event-id`, Cashfree's
+  `x-idempotency-key`). Body-only parsing leaves `event_id` as `None`; it never
+  invents a provider identifier. Future inbox wiring must retain the headers.
+- Razorpay signs the raw body, without a delivery timestamp header. Its replay
+  window uses signed envelope `created_at`; legitimate older retries will also
+  fail that window. Cashfree signs the millisecond delivery timestamp plus body.
+- Both settlement CSV headers are assumed normalized input schemas, explicitly
+  documented in the fixture READMEs. Public material did not establish a stable
+  downloadable export header schema. Real seller exports need maintainer
+  confirmation before production use; no compatibility with an unseen CSV is
+  claimed.
+- Every fixture directory carries the required UNVERIFIED disclaimer. No real
+  test-mode webhook payload was captured and no provider credentials were used.
+
+Primary sources consulted:
+
+- https://razorpay.com/docs/webhooks/validate-test/
+- https://razorpay.com/docs/webhooks/payments/
+- https://razorpay.com/docs/webhooks/refunds/
+- https://razorpay.com/docs/payments/settlements/settlement-recon/
+- https://www.cashfree.com/docs/payments/online/webhooks/signature-verification
+- https://www.cashfree.com/docs/api-reference/payments/latest/payments/webhooks
+- https://www.cashfree.com/docs/api-reference/payments/latest/refunds/webhooks
+- https://www.cashfree.com/docs/api-reference/payments/latest/orders/get-order
+
+`uv run python -m scripts.live_psp_smoke` makes GET requests only. It skips without
+explicit `RAZORPAY_TEST_KEY_ID`/`RAZORPAY_TEST_KEY_SECRET`, or
+`CASHFREE_TEST_CLIENT_ID`/`CASHFREE_TEST_CLIENT_SECRET` plus
+`CASHFREE_TEST_ORDER_ID`. Razorpay keys must have the `rzp_test_` prefix; Cashfree
+uses only the sandbox host. The command refuses live checks under `CI`. Its tests
+carry `live_psp`; Make and CI marker expressions exclude them. The optional live
+test skipped locally because keys were absent; four offline smoke guards passed.
+These reads check credentials, not webhook fixture shapes.
+
 ## Measurements and remaining boundaries
 
 C2 RSS/time, C3 latency/RPS/machine information, and C4 plans/Seq Scans are
 unavailable because those stages were not started. No performance conclusions or
 index recommendations were fabricated.
 
-No Razorpay/Cashfree fixtures or adapters were created and no external documentation
-was consulted, so there are no fixture-shape verification claims or source URLs yet.
-Their inbox wiring, operation matching, and per-provider secret configuration remain
+Adapter inbox wiring, operation matching, and per-provider secret configuration remain
 reserved follow-ups from the supplied brief.
 
 All other explicitly excluded work remains untouched: UPI/requires_action,

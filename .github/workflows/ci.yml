@@ -45,7 +45,7 @@ jobs:
       - name: Property, stateful and contention proofs
         env:
           HYPOTHESIS_PROFILE: ci
-        run: uv run pytest -m "(proof or chaos) and not handwritten"
+        run: uv run pytest -m "(proof or chaos) and not handwritten and not live_psp"
 
       - name: Chaos sweep (20 seeds x 1,000 ops)
         run: make chaos
@@ -221,7 +221,7 @@ jobs:
           make api-contract
           make sdk-drift
           make sdk-example
-          make test PYTEST_MARK="not handwritten and not proof and not chaos"
+          make test PYTEST_MARK="not handwritten and not proof and not chaos and not live_psp"
           make merchant-balance-demo
 
       - name: Shared agent runtime failure and recovery gate
