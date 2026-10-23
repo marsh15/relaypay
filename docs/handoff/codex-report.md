@@ -1,6 +1,6 @@
 # Codex handoff report
 
-Date: 2026-10-22. Execution initially stopped at C0's remote release gate, following
+Updated: 2026-10-23. Execution initially stopped at C0's remote release gate, following
 the handoff's scope boundary. The maintainer subsequently requested continuation;
 the narrow historical-proof correction described below passed local verification and CI.
 
@@ -10,7 +10,7 @@ the narrow historical-proof correction described below passed local verification
 | --- | --- | --- | --- |
 | C0: provider chaos, webhook push, local gate script | `302ffe6c54e07f6b3d0182e8d79c99ef336317f8` | `bash scripts/ci_local.sh`: ALL PASS | [Run 39810083150](https://github.com/marsh15/relaypay/actions/runs/39810083150): release-gate failure; proof-gate success; handwritten-gate failure as expected; chaos-full skipped |
 | Historical proof follow-up | `aa91728c02b3060aff83958667e593d8bef12b95` | Full gate plus unchanged-code demo retry, detailed below | [Run 39826423138](https://github.com/marsh15/relaypay/actions/runs/39826423138): release-gate success, proof-gate success, handwritten-gate expected failure |
-| C1: PSP adapters | Razorpay `9ed1a3e`; Cashfree/smoke commit containing this update | Full local gate ALL PASS | Pending push |
+| C1: PSP adapters | Razorpay `9ed1a3e`; Cashfree/smoke `7b5cf577061776c03bed0a6537a1c58e81de00d2` | Full local gate ALL PASS | [Run 39831184327](https://github.com/marsh15/relaypay/actions/runs/39831184327): proof-gate success, release-gate failure in existing M13 test, handwritten-gate expected failure |
 | C2: seller reconciliation CLI | Not started | Not run | Not run |
 | C3: load-test kit | Not started | Not run | Not run |
 | C4: money-path query plans | Not started | Not run | Not run |
@@ -177,6 +177,44 @@ test skipped locally because keys were absent; four offline smoke guards passed.
 These reads check credentials, not webhook fixture shapes.
 
 ## Measurements and remaining boundaries
+
+### C1 remote gate blocker: M13 test crosses local midnight
+
+On continuation on 2026-10-23, job-level inspection of run `39831184327`
+showed `proof-gate=success`, `release-gate=failure`, and the expected
+`handwritten-gate=failure`. Release job `120007426528` failed its Backend
+correctness gate with 596 tests passing and this one failure:
+
+```text
+FAILED tests/integration/test_m13_settlement_intelligence.py::test_policies_forecasts_and_all_four_intents_end_to_end
+tests/integration/test_m13_settlement_intelligence.py:395:
+    assert numbers["refundCount"] == 1
+E   assert 0 == 1
+1 failed, 596 passed, 126 deselected
+```
+
+The test reads wall-clock time at line 297, records a refund at `now + 1 second`,
+then asks for today's cash impact at `now + 1 minute` (line 367). The production
+query correctly restricts refunds to the local calendar day containing that answer
+moment (`packages/relaypay/settlement_intelligence/queries.py:450`). When `now`
+falls in the final minute before midnight in Asia/Kolkata, the refund and question
+land on different local days. This explains the CI execution around 18:30 UTC.
+
+Verified without editing source files:
+
+- The exact failed test passed unchanged at the current time: 1 passed in 6.86s
+  (`output/codex/c1-m13-retry.log`).
+- In an isolated Python process, replacing only the imported test module's clock
+  with `2026-10-22T18:29:30Z` reproduced the exact assertion at line 395. The clock
+  reference was restored in a `finally` block; no test, service, or DB clock was
+  modified persistently.
+- CI failure output is retained at `output/codex/c1-ci-failed.log`.
+
+A separate authorized follow-up should give the existing M13 scenario a
+deterministic time that keeps its refund and question on the intended local day,
+while retaining the assertion. No test marker, threshold, assertion, or production
+query was changed. Per the handoff's outside-task failure rule, C2–C7 remain
+unstarted until this gate is resolved.
 
 C2 RSS/time, C3 latency/RPS/machine information, and C4 plans/Seq Scans are
 unavailable because those stages were not started. No performance conclusions or
