@@ -301,10 +301,16 @@ proof measured inherited pre-exec pytest RSS on Linux (263,409,664 bytes), rathe
 standalone CLI's memory alone. The harness now starts its measured child from a lightweight
 launcher. A Linux parent-memory regression and the full two-million-order proof passed in a
 Linux container: 54,272,000 bytes peak RSS, 2,400 expected findings, unchanged 128 MiB bound.
-The old measurement fails the new regression as intended. No row count, marker or threshold
+The old measurement failed a manual control as intended. No row count, marker or threshold
 was weakened.
 
+The launcher also bounds its own child below the outer test timeout, so a timed-out measured
+process cannot survive scratch cleanup. A process-existence regression verifies child termination,
+and both the heavy-parent guard and full workload use a shared command builder. Current macOS
+non-proof reconciliation results after this guard: 129 passed, one Linux guard skipped and one
+memory proof deselected.
+
 Malformed UTF-8 mapping files also now return the documented input-error exit 2. Current
-non-proof CLI tests: 128 passed; the extra Linux-only launcher guard passes on Linux and is
+non-proof CLI tests: 129 passed; the extra Linux-only launcher guard passes on Linux and is
 skipped on macOS. The follow-up push reruns the normal CI jobs; this note does not anticipate
 their result.

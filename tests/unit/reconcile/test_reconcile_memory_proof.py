@@ -7,9 +7,13 @@ tests in the same pytest process cannot raise the figure.
 
 import csv
 import json
+import os
+import signal
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
+from contextlib import suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -43,7 +47,8 @@ _WRAPPER = (
 # https://man7.org/linux/man-pages/man2/getrusage.2.html
 _LAUNCHER = (
     "import subprocess, sys\n"
-    "completed = subprocess.run(sys.argv[1:], capture_output=True, text=True, check=False)\n"
+    "completed = subprocess.run(sys.argv[2:], capture_output=True, text=True, check=False,\n"
+    "                           timeout=float(sys.argv[1]))\n"
     "print(completed.stdout, end='')\n"
     "print(completed.stderr, end='', file=sys.stderr)\n"
     "raise SystemExit(completed.returncode)\n"
@@ -51,13 +56,28 @@ _LAUNCHER = (
 
 _MEMORY_PROBE = "import resource; print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)"
 _HEAVY_PARENT = (
-    "import subprocess, sys\n"
+    "import json, subprocess, sys\n"
     "retained = bytearray(192 * 1024 * 1024)\n"
     "completed = subprocess.run(\n"
-    "    [sys.executable, '-c', sys.argv[1], sys.executable, '-c', sys.argv[2]],\n"
+    "    json.loads(sys.argv[1]),\n"
     "    capture_output=True, text=True, check=True)\n"
     "print(completed.stdout, end='')\n"
 )
+
+
+def _measured_command(
+    arguments: Sequence[str], *, program: str = _WRAPPER, timeout: float = 1_740
+) -> list[str]:
+    return [
+        sys.executable,
+        "-c",
+        _LAUNCHER,
+        str(timeout),
+        sys.executable,
+        "-c",
+        program,
+        *arguments,
+    ]
 
 
 @pytest.mark.skipif(
@@ -65,13 +85,46 @@ _HEAVY_PARENT = (
 )
 def test_measured_child_does_not_inherit_the_pytest_memory_high_water_mark() -> None:
     completed = subprocess.run(  # noqa: S603 - fixed interpreter and inline test programs
-        [sys.executable, "-c", _HEAVY_PARENT, _LAUNCHER, _MEMORY_PROBE],
+        [
+            sys.executable,
+            "-c",
+            _HEAVY_PARENT,
+            json.dumps(_measured_command([], program=_MEMORY_PROBE)),
+        ],
         capture_output=True,
         text=True,
         check=True,
         timeout=30,
     )
     assert int(completed.stdout.strip()) < 64 * 1024 * 1024
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process existence probe")
+def test_launcher_timeout_terminates_the_measured_child(tmp_path: Path) -> None:
+    pid_file = tmp_path / "measured.pid"
+    program = (
+        "import os, sys, time\n"
+        "from pathlib import Path\n"
+        "Path(sys.argv[1]).write_text(str(os.getpid()))\n"
+        "time.sleep(60)\n"
+    )
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed inline program and private fixture path
+            _measured_command([str(pid_file)], program=program, timeout=1),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        assert completed.returncode != 0
+        assert "TimeoutExpired" in completed.stderr
+        pid = int(pid_file.read_text())
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+    finally:
+        if pid_file.exists():
+            with suppress(ProcessLookupError):
+                os.kill(int(pid_file.read_text()), signal.SIGKILL)
 
 
 def _rupees(paise: int) -> str:
@@ -124,33 +177,31 @@ def test_two_million_row_pair_reconciles_within_the_peak_rss_bound() -> None:
         settlement, orders = _write_pair(root)
         out = root / "out"
         completed = subprocess.run(  # noqa: S603 - fixed interpreter and arguments, no shell
-            [
-                sys.executable,
-                "-c",
-                _LAUNCHER,
-                sys.executable,
-                "-c",
-                _WRAPPER,
-                "--settlement",
-                str(settlement),
-                "--orders",
-                str(orders),
-                "--out-dir",
-                str(out),
-                "--report",
-                "csv",
-            ],
+            _measured_command(
+                [
+                    "--settlement",
+                    str(settlement),
+                    "--orders",
+                    str(orders),
+                    "--out-dir",
+                    str(out),
+                    "--report",
+                    "csv",
+                ]
+            ),
             capture_output=True,
             text=True,
             check=False,
             env={"PYTHONPATH": str(PROJECT_DIR)},
             timeout=1_800,
         )
-        peak_bytes = int(completed.stderr.strip().splitlines()[-1])
+        assert completed.returncode == 1, completed.stderr
+        peak_text = completed.stderr.strip().splitlines()[-1] if completed.stderr.strip() else ""
+        assert peak_text.isdecimal(), completed.stderr
+        peak_bytes = int(peak_text)
         with (out / "findings.csv").open(encoding="utf-8", newline="") as handle:
             finding_rows = sum(1 for _ in handle) - 1
 
-    assert completed.returncode == 1, completed.stderr
     assert f"findings: {sum(EXPECTED.values())}" in completed.stdout
     for kind, count in EXPECTED.items():
         assert f"  {kind}: {count}" in completed.stdout
