@@ -292,3 +292,19 @@ All commits in this continuation land directly on `main`. Job-level results for 
 are available from [relaypay-ci](https://github.com/marsh15/relaypay/actions/workflows/ci.yml).
 This report is committed before those remote jobs finish; it makes no advance claim that they
 passed. The overall workflow is expected to be red while `handwritten-gate` remains pending.
+
+### Remote proof follow-up
+
+Run [41209910236](https://github.com/marsh15/relaypay/actions/runs/41209910236) finished with
+`release-gate=success`, `proof-gate=failure`, and the expected handwritten failure. The failed
+proof measured inherited pre-exec pytest RSS on Linux (263,409,664 bytes), rather than the
+standalone CLI's memory alone. The harness now starts its measured child from a lightweight
+launcher. A Linux parent-memory regression and the full two-million-order proof passed in a
+Linux container: 54,272,000 bytes peak RSS, 2,400 expected findings, unchanged 128 MiB bound.
+The old measurement fails the new regression as intended. No row count, marker or threshold
+was weakened.
+
+Malformed UTF-8 mapping files also now return the documented input-error exit 2. Current
+non-proof CLI tests: 128 passed; the extra Linux-only launcher guard passes on Linux and is
+skipped on macOS. The follow-up push reruns the normal CI jobs; this note does not anticipate
+their result.

@@ -37,6 +37,42 @@ _WRAPPER = (
     "raise SystemExit(status)\n"
 )
 
+# Linux preserves ru_maxrss across exec, including the memory inherited when pytest forks.
+# Exec a lightweight launcher first, then fork the measured child from that small process.
+# Its own high-water mark is irrelevant; the measured process starts with a fresh counter.
+# https://man7.org/linux/man-pages/man2/getrusage.2.html
+_LAUNCHER = (
+    "import subprocess, sys\n"
+    "completed = subprocess.run(sys.argv[1:], capture_output=True, text=True, check=False)\n"
+    "print(completed.stdout, end='')\n"
+    "print(completed.stderr, end='', file=sys.stderr)\n"
+    "raise SystemExit(completed.returncode)\n"
+)
+
+_MEMORY_PROBE = "import resource; print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)"
+_HEAVY_PARENT = (
+    "import subprocess, sys\n"
+    "retained = bytearray(192 * 1024 * 1024)\n"
+    "completed = subprocess.run(\n"
+    "    [sys.executable, '-c', sys.argv[1], sys.executable, '-c', sys.argv[2]],\n"
+    "    capture_output=True, text=True, check=True)\n"
+    "print(completed.stdout, end='')\n"
+)
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="Linux preserves the pre-exec RSS high-water mark"
+)
+def test_measured_child_does_not_inherit_the_pytest_memory_high_water_mark() -> None:
+    completed = subprocess.run(  # noqa: S603 - fixed interpreter and inline test programs
+        [sys.executable, "-c", _HEAVY_PARENT, _LAUNCHER, _MEMORY_PROBE],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    assert int(completed.stdout.strip()) < 64 * 1024 * 1024
+
 
 def _rupees(paise: int) -> str:
     whole, fraction = divmod(paise, 100)
@@ -89,6 +125,9 @@ def test_two_million_row_pair_reconciles_within_the_peak_rss_bound() -> None:
         out = root / "out"
         completed = subprocess.run(  # noqa: S603 - fixed interpreter and arguments, no shell
             [
+                sys.executable,
+                "-c",
+                _LAUNCHER,
                 sys.executable,
                 "-c",
                 _WRAPPER,

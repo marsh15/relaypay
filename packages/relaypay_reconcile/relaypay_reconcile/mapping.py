@@ -174,7 +174,7 @@ def load_mapping(
 def _read_document(path: Path) -> dict[str, Any]:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
         raise ReconcileInputError(f"{path}: not valid JSON: {error}") from error
     if not isinstance(document, dict):
         raise ReconcileInputError(f"{path}: the mapping must be a JSON object")

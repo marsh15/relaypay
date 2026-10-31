@@ -10,6 +10,17 @@ import pytest
 from relaypay_reconcile import matching
 from relaypay_reconcile.cli import main
 
+
+def test_invalid_utf8_mapping_exits_two(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    mapping = tmp_path / "mapping.json"
+    mapping.write_bytes(b"\xff")
+    status = main(
+        ["--settlement", "unused.csv", "--orders", "unused.csv", "--mapping", str(mapping)]
+    )
+    assert status == 2
+    assert "mapping.json: not valid JSON" in capsys.readouterr().err
+
+
 HEADER = "reference,type,amount,fee,tax,date,status"
 PROJECT_DIR = Path(__file__).resolve().parents[3] / "packages" / "relaypay_reconcile"
 
