@@ -134,8 +134,11 @@ def poll_once(
     commerce_factory: sessionmaker[Session] | None = None,
     due: dict[str, float] | None = None,
 ) -> dict[str, int]:
-    """Run every batch that is due. Callers that pass a persistent factory
-    avoid per-tick engine churn; standalone callers get disposable engines."""
+    """Run due batches independently and advance only their own deadlines.
+
+    Callers that pass a persistent factory avoid per-tick engine churn; standalone callers get
+    disposable engines. Ordinary batch failures are logged without starving later tasks.
+    """
     owned_relay_engine: Engine | None = None
     owned_commerce_engine: Engine | None = None
     if factory is None:
@@ -157,10 +160,16 @@ def poll_once(
         for task in SCHEDULE_SECONDS:
             if due is not None and now < due.get(task, 0.0):
                 continue
-            if task == "process_inbound_webhooks":
-                results[task] = _process_inbound_webhooks(factory, commerce_factory)
-            else:
-                results[task] = _RUNNERS[task](factory, settings)
+            try:
+                if task == "process_inbound_webhooks":
+                    results[task] = _process_inbound_webhooks(factory, commerce_factory)
+                else:
+                    results[task] = _RUNNERS[task](factory, settings)
+            except Exception:
+                logger.exception("postgres_poller_task_failed", extra={"task": task})
+            finally:
+                if due is not None:
+                    due[task] = time.monotonic() + SCHEDULE_SECONDS[task]
             maybe_crash("poller.between_tasks")
         event_publisher = RedpandaPublisher(settings.REDPANDA_BROKERS)
         published = 0
@@ -226,9 +235,6 @@ def main() -> None:
                     commerce_factory=commerce_factory,
                     due=next_due,
                 )
-                now = time.monotonic()
-                for task, interval in SCHEDULE_SECONDS.items():
-                    next_due[task] = now + interval
             except Exception:
                 logger.exception("postgres_poller_iteration_failed")
             time.sleep(1)
