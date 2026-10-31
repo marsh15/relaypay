@@ -38,6 +38,8 @@ from relaypay.settlement_intelligence.windows import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from tests.support.m13_clock import SCENARIO_ANCHOR, scenario_moments
+
 pytestmark = pytest.mark.integration
 
 DATABASE_URL = "postgresql+psycopg://relaypay_app:relaypay_app_dev@localhost:55432/relaypay"
@@ -294,7 +296,9 @@ def _answer_numbers(payload: dict[str, object]) -> dict[str, int]:
 def test_policies_forecasts_and_all_four_intents_end_to_end() -> None:
     engine = build_engine(DATABASE_URL, application_name="m13-settlement-proof")
     factory = build_session_factory(engine)
-    now = datetime.now(UTC)
+    # Fixed local midday: the refund and the questions must share one Asia/Kolkata day.
+    now = SCENARIO_ANCHOR
+    moments = scenario_moments(now)
     try:
         organisation, environment, account = _organisation(factory, "M13 settlement proof")
 
@@ -314,11 +318,9 @@ def test_policies_forecasts_and_all_four_intents_end_to_end() -> None:
         assert window.weekend_handling == "SKIP"
 
         early = _successful_capture(
-            factory, organisation, environment, 10_000, now - timedelta(hours=2)
+            factory, organisation, environment, 10_000, moments.early_capture
         )
-        late = _successful_capture(
-            factory, organisation, environment, 25_000, now - timedelta(hours=1)
-        )
+        late = _successful_capture(factory, organisation, environment, 25_000, moments.late_capture)
 
         forecast = record_pre_cutoff_forecast_via(factory, organisation, environment, account, now)
         assert forecast.capture_total == 35_000
@@ -359,12 +361,12 @@ def test_policies_forecasts_and_all_four_intents_end_to_end() -> None:
             environment,
             early,
             10_000,
-            now + timedelta(seconds=1),
+            moments.refund,
             merchant_refund_reference=hostile_reference,
         )
 
         # Intent 2: which payments are still unsettled?
-        moment = now + timedelta(minutes=1)
+        moment = moments.question
         payload, replayed = _ask(
             factory,
             organisation,
