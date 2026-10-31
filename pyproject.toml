@@ -32,8 +32,15 @@ dev = [
   "pytest>=8.4.0,<9",
   "pytest-cov>=6.2.0,<7",
   "pytest-xdist>=3.8.0,<4",
+  "relaypay-reconcile",
   "ruff>=0.12.0,<0.13",
 ]
+
+[tool.uv.workspace]
+members = ["packages/relaypay_reconcile"]
+
+[tool.uv.sources]
+relaypay-reconcile = { workspace = true }
 
 [build-system]
 requires = ["hatchling>=1.27.0,<2"]

@@ -6,6 +6,12 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+members = [
+    "relaypay",
+    "relaypay-reconcile",
+]
+
 [[package]]
 name = "alembic"
 version = "1.18.5"
@@ -1500,6 +1506,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
+    { name = "relaypay-reconcile" },
     { name = "ruff" },
 ]
 
@@ -1532,8 +1539,14 @@ dev = [
     { name = "pytest", specifier = ">=8.4.0,<9" },
     { name = "pytest-cov", specifier = ">=6.2.0,<7" },
     { name = "pytest-xdist", specifier = ">=3.8.0,<4" },
+    { name = "relaypay-reconcile", editable = "packages/relaypay_reconcile" },
     { name = "ruff", specifier = ">=0.12.0,<0.13" },
 ]
+
+[[package]]
+name = "relaypay-reconcile"
+version = "0.1.0"
+source = { editable = "packages/relaypay_reconcile" }
 
 [[package]]
 name = "requests"

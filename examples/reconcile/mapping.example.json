@@ -1,0 +1,8 @@
+{
+  "format": "generic",
+  "settlement": {"ref": "reference", "amount": "amount", "unit": "rupees"},
+  "orders": {"ref": "reference", "amount": "amount", "unit": "rupees"},
+  "failed_values": ["failed"],
+  "timing_window_days": [0, 2],
+  "tolerance_paise": 0
+}

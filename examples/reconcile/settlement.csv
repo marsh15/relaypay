@@ -1,0 +1,13 @@
+reference,type,amount,fee,tax,date,status
+pay_clean_01,payment,100.00,2.36,0.42,2026-10-01,captured
+pay_clean_02,payment,250.00,5.90,1.06,2026-10-01,captured
+rfnd_clean_01,refund,50.00,,,2026-10-02,processed
+pay_orphan_settle,payment,75.00,1.77,0.32,2026-10-01,captured
+pay_amount_diff,payment,99.00,2.36,0.42,2026-10-01,captured
+pay_duplicate_settle,payment,40.00,0.94,0.17,2026-10-01,captured
+pay_duplicate_settle,payment,40.00,0.94,0.17,2026-10-01,captured
+pay_clean_03,payment,60.00,1.42,0.26,2026-10-01,captured
+pay_fee_diff,payment,100.00,2.50,0.42,2026-10-01,captured
+pay_gst_diff,payment,100.00,2.36,0.50,2026-10-01,captured
+pay_timing,payment,100.00,2.36,0.42,2026-10-06,captured
+pay_failed_debited,payment,80.00,1.89,0.34,2026-10-01,captured
