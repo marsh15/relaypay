@@ -1,0 +1,18 @@
+{
+  "captures": 1,
+  "codeCommit": "210e07dc8947c16076c72fa7ec6019601fe75ded",
+  "command": "make demo",
+  "deliveries": 1,
+  "eventSha256": "d44033038c6a1d7d34074de675dca25a7399a226fafc03704d3ac68b33b7e3e2",
+  "events": 1,
+  "idempotencyRecords": 2,
+  "journals": 1,
+  "ledgerBalanced": true,
+  "providerEffects": 1,
+  "receiverRows": 1,
+  "recipients": 1,
+  "responseSha256": "041f613ce36cc16fa3cec36e12fa951c8745dc7ecbbd163cb59bc931b0b16ff1",
+  "scenario": "capture_lost_response",
+  "stableReplay": true,
+  "transport": "in-process provider and receiver transports with independent PostgreSQL stores"
+}

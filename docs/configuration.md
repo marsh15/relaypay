@@ -20,7 +20,7 @@ process fail at start-up when absent.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `APP_ENV` | `development` | `development`, `test`, or `production`. Production requires an HTTPS `PUBLIC_BASE_URL`, sets `Secure` on the session cookie, and rejects development defaults for the eight secrets listed below |
+| `APP_ENV` | `development` | `development`, `test`, or `production`. Production requires an HTTPS `PUBLIC_BASE_URL`, sets `Secure` on the session cookie, and rejects development defaults for the nine secrets listed below |
 | `PUBLIC_BASE_URL` | `http://localhost:8080` | Public origin of the deployment. Nothing binds port 8080; it is only validated in production |
 | `LOG_LEVEL` | `INFO` | Declared but not read anywhere in the code |
 | `SESSION_COOKIE_NAME` | `relaypay_session` | Admin session cookie name |
@@ -60,6 +60,10 @@ keys, cursors); rotating an encryption key without re-encrypting makes stored se
 | `PROVIDER_BASE_URL`, `PROVIDER_ACCOUNT_ID` | `http://localhost:8001`, `acct_relaypay_demo` | no | Where RelayPay calls the provider and which account it uses |
 | `PROVIDER_SIGNING_SECRET` | required, 16+ chars | yes | Verifies provider response signatures |
 | `PROVIDER_CONTROL_SECRET` | required, 16+ chars | yes | Authorizes provider `/control/*` calls |
+| `PROVIDER_WEBHOOK_SECRET` | default `dev-provider-webhook-secret-change-me`, 16+ chars | yes | Signs the provider simulator's pushed webhooks and verifies inbound PSP webhooks. Separate from `PROVIDER_SIGNING_SECRET`. Production rejects the development default |
+| `PSP_WEBHOOK_REPLAY_SECONDS` | `300`, minimum 30 | no | Replay window for inbound PSP webhooks (`/api/inbound/v1/psp/{provider}`) |
+| `PROVIDER_WEBHOOK_URL` | unset | no | Where the provider simulator pushes its webhooks. Unset disables the push. Compose sets it to `http://api:8000/api/inbound/v1/psp/SIMULATOR`; `compose.production.yaml` does not set it, so production containers do not push |
+| `PROVIDER_WEBHOOK_PUSH_SECONDS` | `0.5`, greater than 0 | no | Interval between push batches |
 | `BANK_BASE_URL`, `BANK_ACCOUNT_ID` | `http://localhost:8003`, `bank_relaypay_demo` | no | Bank simulator |
 | `BANK_SIGNING_SECRET`, `BANK_CONTROL_SECRET` | dev defaults | yes | Bank response signature and control |
 | `COMMERCE_BASE_URL`, `COMMERCE_ACCOUNT_ID` | `http://localhost:8004`, `commerce_relaypay_demo` | no | Commerce simulator |
@@ -89,7 +93,7 @@ keys, cursors); rotating an encryption key without re-encrypting makes stored se
 ## Production validation
 
 With `APP_ENV=production`, start-up fails if `PUBLIC_BASE_URL` is not HTTPS or if any of these still
-holds its development default: `PROVIDER_SIGNING_SECRET`, `PROVIDER_CONTROL_SECRET`,
+holds its development default: `PROVIDER_SIGNING_SECRET`, `PROVIDER_CONTROL_SECRET`, `PROVIDER_WEBHOOK_SECRET`,
 `BANK_SIGNING_SECRET`, `BANK_CONTROL_SECRET`, `COMMERCE_CONTROL_SECRET`,
 `CONNECTOR_CREDENTIAL_ENCRYPTION_KEY`, `DISPUTE_PACKAGE_SIGNING_SECRET`,
 `RECEIVER_WEBHOOK_SECRET`. The session, CSRF, pepper, and `WEBHOOK_SECRET_ENCRYPTION_KEY` values
@@ -115,8 +119,9 @@ have no default in `Settings`, but Compose supplies development values when unse
 ## Gaps to know about
 
 - Compose does not forward `LOG_LEVEL`, `SESSION_COOKIE_NAME`, `INBOUND_WEBHOOK_REPLAY_SECONDS`,
-  `REQUEST_LOG_RETENTION`, `PROMETHEUS_WORKER_PORT`, or any `EDGE_*` variable to containers. They
-  take effect only for processes you run on the host.
+  `PSP_WEBHOOK_REPLAY_SECONDS`, `PROVIDER_WEBHOOK_PUSH_SECONDS`, `REQUEST_LOG_RETENTION`,
+  `PROMETHEUS_WORKER_PORT`, or any `EDGE_*` variable to containers. They take effect only for
+  processes you run on the host.
 - `INBOUND_WEBHOOK_REPLAY_SECONDS` is absent from both example files.
 - `.env.production.example` includes `APP_ENV`, `OTEL_EXPORTER_OTLP_ENDPOINT`,
   `PROMETHEUS_WORKER_PORT`, and `REQUEST_LOG_RETENTION`, none of which changes container behavior

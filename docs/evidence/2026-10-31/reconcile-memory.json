@@ -1,0 +1,15 @@
+{
+  "codeCommit": "210e07dc8947c16076c72fa7ec6019601fe75ded",
+  "command": "uv run pytest tests/unit/reconcile/test_reconcile_memory_proof.py -m proof -s -q",
+  "elapsedSeconds": 72.138,
+  "findings": {
+    "AMOUNT_MISMATCH": 2000,
+    "MISSING_IN_SETTLEMENT": 400
+  },
+  "orders": 2000000,
+  "peakRssBoundBytes": 134217728,
+  "peakRssBytes": 65536000,
+  "platform": "macOS 27 arm64",
+  "pythonVersion": "3.12.12",
+  "settlementRows": 1999600
+}

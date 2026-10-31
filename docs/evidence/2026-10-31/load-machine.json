@@ -1,0 +1,36 @@
+{
+  "application": {
+    "apiWorkers": 1,
+    "pollerProcesses": 1,
+    "sqlalchemyMaxOverflowPerEngine": 10,
+    "sqlalchemyPoolSizePerEngine": 5,
+    "topology": "compose.yaml defaults; record any overrides separately"
+  },
+  "command": {
+    "duration": "30s",
+    "limiterLabel": "off",
+    "script": "mixed",
+    "vus": 4
+  },
+  "database": {
+    "max_connections": "100",
+    "shared_buffers": "128MB",
+    "version": "PostgreSQL 17.6 (Debian 17.6-2.pgdg12+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+    "work_mem": "4MB"
+  },
+  "datasetBeforeRun": {
+    "operations": 3853,
+    "payments": 1676,
+    "postings": 5847
+  },
+  "gitCommit": "210e07dc8947c16076c72fa7ec6019601fe75ded",
+  "gitDirty": true,
+  "host": {
+    "logicalCpus": 8,
+    "machine": "arm64",
+    "memoryBytes": 8589934592,
+    "os": "macOS-27.0-arm64-arm-64bit",
+    "processor": "Apple M1"
+  },
+  "recordedAt": "2026-10-31T10:39:33.617803+00:00"
+}

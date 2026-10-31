@@ -1,6 +1,7 @@
 # Codex handoff report
 
-Updated: 2026-10-23. Execution initially stopped at C0's remote release gate, following
+Updated: 2026-10-31. The continuation at the end of this report supersedes the earlier
+not-started/blocker status. Execution initially stopped at C0's remote release gate, following
 the handoff's scope boundary. The maintainer subsequently requested continuation;
 the narrow historical-proof correction described below passed local verification and CI.
 
@@ -11,11 +12,11 @@ the narrow historical-proof correction described below passed local verification
 | C0: provider chaos, webhook push, local gate script | `302ffe6c54e07f6b3d0182e8d79c99ef336317f8` | `bash scripts/ci_local.sh`: ALL PASS | [Run 39810083150](https://github.com/marsh15/relaypay/actions/runs/39810083150): release-gate failure; proof-gate success; handwritten-gate failure as expected; chaos-full skipped |
 | Historical proof follow-up | `aa91728c02b3060aff83958667e593d8bef12b95` | Full gate plus unchanged-code demo retry, detailed below | [Run 39826423138](https://github.com/marsh15/relaypay/actions/runs/39826423138): release-gate success, proof-gate success, handwritten-gate expected failure |
 | C1: PSP adapters | Razorpay `9ed1a3e`; Cashfree/smoke `7b5cf577061776c03bed0a6537a1c58e81de00d2` | Full local gate ALL PASS | [Run 39831184327](https://github.com/marsh15/relaypay/actions/runs/39831184327): proof-gate success, release-gate failure in existing M13 test, handwritten-gate expected failure |
-| C2: seller reconciliation CLI | Not started | Not run | Not run |
-| C3: load-test kit | Not started | Not run | Not run |
+| C2: seller reconciliation CLI | `cd92c1e` | 127 non-proof tests; 2M-order memory proof passed | Current push tracked in Actions |
+| C3: load-test kit | `9d5bc16` | Seven offline guards; four-VU HTTP run passed | Current push tracked in Actions |
 | C4: money-path query plans | Not started | Not run | Not run |
-| C5: admin resources and console pages | Not started | Not run | Not run |
-| C6: documentation catch-up | Not started | Not run | Not run |
+| C5: admin resources and console pages | `210e07d` | 15 scoped backend tests; eight console journeys; contract/SDK checks passed | Current push tracked in Actions |
+| C6: documentation catch-up | Current documentation/evidence commit | Source checks, local links and recorded evidence | Current push tracked in Actions |
 | C7: optional fee-schedule reads | Not started | Not run | Not run |
 
 C0 was reviewed read-only by a Luna subagent. The only implementation correction
@@ -229,3 +230,65 @@ scaling, GCRA, payout-locking wiring/benchmarks, migrations/index/hot-path chang
 cancel/refund-fee policy changes, fee-schedule writes, final release evidence and
 the maintainer's handwritten modules. No additional out-of-scope implementation
 defect was established during C0 review.
+
+## Continuation: useful completion work, 2026-10-31
+
+The maintainer requested broader completion work, direct commits to `main`, and Claude Haiku
+5.5 high-effort subagents. They explicitly confirmed that all four maintainer-written module
+groups must remain reserved. Those sources, their specification tests and `PROVENANCE.md`
+are unchanged. The existing user edit in `scripts/portfolio_demo.py` and the untracked
+`codex-handoff-prompt.md` were preserved.
+
+Implemented and verified stages:
+
+- `85b999e`: fixed the M13 scenario clock without changing a financial assertion or production
+  query. Nine M13 integration tests and three clock tests passed. Its
+  [CI run 41191117046](https://github.com/marsh15/relaypay/actions/runs/41191117046) completed
+  `release-gate=success`, `proof-gate=success`, `handwritten-gate=failure` as expected.
+- `4a22444`: repaired scheduler starvation discovered during documentation review. Previously
+  every tick postponed every task, including skipped long-interval work. Deadlines now advance
+  per attempted task; ordinary errors do not starve later tasks. Four regression tests fail
+  against the old implementation (three failures, one crash test pass) and pass against the fix.
+  No payment, finalizer, ledger or payout logic was changed.
+- `cd92c1e`: added the stdlib-only offline seller CLI with streamed SQLite matching and reports,
+  strict inputs, nine exception kinds, a sample with exactly one of each, and a memory proof.
+- `9d5bc16`: added isolated TEST-tenant load setup, five k6 workloads, private temporary
+  credentials, complete summaries on threshold failure, machine/dataset/commit capture and CI
+  workload guards. Limiter `on/off` remains a label only; the documentation says so.
+- `210e07d`: added scoped payment status filtering and journal/posting investigation reads,
+  console list/detail pages and navigation. The additive admin contract and SDK were regenerated;
+  frozen v1 checks pass. Browser testing caught and fixed the login allowlist and one ambiguous
+  test locator. All eight console journeys passed with axe checks.
+- Documentation now describes PSP signatures/inbox states, actual retry behavior, Redpanda's
+  derived outbox role, dormant workflow boundaries, the four historical F1–F4 RCAs, ADR-012 and
+  an honest M17 draft. Recovery review-budget changes are explicitly documented. No final v2
+  release was written.
+
+The complete measurements, commands and artifacts are in
+[the evidence report](../evidence/2026-10-31.md). At implementation commit `210e07d`, the fresh
+memory run processed 2,000,000 orders and 1,999,600 settlements in 72.138 seconds with
+65,536,000 bytes peak RSS and the expected 2,400 findings. The clean four-VU, 30-second mixed
+HTTP run completed 191 journeys/668 requests with p50/p95/p99 132.908/371.412/532.648 ms and
+21.878 HTTP requests/s. The host was an eight-core Apple M1 with 8 GiB RAM; full context is
+committed with the measurements. Earlier concurrent runs are distinguished in the report.
+
+The original full local gate retains its `FAILURES` result: the broad suite collected one
+reconciliation error-message parameter before its wording changed during implementation.
+It recorded 720 passes and that one stale expectation. Current reconciliation and scheduler
+tests passed together (131 tests), the ten property/chaos tests passed, all isolated workflow
+commands and evaluations passed, and the six-seed/6,000-operation chaos sweep had zero harness
+failures (291 crashes, 457 faults). The handwritten invariant checker was not evaluated.
+Final lint, format, strict types, contract/SDK checks, console build/audit, edge and Compose
+checks passed. Ignored logs remain in `output/completion-2026-10-31/`.
+
+Independent Haiku reviews found no blockers. The journal-list scope/order query lacks a
+measured index baseline; this is a C4/profiling follow-up, not a claimed performance defect or
+an unreviewed index migration. No query-plan baseline or lock-contention measurement was
+fabricated. C4 and optional C7 remain unselected; in-database reconciliation scaling, gateway
+inbox wiring, provider replay chaos, rate limiting and final v2 release work remain deferred.
+The handwritten checker/calculator/locking/ordering gates still require the maintainer.
+
+All commits in this continuation land directly on `main`. Job-level results for the final push
+are available from [relaypay-ci](https://github.com/marsh15/relaypay/actions/workflows/ci.yml).
+This report is committed before those remote jobs finish; it makes no advance claim that they
+passed. The overall workflow is expected to be red while `handwritten-gate` remains pending.

@@ -19,6 +19,27 @@ settlement, risk, and dispute workflows are deterministic code, not external LLM
 Current version: **1.0.1** ([release notes](docs/releases/v1.0.1.md)). Licensed under the
 [MIT License](LICENSE). Nothing in this repository deploys or hosts the sandbox for you.
 
+`main` also contains ongoing v2 work: persisted payment states, partial capture, void and
+expiry, a PSP evidence inbox, and fixtures-first gateway adapters. It is not a completed v2
+release. Four core decision modules remain reserved for the maintainer in
+[PROVENANCE.md](PROVENANCE.md); the handwritten CI gate remains red until they are implemented.
+
+For offline seller investigations, [relaypay-reconcile](packages/relaypay_reconcile/README.md)
+streams settlement and order CSVs through local SQLite and emits deterministic exception reports.
+It uses only the Python standard library, opens no network connections, and never changes the
+payment database. Try the [sample exports](examples/reconcile/) after `uv sync --frozen`:
+
+```bash
+uv run relaypay-reconcile --settlement examples/reconcile/settlement.csv \
+  --orders examples/reconcile/orders.csv --out-dir output/reconcile
+```
+
+The sample deliberately returns exit code **1** with one finding in each of nine exception
+classes. Clean inputs return 0; malformed inputs return 2.
+
+[Latest measured evidence and recovery recording](docs/evidence/2026-10-31.md) cover the
+implemented completion pass, its verification results and the remaining v2 boundaries.
+
 ## The problem it demonstrates
 
 A capture request reaches the provider, the provider commits the capture, and the response is
@@ -45,7 +66,7 @@ identical response bytes for both capture keys. Details: [architecture](docs/arc
 
 | Area | Capability |
 | --- | --- |
-| Payments | Customers, payment intents, authorize, capture (single, full), refunds against available amount; route-aware idempotency; cursor pagination |
+| Payments | Customers, payment intents, authorize, capture (single; partial in v2), void and expiry in v2, refunds against available amount; route-aware idempotency; cursor pagination |
 | Ledger | Double-entry INR journals, DB-enforced balance and immutability, derived merchant balances (pending, available, receivable) |
 | Events | Immutable merchant events, endpoint versions, leased HMAC-signed delivery, bounded retry, dead letter, operator replay |
 | Settlement and payouts | Idempotent settlement runs, reserved payouts, numbered bank attempts with lookup-only recovery |
@@ -144,7 +165,7 @@ curl -s localhost:8000/api/v1/payment_intents \
 
 `amount` is an integer in paise. Authorize, capture, and refund are
 `POST /api/v1/payment_intents/{id}/authorize|capture|refunds` with their own `Idempotency-Key`; they
-return `202` and the operation settles asynchronously. See the [HTTP API reference](docs/api/reference.md).
+return `200` when finalized inline or `202` while unresolved. See the [HTTP API reference](docs/api/reference.md).
 
 ## Local development
 
@@ -179,6 +200,8 @@ development URLs hard-coded in each `alembic.ini` unless you export the matching
 | `make console-check`, `make console-e2e` | Console lint, typecheck, build, `npm audit`; Playwright journeys (needs the full stack) |
 | `make edge-check`, `make compose-check` | Worker lint, types, tests, dry-run build; `docker compose config` validation |
 | `make m7-evidence` | Query plans and bounded HTTP performance measurements |
+| `make load`, `make load-check` | Synthetic payment-path k6 measurements and offline workload checks; [load kit](loadtest/README.md) |
+| `make reconcile-check`, `make reconcile-proof` | Offline CLI correctness tests; separate two-million-order memory proof |
 | `make check` | Lint, format, types, contract and SDK checks, pytest, console and edge checks, compose validation (needs PostgreSQL and Redpanda up; not the Playwright journeys) |
 | `make infra-up`, `make infra-down` | Start PostgreSQL only; `docker compose down` (keeps the data volume) |
 
@@ -198,7 +221,8 @@ In `APP_ENV=production` it additionally requires `ALLOW_SANDBOX_RESET=true`.
 
 ## Testing
 
-CI (`.github/workflows/ci.yml`, one job) starts empty PostgreSQL and Redpanda, replays each
+CI (`.github/workflows/ci.yml`) separates release checks, property/chaos proofs, and the
+maintainer's handwritten specifications. The release job starts empty PostgreSQL and Redpanda, replays each
 milestone's upgrade proof, applies all migrations, runs `alembic check` on all five trees, then
 runs lint, format, strict typing, the OpenAPI and SDK drift checks, the pytest suite (unit,
 integration, concurrency), the evaluation suite, the console build, the edge checks, compose
@@ -206,6 +230,9 @@ validation, the Playwright journeys with axe, and measured performance evidence.
 in `tests/unit` and `tests/integration`; console journeys in `apps/console/e2e`; Worker tests in
 `apps/edge/test`. Recorded release runs are in [docs/test-evidence.md](docs/test-evidence.md) and
 [docs/evidence/](docs/evidence/).
+
+The chaos harness explicitly reports when the handwritten invariant checker has not run.
+A passing harness schedule is not a claim that all fifteen money invariants were evaluated.
 
 ## Configuration and deployment
 

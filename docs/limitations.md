@@ -2,8 +2,12 @@
 
 ## Scope
 
-- Synthetic INR data only; no card, bank, UPI, KYC, PII, real settlement, fee, dispute, or
-  chargeback processing.
+- Synthetic INR data only; no card, bank, UPI, KYC, PII, real settlement, real fee schedule, dispute,
+  or chargeback processing. The schema and finalizer carry synthetic per-merchant fee schedules and
+  the platform fee and GST fields (D7), but no fee computation is implemented in this checkout: the
+  calculator, `packages/relaypay/fees/calculator.py::compute_capture_fee`, is a hand-written stub
+  that raises `NotImplementedError`, and capture reaches it through the fee service. The
+  calculation is the maintainer's to write.
 - Every counterparty is a local simulator: one deterministic mock provider, one mock bank, one mock
   commerce store, in-memory dispute and recovery networks, static merchant-site snapshots, and one
   exact allowlisted bundled receiver. The dispute network keeps submissions in memory, so a restart
@@ -17,8 +21,8 @@
 - The leased workflow-step engine in `agent_runtime/workflows.py` is covered by tests but is not
   called by the API or poller as of 1.0.1. Production workflows run in their own domain services.
   `ToolInvocation` rows are never written.
-- Single full capture per payment; no partial capture. Bounded evidence sizes are deliberate
-  demonstration constraints.
+- One capture per payment, of up to the authorized amount; the remainder is released (partial
+  capture, M16). Bounded evidence sizes are deliberate demonstration constraints.
 - Reconciliation accepts bounded CSV/JSON statements from the synthetic payment provider only; there
   are no connector-specific statement formats. Mismatch resolution records operator notes and may
   link an existing compensating journal, but it never creates or changes payment, provider, or
@@ -39,9 +43,25 @@
 - Business-event outbox rows are published to Redpanda and never consumed in this repository.
   Publication failures retry forever with backoff and have no dead-letter state. Topic names double
   the version suffix for event types that already end in `.v1`.
+- Redpanda is a startup dependency of the poller, not an optional integration. Compose's
+  `depends_on` starts the `poller` service only after Redpanda's healthcheck passes. At run time the
+  outbox publish step is the last step of each poller tick. It builds a Kafka producer, and with the
+  broker unreachable that construction fails, so the publish step is skipped and the outbox rows wait.
+  Financial tasks such as `recover_provider_operations` run earlier in the same tick and do not wait
+  for the broker. Ordinary batch errors are isolated and logged per task; a failure in the final
+  outbox publish step does not postpone other tasks' deadlines. A simulated publisher outage is
+  covered by scheduler unit tests; a live broker-stop recovery drill is not recorded here.
+  See the [runbook](operations/runbook.md#redpanda-and-the-outbox).
 - Redpanda runs in `dev-container` mode with no data volume, in the production overlay as well.
 - Merchant webhooks support three event types (`payment.authorized.v1`, `payment.captured.v1`,
   `refund.succeeded.v1`) to one bundled receiver.
+- Inbound PSP webhooks are accepted only from the provider simulator (`SIMULATOR`). The Razorpay and
+  Cashfree adapters are parsers and verifiers. They are not routed into the inbox, and they have no
+  per-provider secrets in configuration.
+- PSP webhook ordering is not implemented. Every matched PSP event ends `DEFERRED` and changes no
+  operation; operations resolve by polling. The applier does not re-lease `DEFERRED` events.
+- Provider webhook chaos (drop, duplicate, delay) is not in the chaos harness, and the harness does
+  not replay webhooks.
 
 ## Security and exposure
 
@@ -105,6 +125,17 @@
   providers are likewise fixed in `build_admin_router`.
 - The versioned evaluation fixtures pin current deterministic behaviour; regenerating them is a
   deliberate, reviewed change (via the checked-in generator), not an automated step.
+
+## Verification
+
+- The 15 money invariants are not evaluated. The checker, `packages/relaypay/proof/invariants.py`,
+  is hand-written by the maintainer and is still a stub. The chaos harness reports counters and
+  harness failures only, and it prints `INVARIANTS NOT EVALUATED`. A passing chaos run is not a
+  finding of zero invariant violations. See [resilience proofs](operations/resilience-proofs.md).
+- The PSP ordering decision (`packages/relaypay/psp/ordering.py::decide`) is also hand-written and
+  pending.
+- The fee calculator (`packages/relaypay/fees/calculator.py`) and the payout locking strategies are
+  hand-written and pending as well. See [PROVENANCE.md](../PROVENANCE.md).
 
 ## Documentation and tooling inconsistencies
 

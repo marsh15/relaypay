@@ -1,0 +1,81 @@
+{
+  "backendScopedInvestigationTestsPassed": 15,
+  "chaosSweep": {
+    "crashesInjected": 291,
+    "faultsInjected": 457,
+    "moneyInvariantsEvaluated": false,
+    "operations": 6000,
+    "seconds": 86.4,
+    "seeds": 6,
+    "seedsWithHarnessFailures": 0
+  },
+  "checksPassed": [
+    "ruff",
+    "ruff-format",
+    "strict-mypy",
+    "frozen-v1-compatibility",
+    "openapi-drift",
+    "sdk-drift",
+    "sdk-example",
+    "five-migration-tree-checks",
+    "M7/M15/M16/M17-upgrade-proofs",
+    "isolated-CI-workflow-tests",
+    "deterministic-evaluations",
+    "edge-check",
+    "compose-check"
+  ],
+  "console": {
+    "axeChecksPassed": true,
+    "buildTypesLintPassed": true,
+    "journeysPassed": 8,
+    "productionDependencyAuditVulnerabilities": 0,
+    "seconds": 39.6
+  },
+  "currentScopedOfflineRerun": {
+    "memoryProofDeselected": 1,
+    "reconcileTestsPassed": 127,
+    "schedulerTestsPassed": 4,
+    "totalPassed": 131
+  },
+  "fullV2ReleaseComplete": false,
+  "implementationCommit": "210e07dc8947c16076c72fa7ec6019601fe75ded",
+  "initialBroadBackendRun": {
+    "deselected": 126,
+    "failed": 1,
+    "failure": "reconcile mapping error-message parameter collected before its expected wording was updated",
+    "gateExit": "FAILURES; original log retained",
+    "passed": 720,
+    "seconds": 830.73
+  },
+  "loadGuards": {
+    "credentialTestsPassed": 2,
+    "javascriptTestsPassed": 5
+  },
+  "m13ClockTestsPassed": 3,
+  "m13IntegrationTestsPassed": 9,
+  "maintainerModulesChanged": false,
+  "propertyAndChaosTests": {
+    "deselected": 857,
+    "localPayoutRaceRequests": 80,
+    "passed": 10,
+    "seconds": 317.22
+  },
+  "recordedAt": "2026-10-31T14:20:30.283599+00:00",
+  "remaining": [
+    "maintainer invariants, payout locking, fee calculator and PSP ordering",
+    "gateway inbox wiring and verified live fixtures",
+    "webhook-chaos replay proof",
+    "in-database reconciliation scaling",
+    "rate limiting and locking benchmark",
+    "money-path query-plan baseline",
+    "complete v2 release evidence"
+  ],
+  "review": {
+    "blockingFindings": 0,
+    "effort": "high",
+    "model": "claude-haiku-5-5",
+    "provider": "claudeAgent"
+  },
+  "schemaVersion": 1,
+  "syntheticOnly": true
+}

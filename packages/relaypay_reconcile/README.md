@@ -45,8 +45,8 @@ the order of the input rows.
 
 Both files are UTF-8 CSV, with a header row. A byte-order mark is allowed. Column names are
 matched after trimming whitespace, and duplicate header names are rejected. Each row must have
-the same number of fields as the header. Blank lines are rejected. Every error includes the file
-and line number.
+the same number of fields as the header. Blank lines are rejected. Row parsing errors include
+the file and physical line number; header and missing-column errors identify the file.
 
 Amounts are non-negative. A refund is its own row with a refund type, never a negative payment.
 

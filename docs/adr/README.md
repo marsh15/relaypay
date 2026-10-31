@@ -11,3 +11,4 @@
 - [ADR-009: Merchant risk review scores risk deterministically with cited model findings](009-deterministic-merchant-risk-review.md)
 - [ADR-010: Integrated platform analytics stay in PostgreSQL with low-cardinality gauges only](010-integrated-platform-analytics.md)
 - [ADR-011: A signed "not found" past a grace period is proof of absence](011-signed-not-found-is-proof-of-absence.md)
+- [ADR-012: Webhooks are evidence, not a money path](012-webhooks-are-evidence-not-a-money-path.md)

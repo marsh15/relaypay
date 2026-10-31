@@ -81,9 +81,9 @@ or construct cursors. Some admin list routes cap results at 500 rows instead of 
 | `POST /payment_intents` | `payments:write` | yes | `201` `{id, customerId, merchantReference, amount, currency, status}` |
 | `GET /payment_intents` | `payments:read` | no | Page of summaries with `authorizationStatus` and `captureStatus` |
 | `GET /payment_intents/{id}` | `payments:read` | no | `{id, merchantReference, amount, currency, authorizationStatus, captureStatus, capturedAmount, reservedOrRefundedAmount, refundableAmount}` |
-| `POST /payment_intents/{id}/authorize` | `payments:write` | yes | `202` operation envelope |
-| `POST /payment_intents/{id}/capture` | `payments:write` | yes | `202` operation envelope; requires a succeeded authorization |
-| `POST /payment_intents/{id}/refunds` | `payments:write` | yes | `202`; amount may not exceed the capture minus existing refunds |
+| `POST /payment_intents/{id}/authorize` | `payments:write` | yes | `200` terminal or `202` unresolved operation envelope |
+| `POST /payment_intents/{id}/capture` | `payments:write` | yes | `200` terminal or `202` unresolved; requires a succeeded authorization |
+| `POST /payment_intents/{id}/refunds` | `payments:write` | yes | `200` terminal or `202` unresolved; amount may not exceed the capture minus existing refunds |
 | `GET /operations/{operation_id}` | `payments:read` | no | Current operation envelope |
 
 `POST /payment_intents` takes `customer_id` (`cus_` plus 32 hex), `merchant_reference`, and
@@ -91,8 +91,9 @@ or construct cursors. Some admin list routes cap results at 500 rows instead of 
 authorized amount. Public identifiers are prefixed (`cus_`, `pay_`, `op_`, `cap_`, `rfd_`,
 `evt_`, `jrn_`).
 
-Command endpoints dispatch to the provider after the transaction commits and return `202` even
-when the provider answered synchronously; read the operation or payment to see the terminal state.
+Command endpoints dispatch to the provider after the transaction commits. They return `200`
+with the stored terminal response when synchronous finalization succeeds, or `202` while the
+outcome remains unresolved; read the operation or payment to follow recovery.
 Operation status is one of `PROCESSING`, `SUCCEEDED`, `FAILED`, `REQUIRES_REVIEW`.
 
 ## Session API
@@ -119,6 +120,8 @@ layer (see `apps/api/routes/admin.py`); the table lists the permission where the
 | Environments, tenancy | `GET /api/admin/v1/environments`; `POST /api/admin/v1/organisations` (platform admin); `GET`/`PUT /api/admin/v1/memberships` | `PUT` needs `ORGANISATION_ADMIN` |
 | API keys | `POST /api-keys`, `POST /api-keys/{id}/rotate`, `/versions/{n}/activate`, `/revoke`, `PATCH /api-keys/{id}/scopes` | `ORGANISATION_ADMIN`; audited |
 | Generic lists | `GET /operations/{resource}` | Cursor-paginated lists over an allowlist of resources |
+| Payment investigation | `GET /operations/payments?status=captured` | Optional persisted status filter; cursor binds to the filter; links to payment evidence in the console |
+| Ledger investigation | `GET /operations/journals`, `GET /journals/{id}` | Journal list and read-only postings detail with `debitTotal`, `creditTotal`, and `balanced` |
 | Merchant accounts and balances | `GET`/`POST /merchant-accounts`, `GET /merchant-accounts/{id}/balances`, `/balance-transactions`, `POST /merchant-accounts/{id}/settlements` | Settlement takes an `Idempotency-Key` |
 | Payouts | `GET`/`POST /beneficiaries`, `GET`/`POST /payouts`, `POST /payouts/{id}/attempts` | Create and retry take an `Idempotency-Key` |
 | Reconciliation | `POST /statement-imports` (multipart: `provider`, `sourceReference`, `sourceFormat` CSV or JSON, `file`), `GET /reconciliation-mismatches`, `POST .../{id}/acknowledge`, `/resolve`, `/evidence-versions` | Statement size is capped at 1 MiB |
@@ -129,6 +132,12 @@ layer (see `apps/api/routes/admin.py`); the table lists the permission where the
 | Risk review | `GET`/`POST /risk-reviews`, `GET /risk-reviews/{id}`, `POST .../annotations`, `POST .../escalation/disposition` | Disposition needs `approvals:write` |
 | Workflows and approvals | `GET /workflow-runs[/{id}]`, `POST /approval-requests/{id}/decisions` | Decisions need `approvals:write` and a different user than the maker |
 | Analytics | `GET /analytics/portfolio` | `technical:read` |
+
+The payment status filter accepts `created`, `requires_action`, `authorised`, `captured`,
+`partially_refunded`, `refunded`, `failed`, `expired`, and `cancelled`. An unknown status or
+a status filter on another resource returns `422 VALIDATION_ERROR`. A missing or foreign
+environment or journal returns `404 RESOURCE_NOT_FOUND`. Payment and journal investigation
+reads use the same session and tenant/environment scope as the existing generic lists.
 
 ## Inbound connector events
 
@@ -141,6 +150,45 @@ body is parsed; accepted bytes are stored once and processed by the poller. Resp
 byte-identical replay returns `200` with `Inbound-Replayed: true`; the same provider event id with
 different bytes returns `409 WEBHOOK_EVENT_CONFLICT`. When `EDGE_ORIGIN_SIGNATURE_REQUIRED=true`
 this path (like `/api/v1*`) also requires the edge origin signature.
+
+## Inbound PSP webhooks
+
+`POST /api/inbound/v1/psp/{provider}` receives signed webhooks from a payment provider. The path
+segment is upper-cased, and only `SIMULATOR` (the provider simulator) has an adapter wired. Any
+other value returns `404 PSP_PROVIDER_UNSUPPORTED` before the body is read. The Razorpay and
+Cashfree adapters exist as code only and are not routed; see [limitations](../limitations.md).
+When `EDGE_ORIGIN_SIGNATURE_REQUIRED=true`, this path also requires the edge origin signature.
+
+| Header | Value |
+| --- | --- |
+| `X-Provider-Event-Id` | Provider event id; must equal the body's `eventId` |
+| `X-Provider-Timestamp` | Unix seconds |
+| `X-Provider-Signature` | `v1=` (the prefix is optional) plus the hex HMAC-SHA256 of `"<timestamp>." + raw body`, keyed with `PROVIDER_WEBHOOK_SECRET` |
+
+The body is a simulator envelope, `{eventId, eventType: "effect.updated", occurredAt, effect}`, where
+`effect.stableKey` names the operation. Unknown top-level fields are rejected.
+
+The checks run in this order. The body is not parsed until the signature passes.
+
+1. All three headers present (`401 PSP_WEBHOOK_HEADERS_MISSING`).
+2. Timestamp is an integer (`401 INVALID_WEBHOOK_TIMESTAMP`).
+3. Replay window: `|now - timestamp|` is at most `PSP_WEBHOOK_REPLAY_SECONDS` (default 300, minimum
+   30). The window is symmetric, so a timestamp in the future is refused too
+   (`401 WEBHOOK_REPLAY_WINDOW_EXCEEDED`).
+4. Signature, compared in constant time (`401 INVALID_WEBHOOK_SIGNATURE`).
+5. Envelope valid (`400 INVALID_PSP_EVENT`), and body `eventId` equal to the header
+   (`400 PSP_EVENT_ID_MISMATCH`).
+6. Dedupe on `(provider, provider_event_id)`. The same bytes are a replay. Different bytes are a
+   conflict (`409 PSP_EVENT_CONFLICT`).
+
+The replay window also applies to redeliveries. A byte-identical redelivery whose timestamp is
+outside the window is refused with `401`, even though its event is already stored.
+
+Response `200 {"id", "replayed", "status"}`. `id` is the `pev_` public id. `replayed` is `false` for a
+new event, and `true` for a redelivery, in which case `status` is the stored row's status. A new
+event's `status` is `PENDING` when its stable key matches exactly one provider operation, and
+`UNMATCHED` otherwise. Acceptance changes no operation. The poller applies stored events every second
+(`apply_psp_events`). See the [runbook](../operations/runbook.md#psp-inbox) for each status.
 
 ## Merchant webhooks (RelayPay to the receiver)
 
@@ -159,12 +207,26 @@ call; redirects are not followed) with:
 | `X-RelayPay-Signature` | `v1=` plus hex HMAC-SHA256 of `"<timestamp>." + exact event bytes`, keyed with the endpoint version's secret |
 
 Endpoint secrets are stored AES-256-GCM encrypted. A `2xx` acknowledges; `408`, `429`, `5xx`, and
-transport errors retry; any other status is permanent. At most 8 attempts, then `DEAD_LETTER`.
-Retry *n* waits a random delay in `[0, min(3600, 5 * 2^(n-1))]` seconds (full jitter, reproducible
-per delivery), which rides out about 10 minutes of receiver failure in the worst case. An unreadable secret dead-letters immediately. The
-receiver rejects timestamps more than 300 seconds old, requires the body `id` to match the header,
-returns `200 {duplicate: true}` for a repeat of the same bytes, and `409 EVENT_CONTRADICTION` for
-the same event id with a different digest. Verification code: `packages/relaypay_sdk/webhooks.py`.
+transport errors retry; any other status, including a `3xx` (redirects are not followed), is
+permanent. A delivery makes at most 8 attempts in total, then goes to `DEAD_LETTER`. An unreadable
+secret dead-letters immediately.
+
+Retry *n* (after *n* failed attempts) waits a uniformly random delay in
+`[0, min(3600, 5 * 2^(n-1))]` seconds (full jitter, reproducible per delivery and attempt). With 8
+attempts the ceilings are 5, 10, 20, 40, 80, 160 and 320 seconds, so the 3600-second cap is never
+reached. The worst-case total across the schedule is 635 seconds (about 10.6 minutes). The poller
+claims due deliveries every second, up to 50 per tick, under a 30-second lease. The transport times
+out after 3 seconds.
+
+The transport calls only `{RECEIVER_BASE_URL}/webhooks/relaypay`. Any other destination is refused
+before sending. The refusal is recorded as `WEBHOOK_TRANSPORT_ERROR` and retried like a transport
+error.
+
+The receiver rejects a bad or missing timestamp, a timestamp more than 300 seconds from its clock, a
+bad signature, invalid JSON, and a body `id` that differs from the header, all with
+`401 INVALID_WEBHOOK`. It returns `200 {received, eventId, duplicate}`, with `duplicate: true` for a
+repeat of the same bytes, and `409 EVENT_CONTRADICTION` for the same event id with a different
+digest. Verification code: `packages/relaypay_sdk/webhooks.py`.
 
 ## Simulator endpoints
 
@@ -173,13 +235,47 @@ requires the matching `X-*-Control` secret header.
 
 | Service | Endpoints |
 | --- | --- |
-| provider `:8001` | `POST /v1/effects`, `GET /v1/effects/{stable_key}?account_id=`, control: `POST /control/faults`, `POST /control/chaos`, `GET /control/effects/{stable_key}/proof`, `POST /control/statements`. Faults: `LOSE_RESPONSE`, `DECLINE`, `MALFORMED`, `UNSIGNED`, `MISMATCHED`, `PENDING`, `SLOW_RESPONSE`. A chaos profile (basis points per aspect, plus `seed`) draws each decision from `sha256(seed\|stable key\|aspect)`; one-shot faults win. With `PROVIDER_WEBHOOK_URL` set, every effect pushes one signed `effect.updated` webhook, which the profile may drop, duplicate or delay |
+| provider `:8001` | `POST /v1/effects`, `GET /v1/effects/{stable_key}?account_id=`, control: `POST /control/faults`, `POST /control/chaos`, `GET /control/effects/{stable_key}/proof`, `POST /control/statements`. Faults: `LOSE_RESPONSE`, `DECLINE`, `MALFORMED`, `UNSIGNED`, `MISMATCHED`, `PENDING`, `SLOW_RESPONSE`. A chaos profile (basis points per aspect, plus `seed`) draws each decision from `sha256(seed\|stable key\|aspect)`; one-shot faults win. With `PROVIDER_WEBHOOK_URL` set, every effect pushes one signed `effect.updated` webhook; see [provider chaos and push](#provider-chaos-and-push) |
 | bank `:8003` | `POST /v1/transfers`, `GET /v1/transfers/{stable_key}`, control: `POST /control/faults` (`LOSE_RESPONSE`, `DECLINE`, `PENDING`) |
 | commerce `:8004` | control-secret protected: `POST /v1/orders`, `/v1/orders/{id}/payment-links`, `/v1/events/{id}` |
 | dispute network `:8005` | `POST /v1/submissions`, `GET /v1/submissions/{stable_key}` |
 | recovery network `:8006` | `POST /v1/messages`, `POST /v1/payment-retries`, and `GET` lookups by stable key |
 | merchant site `:8007` | `GET /v1/sites/{site_ref}/snapshot` |
 | receiver `:8002` | `POST /webhooks/relaypay`, `GET /health/ready` |
+
+### Provider chaos and push
+
+`POST /control/chaos` (header `X-Provider-Control`, the `PROVIDER_CONTROL_SECRET`) installs a seeded
+profile for one account and returns `204`. A wrong or missing secret returns `401 UNAUTHENTICATED`.
+An unknown field or an out-of-range value returns `422 VALIDATION_ERROR`. Fields, in camelCase:
+
+| Field | Range | Effect |
+| --- | --- | --- |
+| `accountId` | required | Provider account public id |
+| `enabled` | boolean, default `true` | `false` removes the account's profile |
+| `seed` | 0 to 2^62, default 0 | Seed for every draw |
+| `errorBeforeBps` | 0 to 10000 | `503` before anything is committed; no effect is created |
+| `errorAfterBps` | 0 to 10000 | Commits the effect, then `503` |
+| `loseResponseBps` | 0 to 10000 | Commits the effect, then replies `599` with an empty body |
+| `slowBps`, `slowMs` | 0 to 10000 bps; 0 to 10000 ms | When hit, sleeps `slowMs` after the commit |
+| `pendingBps`, `declineBps` | 0 to 10000 | Outcome `PENDING` (takes precedence) or `DECLINED`; otherwise `SUCCEEDED` |
+| `webhookDropBps`, `webhookDuplicateBps` | 0 to 10000 | The event is kept but never sent, or is sent twice |
+| `webhookMaxDelayMs` | 0 to 600000 | First send delayed by `draw * webhookMaxDelayMs / 10000` ms |
+
+Each decision is `draw(seed, stableKey, aspect)`: the first 8 bytes of
+`sha256("<seed>|<stableKey>|<aspect>")`, modulo 10000. It is a hit when the draw is below the
+basis-point value. Decisions apply to the first mutation of a stable key. A one-shot fault from
+`/control/faults` takes precedence over the profile.
+
+With `PROVIDER_WEBHOOK_URL` set, each effect enqueues one `effect.updated` event in the same
+transaction as the effect. The pusher sends due events to that URL every `PROVIDER_WEBHOOK_PUSH_SECONDS`
+(default 0.5), up to 50 per batch, with a 5-second HTTP timeout. Each request carries
+`X-Provider-Event-Id`, `X-Provider-Timestamp` (Unix seconds), and `X-Provider-Signature`: `v1=` plus
+the HMAC-SHA256 of `"<timestamp>." + body`, keyed with `PROVIDER_WEBHOOK_SECRET`.
+
+Delivery is at least once. A failed send (non-2xx or transport error) waits `min(2^n, 60)` seconds
+after the *n*th failure. The event becomes `DEAD` after 8 failed sends, which is 182 seconds of
+cumulative waiting. The push is best effort, and polling remains the guarantee.
 
 The dispute, recovery, and merchant-site simulators use FastAPI's default `{"detail": ...}` error
 shape rather than the RelayPay envelope.
@@ -190,6 +286,11 @@ v2 adds the payment commands whose behaviour v2.0 changed. Creating payments, re
 operation reads are unchanged and stay on `/api/v1`. Every v2 command takes an `Idempotency-Key`.
 v2 fingerprints are versioned, so a key already used on a v1 route returns
 `409 IDEMPOTENCY_KEY_REUSED` on v2 and never replays across versions.
+
+The capture response exposes fee/GST fields, and the schema and finalizer support them.
+The fee calculator is still a maintainer-owned stub: a merchant with a configured fee schedule
+cannot complete that computation yet. The default no-schedule path has zero fees. See
+[PROVENANCE.md](../../PROVENANCE.md) and [limitations](../limitations.md).
 
 | Method and path | Body | Notes |
 | --- | --- | --- |
