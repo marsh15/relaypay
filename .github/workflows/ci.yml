@@ -224,6 +224,9 @@ jobs:
           make test PYTEST_MARK="not handwritten and not proof and not chaos and not live_psp"
           make merchant-balance-demo
 
+      - name: Offline load workload guards
+        run: make load-check
+
       - name: Shared agent runtime failure and recovery gate
         run: |
           docker compose exec -T redpanda rpk cluster info

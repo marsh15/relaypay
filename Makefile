@@ -110,3 +110,18 @@ console-e2e:
 	cd apps/console && npm run test:e2e
 
 check: lint format-check typecheck api-contract sdk-drift sdk-example test console-check edge-check compose-check
+
+.PHONY: load load-check reconcile-check reconcile-proof
+
+load:
+	uv run python -m scripts.run_loadtest
+
+load-check:
+	node --experimental-vm-modules --test loadtest/k6/common.test.mjs
+	uv run pytest tests/unit/test_loadtest_credentials.py -q
+
+reconcile-check:
+	uv run pytest tests/unit/reconcile -m "not proof" -q
+
+reconcile-proof:
+	uv run pytest tests/unit/reconcile/test_reconcile_memory_proof.py -m proof -q

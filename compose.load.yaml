@@ -1,0 +1,17 @@
+services:
+  k6:
+    image: grafana/k6:1.3.0
+    profiles: [load]
+    user: "${LOAD_UID:-1000}:${LOAD_GID:-1000}"
+    environment:
+      LOAD_BASE_URL: ${LOAD_BASE_URL:-http://api:8000}
+      LOAD_RUN_ID: ${LOAD_RUN_ID:?set LOAD_RUN_ID via scripts.run_loadtest}
+      LOAD_SCRIPT: ${LOAD_SCRIPT:-mixed}
+      LOAD_VUS: ${LOAD_VUS:-4}
+      LOAD_DURATION: ${LOAD_DURATION:-30s}
+      LOAD_LIMITER: ${LOAD_LIMITER:-off}
+    volumes:
+      - ./loadtest/k6:/scripts:ro
+      - ${LOAD_RESULTS_DIR:?set LOAD_RESULTS_DIR via scripts.run_loadtest}:/results
+      - ${LOAD_CREDENTIALS_FILE:?set LOAD_CREDENTIALS_FILE via scripts.run_loadtest}:/run/load-credentials.json:ro
+    command: [run, "/scripts/${LOAD_SCRIPT:-mixed}.js"]
