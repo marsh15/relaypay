@@ -15,7 +15,10 @@ function safeNext(value: string | undefined): string {
     value === "/agents" ||
     value === "/settlement" ||
     value === "/risk" ||
+    value === "/payments" ||
+    value === "/ledger" ||
     value.startsWith("/payments/") ||
+    value.startsWith("/ledger/") ||
     value.startsWith("/recovery/") ||
     value.startsWith("/disputes/") ||
     value.startsWith("/agents/") ||

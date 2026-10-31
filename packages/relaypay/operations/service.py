@@ -5,13 +5,30 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from relaypay.errors import RelayPayError, not_found
 from relaypay.identity.models import Environment
 from relaypay.identity.security import Principal
+from relaypay.ledger.models import Journal, LedgerAccount, Posting
 from relaypay.pagination import CursorPosition, decode_cursor, encode_cursor
+
+# Mirrors the CHECK constraint on payment_intents.status (payments/models.py).
+PAYMENT_STATUSES = frozenset(
+    {
+        "created",
+        "requires_action",
+        "authorised",
+        "captured",
+        "partially_refunded",
+        "refunded",
+        "failed",
+        "expired",
+        "cancelled",
+    }
+)
+_STATUS_FILTER_RESOURCES = frozenset({"payments"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +108,15 @@ _RESOURCES: dict[str, ResourceQuery] = {
         'request_id AS "id", method, route, status_code AS "statusCode", '
         'duration_ms AS "durationMs"',
     ),
+    "payments": ResourceQuery(
+        "payment_intents",
+        'public_id AS "id", merchant_reference AS "merchantReference", amount, currency, status',
+    ),
+    "journals": ResourceQuery(
+        "journals",
+        'public_id AS "id", journal_type AS "journalType", '
+        'reference_type AS "referenceType", currency, posted_at AS "postedAt"',
+    ),
 }
 
 
@@ -112,23 +138,9 @@ def _json_value(value: Any) -> object:
     return value
 
 
-def list_operations_resource(
-    session: Session,
-    *,
-    principal: Principal,
-    environment_public_id: str,
-    resource: str,
-    limit: int,
-    after: str | None,
-    cursor_secret: str,
-) -> OperationsPage:
-    definition = _RESOURCES.get(resource)
-    if definition is None:
-        raise RelayPayError(
-            code="RESOURCE_NOT_SUPPORTED",
-            message="The requested operations resource is not supported",
-            http_status=404,
-        )
+def _environment_scope(
+    session: Session, *, principal: Principal, environment_public_id: str
+) -> Environment:
     environment = (
         session.query(Environment)
         .filter_by(
@@ -140,12 +152,53 @@ def list_operations_resource(
     )
     if environment is None:
         raise not_found("Environment")
+    return environment
+
+
+def _invalid_status_filter(message: str) -> RelayPayError:
+    # Same wire shape as the request-validation handler in apps/api/main.py.
+    return RelayPayError(
+        code="VALIDATION_ERROR",
+        message="Request validation failed",
+        http_status=422,
+        details={"errors": [{"type": "value_error", "loc": ["query", "status"], "msg": message}]},
+    )
+
+
+def list_operations_resource(
+    session: Session,
+    *,
+    principal: Principal,
+    environment_public_id: str,
+    resource: str,
+    limit: int,
+    after: str | None,
+    cursor_secret: str,
+    status: str | None = None,
+) -> OperationsPage:
+    definition = _RESOURCES.get(resource)
+    if definition is None:
+        raise RelayPayError(
+            code="RESOURCE_NOT_SUPPORTED",
+            message="The requested operations resource is not supported",
+            http_status=404,
+        )
+    if status is not None:
+        if resource not in _STATUS_FILTER_RESOURCES:
+            raise _invalid_status_filter(f"{resource} cannot be filtered by status")
+        if status not in PAYMENT_STATUSES:
+            raise _invalid_status_filter("Unknown payment status")
+    environment = _environment_scope(
+        session, principal=principal, environment_public_id=environment_public_id
+    )
 
     filters: dict[str, object] = {
         "organisationId": principal.organisation_public_id,
         "environmentId": environment_public_id,
         "resource": resource,
     }
+    if status is not None:
+        filters["status"] = status
     position = (
         decode_cursor(after, filters=filters, secret=cursor_secret) if after is not None else None
     )
@@ -161,12 +214,16 @@ def list_operations_resource(
             cursor_created_at=position.created_at,
             cursor_id=position.identifier,
         )
+    status_clause = ""
+    if status is not None:
+        status_clause = "AND status = :status"
+        parameters["status"] = status
     dead_letter_clause = "AND status = 'DEAD_LETTER'" if resource == "dead-letters" else ""
     statement = text(
         f'SELECT {definition.fields}, created_at AS "createdAt", id AS "cursorId" '  # noqa: S608
         f"FROM {definition.source} WHERE organisation_id = :organisation_id "
-        f"AND environment_id = :environment_id {dead_letter_clause} {cursor_clause} "
-        "ORDER BY created_at DESC, id DESC LIMIT :limit"
+        f"AND environment_id = :environment_id {dead_letter_clause} {status_clause} "
+        f"{cursor_clause} ORDER BY created_at DESC, id DESC LIMIT :limit"
     )
     rows = list(session.execute(statement, parameters).mappings())
     page_rows = rows[:limit]
@@ -186,3 +243,63 @@ def list_operations_resource(
             secret=cursor_secret,
         )
     return OperationsPage(data=data, next_cursor=next_cursor)
+
+
+def get_journal_detail(
+    session: Session,
+    *,
+    principal: Principal,
+    environment_public_id: str,
+    journal_public_id: str,
+) -> dict[str, object]:
+    """Read one journal with its postings and debit/credit totals (read-only, tenant-scoped)."""
+    environment = _environment_scope(
+        session, principal=principal, environment_public_id=environment_public_id
+    )
+    journal = session.scalar(
+        select(Journal).where(
+            Journal.organisation_id == principal.organisation_id,
+            Journal.environment_id == environment.id,
+            Journal.public_id == journal_public_id,
+        )
+    )
+    if journal is None:
+        raise not_found("Journal")
+    rows = session.execute(
+        select(
+            LedgerAccount.code, LedgerAccount.name, Posting.side, Posting.amount, Posting.currency
+        )
+        .join(
+            LedgerAccount,
+            (LedgerAccount.organisation_id == Posting.organisation_id)
+            & (LedgerAccount.id == Posting.account_id),
+        )
+        .where(
+            Posting.organisation_id == principal.organisation_id,
+            Posting.environment_id == environment.id,
+            Posting.journal_id == journal.id,
+        )
+        .order_by(Posting.created_at, Posting.id)
+    ).all()
+    debit_total = sum(row.amount for row in rows if row.side == "DEBIT")
+    credit_total = sum(row.amount for row in rows if row.side == "CREDIT")
+    return {
+        "id": journal.public_id,
+        "journalType": journal.journal_type,
+        "referenceType": journal.reference_type,
+        "currency": journal.currency,
+        "postedAt": _json_value(journal.posted_at),
+        "debitTotal": debit_total,
+        "creditTotal": credit_total,
+        "balanced": debit_total == credit_total,
+        "postings": [
+            {
+                "accountCode": row.code,
+                "accountName": row.name,
+                "side": row.side,
+                "amount": row.amount,
+                "currency": row.currency,
+            }
+            for row in rows
+        ],
+    }

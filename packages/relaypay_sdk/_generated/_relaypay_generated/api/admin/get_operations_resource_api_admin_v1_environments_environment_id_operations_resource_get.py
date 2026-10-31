@@ -20,6 +20,7 @@ def _get_kwargs(
     *,
     limit: int | Unset = 25,
     after: None | str | Unset = UNSET,
+    status: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
 
@@ -46,6 +47,13 @@ def _get_kwargs(
     else:
         json_after = after
     params["after"] = json_after
+
+    json_status: None | str | Unset
+    if isinstance(status, Unset):
+        json_status = UNSET
+    else:
+        json_status = status
+    params["status"] = json_status
 
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
@@ -98,6 +106,7 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     limit: int | Unset = 25,
     after: None | str | Unset = UNSET,
+    status: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
 
@@ -109,6 +118,7 @@ def sync_detailed(
         resource (str):
         limit (int | Unset):  Default: 25.
         after (None | str | Unset):
+        status (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
 
@@ -126,6 +136,7 @@ def sync_detailed(
 resource=resource,
 limit=limit,
 after=after,
+status=status,
 authorization=authorization,
 relaypay_session=relaypay_session,
 
@@ -144,6 +155,7 @@ def sync(
     client: AuthenticatedClient | Client,
     limit: int | Unset = 25,
     after: None | str | Unset = UNSET,
+    status: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
 
@@ -155,6 +167,7 @@ def sync(
         resource (str):
         limit (int | Unset):  Default: 25.
         after (None | str | Unset):
+        status (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
 
@@ -173,6 +186,7 @@ resource=resource,
 client=client,
 limit=limit,
 after=after,
+status=status,
 authorization=authorization,
 relaypay_session=relaypay_session,
 
@@ -185,6 +199,7 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     limit: int | Unset = 25,
     after: None | str | Unset = UNSET,
+    status: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
 
@@ -196,6 +211,7 @@ async def asyncio_detailed(
         resource (str):
         limit (int | Unset):  Default: 25.
         after (None | str | Unset):
+        status (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
 
@@ -213,6 +229,7 @@ async def asyncio_detailed(
 resource=resource,
 limit=limit,
 after=after,
+status=status,
 authorization=authorization,
 relaypay_session=relaypay_session,
 
@@ -231,6 +248,7 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     limit: int | Unset = 25,
     after: None | str | Unset = UNSET,
+    status: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     relaypay_session: None | str | Unset = UNSET,
 
@@ -242,6 +260,7 @@ async def asyncio(
         resource (str):
         limit (int | Unset):  Default: 25.
         after (None | str | Unset):
+        status (None | str | Unset):
         authorization (None | str | Unset):
         relaypay_session (None | str | Unset):
 
@@ -260,6 +279,7 @@ resource=resource,
 client=client,
 limit=limit,
 after=after,
+status=status,
 authorization=authorization,
 relaypay_session=relaypay_session,
 

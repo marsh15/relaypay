@@ -74,7 +74,7 @@ from relaypay.merchant_balances.service import (
     run_settlement,
 )
 from relaypay.observability.metrics import operations_metrics
-from relaypay.operations.service import list_operations_resource
+from relaypay.operations.service import get_journal_detail, list_operations_resource
 from relaypay.pagination import derive_cursor_secret
 from relaypay.payouts.service import (
     create_beneficiary,
@@ -424,6 +424,7 @@ def build_admin_router(
         principal: PrincipalDep,
         limit: Annotated[int, Query(ge=1, le=100)] = 25,
         after: str | None = None,
+        status: Annotated[str | None, Query(max_length=32)] = None,
     ) -> JSONResponse:
         with session_factory() as session, session.begin():
             page = list_operations_resource(
@@ -434,8 +435,24 @@ def build_admin_router(
                 limit=limit,
                 after=after,
                 cursor_secret=derive_cursor_secret(settings.API_KEY_PEPPER.get_secret_value()),
+                status=status,
             )
         return JSONResponse(content={"data": page.data, "nextCursor": page.next_cursor})
+
+    @router.get("/admin/v1/environments/{environment_id}/journals/{journal_id}")
+    def get_journal(
+        environment_id: str,
+        journal_id: str,
+        principal: PrincipalDep,
+    ) -> JSONResponse:
+        with session_factory() as session, session.begin():
+            detail = get_journal_detail(
+                session,
+                principal=principal,
+                environment_public_id=environment_id,
+                journal_public_id=journal_id,
+            )
+        return JSONResponse(content=detail)
 
     @router.get("/admin/v1/environments/{environment_id}/merchant-accounts")
     def get_merchant_accounts(
