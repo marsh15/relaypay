@@ -169,12 +169,15 @@ return `200` when finalized inline or `202` while unresolved. See the [HTTP API 
 
 ## Local development
 
-Run PostgreSQL and Redpanda from Compose and the Python tooling from the host:
+Use uv0.12.19 (enforced by the project), Node24.12 or later, and npm11.19.1. Dependency
+installation scripts are disabled by the tracked npm policy and the commands below. Run PostgreSQL
+and Redpanda from Compose and the Python tooling from the host:
 
 ```bash
 uv sync --frozen
-npm ci --prefix apps/console
-npm ci --prefix apps/edge          # only for the edge Worker checks
+npm install --global npm@11.19.1 --ignore-scripts
+npm ci --ignore-scripts --prefix apps/console
+npm ci --ignore-scripts --prefix apps/edge          # only for the edge Worker checks
 docker compose up -d postgres redpanda
 make migrate && make seed
 make test

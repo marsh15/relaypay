@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.agent_runtime.models import BusinessEventOutbox, ConsumedBusinessEvent
+from relaypay.errors import RelayPayError
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.ids import new_public_id, new_uuid
 
@@ -163,6 +164,38 @@ def publish_one(
     return True
 
 
+def _consumption_marker(
+    session: Session, *, consumer_name: str, event_id: str
+) -> ConsumedBusinessEvent | None:
+    return session.scalar(
+        select(ConsumedBusinessEvent).where(
+            ConsumedBusinessEvent.consumer_name == consumer_name,
+            ConsumedBusinessEvent.event_id == event_id,
+        )
+    )
+
+
+def _assert_identical_replay(
+    marker: ConsumedBusinessEvent,
+    *,
+    organisation_id: uuid.UUID,
+    environment_id: uuid.UUID,
+    payload_sha256: bytes,
+) -> None:
+    # The marker binds the event id to one scope and one payload. Anything else is a
+    # different request reusing the id, so it gets a generic replay conflict.
+    if (
+        marker.organisation_id != organisation_id
+        or marker.environment_id != environment_id
+        or marker.payload_sha256 != payload_sha256
+    ):
+        raise RelayPayError(
+            code="EVENT_REPLAY_CONFLICT",
+            message="The event id is already bound to a different payload",
+            http_status=409,
+        )
+
+
 def record_consumption(
     session: Session,
     *,
@@ -172,6 +205,20 @@ def record_consumption(
     event_id: str,
     payload_sha256: bytes,
 ) -> bool:
+    """Record one consumer effect per event id.
+
+    Returns True for the first consumption and False for an identical replay. A marker
+    bound to another scope or payload raises EVENT_REPLAY_CONFLICT (409) instead.
+    """
+    marker = _consumption_marker(session, consumer_name=consumer_name, event_id=event_id)
+    if marker is not None:
+        _assert_identical_replay(
+            marker,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            payload_sha256=payload_sha256,
+        )
+        return False
     nested = session.begin_nested()
     try:
         session.add(
@@ -187,6 +234,20 @@ def record_consumption(
         session.flush()
         nested.commit()
         return True
-    except IntegrityError:
+    except IntegrityError as exc:
         nested.rollback()
+        # Only the consumer/event unique constraint represents a concurrent replay.
+        if getattr(getattr(exc.orig, "diag", None), "constraint_name", None) != (
+            "consumed_business_events_consumer_name_event_id_key"
+        ):
+            raise
+        concurrent = _consumption_marker(session, consumer_name=consumer_name, event_id=event_id)
+        if concurrent is None:
+            raise
+        _assert_identical_replay(
+            concurrent,
+            organisation_id=organisation_id,
+            environment_id=environment_id,
+            payload_sha256=payload_sha256,
+        )
         return False

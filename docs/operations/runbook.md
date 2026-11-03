@@ -95,6 +95,14 @@ Redpanda is a startup dependency of the poller, and the outbox publish step uses
 publisher-construction outage, and injected crashes. It does not stop a live broker. Nothing in
 this repository consumes the stream, and financial correctness does not depend on it.
 
+## Inbound connector event backlog
+
+Accepted events from `POST /api/inbound/v1/connectors/{connector_id}/events` are processed by the
+poller task `process_inbound_webhooks`, on a two-second cadence. Each run claims at most 25 events.
+The rest stay queued for a later run, so a steady stream cannot hold one run in the claim loop and
+starve the tasks scheduled after it. A backlog that does not drain means the poller is not running
+or is falling behind; check its logs.
+
 ## Chaos runs
 
 `make chaos` runs `scripts.chaos.run --mode ci --seeds 20 --ops 1000`. `make chaos-full` runs

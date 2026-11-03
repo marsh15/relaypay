@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.payments.models import Authorization, Capture, PaymentIntent, Void
@@ -22,8 +22,8 @@ def expire_authorizations(
     Each payment row is taken ``FOR UPDATE SKIP LOCKED``. ``initiate_capture`` takes the same
     payment lock first and refuses an expired hold, so a capture and an expiry for the same
     payment are serialized: whichever commits first wins, and the other sees its result. The
-    no-capture condition is re-evaluated under the lock. A capture already in flight therefore
-    always prevents expiry, and its outcome decides the payment.
+    child-row eligibility is rechecked in a fresh statement after the lock is acquired. This
+    also protects a void admitted after the original locking query's snapshot.
     """
     with factory() as session, session.begin():
         statement = (
@@ -45,7 +45,20 @@ def expire_authorizations(
         if organisation_id is not None:
             statement = statement.where(PaymentIntent.organisation_id == organisation_id)
         payments = list(session.scalars(statement))
+        expired = 0
         for payment in payments:
+            in_flight = session.scalar(
+                select(
+                    or_(
+                        exists().where(Capture.payment_intent_id == payment.id),
+                        exists().where(
+                            Void.payment_intent_id == payment.id, Void.status != "FAILED"
+                        ),
+                    )
+                )
+            )
+            if in_flight:
+                continue
             transition(
                 session,
                 payment,
@@ -53,4 +66,5 @@ def expire_authorizations(
                 reason="AUTHORIZATION_EXPIRED",
                 actor=EXPIRY_ACTOR,
             )
-    return len(payments)
+            expired += 1
+    return expired

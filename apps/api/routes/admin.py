@@ -1670,7 +1670,7 @@ def build_admin_router(
                     "eventId": f"bev_{event_hex}",
                     "eventType": "recurring-payment.failed.v1",
                     "schemaVersion": 1,
-                    "occurredAt": now.isoformat(),
+                    "occurredAt": now,
                     "organisationId": principal.organisation_public_id,
                     "environmentId": environment_id,
                     "resourceType": "subscription_invoice",

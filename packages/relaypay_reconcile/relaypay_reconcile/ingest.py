@@ -2,6 +2,7 @@
 
 import csv
 import sqlite3
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, TextIO
@@ -99,7 +100,8 @@ def _load_rows(
 
 
 def _resolve_columns(header: list[str], side: SideMapping, path: Path) -> _Columns:
-    duplicates = sorted({name for name in header if header.count(name) > 1})
+    # One pass over the header. Counting each name with list.count would be quadratic in width.
+    duplicates = sorted(name for name, count in Counter(header).items() if count > 1)
     if duplicates:
         raise ReconcileInputError(f"{path}: duplicate header columns: {', '.join(duplicates)}")
     kind: tuple[int, KindRule] | None = None

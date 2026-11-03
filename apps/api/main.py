@@ -1,7 +1,6 @@
 import json
 import logging
 import time
-import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -9,6 +8,7 @@ from fastapi import Cookie, Depends, FastAPI, Header, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from relaypay.body_limit import install_request_body_limit, safe_request_id
 from relaypay.config import Settings, get_settings
 from relaypay.contracts import EmptyCommand
 from relaypay.database import build_engine, build_session_factory
@@ -28,7 +28,7 @@ from relaypay.identity.security import (
     verify_csrf,
 )
 from relaypay.identity.service import append_audit, require_organisation_admin
-from relaypay.observability.metrics import operations_metrics
+from relaypay.observability.metrics import http_method_label, http_route_label, operations_metrics
 from relaypay.observability.service import record_request, refresh_operational_gauges
 from relaypay.observability.telemetry import instrument_fastapi
 from relaypay.payments.service import read_operation
@@ -120,6 +120,9 @@ def create_app(
     app.state.login_limiter = FixedWindowRateLimiter(limit=10, window_seconds=60)
     app.state.operations_metrics = operations_metrics()
     install_edge_origin_boundary(app, resolved)
+    # Added after the edge boundary so it wraps it: the cap runs before the origin signature
+    # check reads the body. security_headers below wraps this, so its headers cover the 413 too.
+    install_request_body_limit(app)
     transport = provider_transport or HTTPProviderTransport(base_url=resolved.PROVIDER_BASE_URL)
     scenario_transport = provider_transport or HTTPProviderTransport(
         base_url=resolved.PROVIDER_BASE_URL,
@@ -166,7 +169,7 @@ def create_app(
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
-        request_id = request.headers.get("X-Request-ID", f"req_{uuid.uuid4().hex}")
+        request_id = safe_request_id(request.headers.get("X-Request-ID"))
         started = time.monotonic()
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
@@ -177,8 +180,8 @@ def create_app(
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
         response.headers["Server-Timing"] = f"app;dur={(time.monotonic() - started) * 1000:.1f}"
         elapsed_seconds = time.monotonic() - started
-        route_object = request.scope.get("route")
-        route = getattr(route_object, "path", request.url.path)
+        route = http_route_label(request)
+        method = http_method_label(request.method)
         app.state.operations_metrics.observe_http(
             service="api",
             method=request.method,
@@ -200,8 +203,8 @@ def create_app(
                 {
                     "event": "http_request",
                     "requestId": request_id,
-                    "method": request.method,
-                    "path": request.url.path,
+                    "method": method,
+                    "path": route,
                     "status": response.status_code,
                     "durationMs": round(elapsed_seconds * 1000, 1),
                 },
@@ -216,7 +219,7 @@ def create_app(
                     request_id=request_id,
                     organisation_id=principal.organisation_id if principal else None,
                     environment_id=principal.environment_id if principal else None,
-                    method=request.method,
+                    method=method,
                     route=route,
                     status_code=response.status_code,
                     duration_ms=round(elapsed_seconds * 1000),

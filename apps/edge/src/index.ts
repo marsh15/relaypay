@@ -1,3 +1,5 @@
+import { readBoundedBody } from "./bounded-body";
+
 export interface Env {
   ORIGIN_BASE_URL: string;
   ORIGIN_SIGNING_SECRET: string;
@@ -91,7 +93,7 @@ async function synchronous(request: Request, env: Env): Promise<Response> {
   if (!API_KEY.test(key)) return jsonError(401, "EDGE_API_KEY_PREFIX_INVALID", "A valid RelayPay API-key shape is required");
   const tenant = key.split(".", 1)[0] ?? "";
   const denied = await admit(request, env, tenant); if (denied) return denied;
-  const body = await request.arrayBuffer(); if (body.byteLength > MAX_BODY) return jsonError(413, "EDGE_BODY_TOO_LARGE", "Request body exceeds one MiB");
+  const body = await readBoundedBody(request, MAX_BODY); if (body === null) return jsonError(413, "EDGE_BODY_TOO_LARGE", "Request body exceeds one MiB");
   if (body.byteLength && !request.headers.get("content-type")?.startsWith("application/json")) return jsonError(415, "EDGE_CONTENT_TYPE_INVALID", "JSON content type is required");
   const url = new URL(request.url); const target = url.pathname + url.search; const traceparent = validTraceparent(request.headers.get("traceparent"));
   const headers = new Headers(request.headers); (await originHeaders(env, request.method, target, body, traceparent)).forEach((value, name) => headers.set(name, value));
@@ -108,7 +110,7 @@ async function webhook(request: Request, env: Env, connectorId: string): Promise
   const eventId = request.headers.get("x-provider-event-id") ?? ""; const providerTimestamp = request.headers.get("x-provider-timestamp") ?? ""; const providerSignature = request.headers.get("x-provider-signature") ?? "";
   if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(eventId) || !/^\d{10}$/.test(providerTimestamp) || !/^v1=[0-9a-f]{64}$/.test(providerSignature)) return jsonError(400, "EDGE_WEBHOOK_SHAPE_INVALID", "Required webhook headers are invalid");
   const denied = await admit(request, env, `${connectorId}:${eventId}`); if (denied) return denied;
-  const body = await request.arrayBuffer(); if (body.byteLength > MAX_BODY) return jsonError(413, "EDGE_BODY_TOO_LARGE", "Webhook exceeds one MiB");
+  const body = await readBoundedBody(request, MAX_BODY); if (body === null) return jsonError(413, "EDGE_BODY_TOO_LARGE", "Webhook exceeds one MiB");
   const digest = await sha256(body); const key = `sha256/${digest}`; const existing = await env.WEBHOOK_ARCHIVE.get(key);
   if (existing) { if (await sha256(await existing.arrayBuffer()) !== digest) return jsonError(500, "EDGE_ARCHIVE_INTEGRITY_FAILED", "Archived bytes failed integrity validation"); }
   else await env.WEBHOOK_ARCHIVE.put(key, body, { sha256: digest, customMetadata: { digest, synthetic: "true" } });

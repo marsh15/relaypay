@@ -12,6 +12,31 @@ recovery, and merchant-site simulators return FastAPI's `{"detail": ...}`.
 Mutation retries are safe only when the caller reuses the original `Idempotency-Key`. RelayPay
 stores terminal response bytes and returns them unchanged on a valid replay.
 
+## Request size
+
+Some services cap the raw request body while it is read. A declared `Content-Length` over the cap is
+refused before any body byte is read. Otherwise the bytes that arrive are counted, and reading stops
+at the chunk that crosses the cap, so a missing, wrong, or chunked `Content-Length` cannot bypass
+the cap. A cap bounds one request; it does not limit request rate, concurrency, or total memory.
+
+| Service | Cap | Notes |
+| --- | ---: | --- |
+| `apps/api`, `apps/receiver`, console backend proxy | 2 MiB | Statement files stay capped at 1 MiB, and the multipart overhead fits in the request cap |
+| `apps/dispute_network` | 20 MiB | Packages are raw zips bounded by `MAX_PACKAGE_BYTES`, so a smaller cap would reject valid submissions |
+| Edge Worker, `/api/v1` and webhook ingress | 1 MiB | Cap unchanged. The body is read with a bounded reader, so an oversize body is no longer buffered in full before the check |
+
+The provider, bank, commerce, recovery-network, and merchant-site services have no body cap in this
+checkout.
+
+| Code | HTTP | Meaning | Retry guidance |
+| --- | ---: | --- | --- |
+| `REQUEST_BODY_TOO_LARGE` | 413 | Body over the service cap, refused before the route runs. `details.maxBytes` is the cap. The API, receiver, and dispute network return this envelope; the receiver and dispute network otherwise use their own error shapes | Send a smaller body |
+| `EDGE_BODY_TOO_LARGE` | 413 | Body over the edge cap | Send a smaller body |
+| `REQUEST_BODY_INCOMPLETE` | 400 | The connection closed before the body finished. Nothing was processed | Resend with the same `Idempotency-Key` |
+
+Error bodies never echo request bytes. The 413 is a service-wide response, so it is not listed in
+each route's OpenAPI responses.
+
 ## Request and authentication
 
 | Code | HTTP | Meaning | Retry guidance |
@@ -61,7 +86,7 @@ On admin routes that take an `Idempotency-Key`, a missing key is `VALIDATION_ERR
 | `INVALID_WEBHOOK_TIMESTAMP`, `WEBHOOK_REPLAY_WINDOW_EXCEEDED`, `INVALID_WEBHOOK_SIGNATURE` | 401 | Inbound event failed authentication |
 | `WEBHOOK_EVENT_CONFLICT` | 409 | Same provider event id with different bytes |
 | `EVENT_CONTAINS_PII`, `EVENT_DIGEST_MISMATCH`, `EVENT_EVIDENCE_TOO_DEEP`, `UNSUPPORTED_EVENT` | 422 | Business-event intake (dispute and recurring-payment failure) rejected the evidence |
-| `EVENT_REPLAY_CONFLICT` | 409 | Consumed event has no matching dispute case or recurring attempt |
+| `EVENT_REPLAY_CONFLICT` | 409 | Event ID is already bound to a different organisation, environment, or payload digest. A replay whose event has no matching dispute case or recurring attempt in the caller's scope also returns this |
 | `EVENT_TOO_LARGE` | 413 | Evidence over the size bound |
 | `INVALID_KEY_VERSION` | 409 | Pending API key version not found at activation |
 
@@ -80,6 +105,9 @@ Admin workflows return these. All are `409` unless noted.
 | Settlement questions | `SETTLEMENT_QUESTION_CONCURRENT`, `SETTLEMENT_QUESTION_KEY_REUSED`; 422: `SETTLEMENT_POLICY_INVALID`, `SETTLEMENT_QUESTION_INVALID`, and the `SETTLEMENT_NARRATIVE_*` validation codes (`CITATION_UNKNOWN`, `CROSS_RECORD_REFERENCE`, `MISSING_CITATION`, `NUMBER_MISMATCH`, `UNSUPPORTED_CLAIM`); 502: `SETTLEMENT_CLASSIFICATION_INVALID`, `SETTLEMENT_NARRATIVE_INVALID`; 500: `SETTLEMENT_NARRATIVE_MISSING` |
 | Risk review | `RISK_ESCALATION_CLOSED`; 422: `RISK_ANNOTATION_INVALID`; 502: `RISK_FINDINGS_INVALID`; 503: `SITE_SNAPSHOT_UNAVAILABLE`; 404: `SITE_SNAPSHOT_UNKNOWN` |
 | Internal | 500: `LEDGER_ACCOUNT_MISSING` (a required ledger account was not seeded) |
+
+`RECURRING_ATTEMPT_CONFLICT` means a provider attempt ID is already recorded for a different
+invoice, organisation, environment, provider code, outcome, or evidence digest.
 
 The simulators add `PROVIDER_ACCOUNT_NOT_FOUND`, `PROVIDER_EFFECT_NOT_FOUND`,
 `PROVIDER_EFFECT_CONFLICT`, `PROVIDER_KEY_CONFLICT`, `BANK_ACCOUNT_NOT_FOUND`,

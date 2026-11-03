@@ -51,6 +51,14 @@ describe("RelayPay edge", () => {
     expect(response.status).toBe(202); const result = await response.json<{ digest: string }>(); expect(result.digest).toMatch(/^[0-9a-f]{64}$/); expect(env.WEBHOOK_QUEUE.send).toHaveBeenCalledWith(expect.objectContaining({ digest: result.digest, eventId: "evt-1" }));
   });
 
+  it("refuses an oversize webhook before archiving or queueing it", async () => {
+    const env = environment();
+    const body = new Uint8Array(1024 * 1024 + 1);
+    const response = await worker.fetch(new Request(`https://edge.test/api/inbound/v1/connectors/con_${"a".repeat(32)}/events`, { method: "POST", body, headers: { ...replayHeaders, "x-provider-event-id": "evt-1", "x-provider-timestamp": "1760000000", "x-provider-signature": `v1=${"b".repeat(64)}` } }), env);
+    expect(response.status).toBe(413); expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ error: { code: "EDGE_BODY_TOO_LARGE" } }); expect(env.WEBHOOK_QUEUE.send).not.toHaveBeenCalled();
+  });
+
   it("retries queue delivery on origin outage", async () => {
     const env = environment(); const bytes = new TextEncoder().encode("{}"); const digestBytes = await crypto.subtle.digest("SHA-256", bytes); const digest = [...new Uint8Array(digestBytes)].map((v) => v.toString(16).padStart(2, "0")).join(""); await env.WEBHOOK_ARCHIVE.put(`sha256/${digest}`, bytes);
     vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("origin down")); const retry = vi.fn(); const ack = vi.fn();

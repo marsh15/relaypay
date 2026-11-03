@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from fastapi.testclient import TestClient
 from relaypay.config import get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.observability import service as observability_service
@@ -8,7 +9,47 @@ from relaypay.observability.models import RequestLog, UsageRollup
 from relaypay.observability.service import record_request
 from sqlalchemy import delete, func, select
 
+from apps.api.main import create_app
+
 pytestmark = pytest.mark.integration
+
+
+def test_actual_api_uses_bounded_route_and_method_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(observability_service, "_PRUNE_PROBABILITY", 0.0)
+    app = create_app(get_settings())
+    prefix = f"req_bounded_{uuid.uuid4().hex}"
+    with TestClient(app) as client:
+        for index, (method, path) in enumerate(
+            [
+                ("GET", "/api/missing-a"),
+                ("GET", "/api/missing-b"),
+                ("PROBEA", "/api/missing-c"),
+                ("PROBEB", "/api/missing-d"),
+                ("GET", "/api/v1/payment_intents/pi_a/evidence"),
+                ("GET", "/api/v1/payment_intents/pi_b/evidence"),
+            ]
+        ):
+            response = client.request(method, path, headers={"X-Request-ID": f"{prefix}_{index}"})
+            assert response.status_code in {401, 404}
+        with app.state.session_factory() as session, session.begin():
+            logs = list(
+                session.scalars(select(RequestLog).where(RequestLog.request_id.startswith(prefix)))
+            )
+            assert len(logs) == 6
+            assert {row.route for row in logs} == {
+                "unmatched",
+                "/api/v1/payment_intents/{payment_id}/evidence",
+            }
+            assert {row.method for row in logs} == {"GET", "OTHER"}
+            rollups = list(
+                session.scalars(
+                    select(UsageRollup).where(
+                        UsageRollup.route == "unmatched", UsageRollup.method == "OTHER"
+                    )
+                )
+            )
+            assert rollups and sum(row.request_count for row in rollups) >= 2
+            session.execute(delete(RequestLog).where(RequestLog.request_id.startswith(prefix)))
 
 
 def test_request_metadata_is_bounded_and_rolls_up_without_sensitive_material(

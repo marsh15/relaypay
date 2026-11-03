@@ -29,13 +29,14 @@ Or, without `uv`: `python -m relaypay_reconcile --settlement ... --orders ...`.
 | `--orders PATH` | Seller order export (CSV). Required. |
 | `--format {generic,razorpay,cashfree}` | Settlement preset. Default `generic`. Cannot be combined with `--mapping`. |
 | `--mapping PATH` | Mapping JSON that sets the columns, units and rules. See below. |
-| `--out-dir DIR` | Where reports are written. Default `reconcile-out`. |
+| `--out-dir DIR` | Where reports are written. Default `reconcile-out`. A report name that is a link is refused (see Reports). |
 | `--report csv,json,md` | Which reports to write. Default is all three. |
 | `--timing-window MIN:MAX` | Allowed days from the order date to the settlement date. Default `0:2`. Use `--timing-window=-1:2` for a negative minimum, because argparse reads a leading `-` as a flag. |
 | `--tolerance-paise N` | Largest allowed difference, in paise, for amount, fee and tax. Default `0`. |
 
-**Exit status:** `0` nothing found. `1` at least one finding. `2` input, option or storage error
-(the message goes to stderr; nothing is reconciled).
+**Exit status:** `0` nothing found. `1` at least one finding. `2` input, option, output or storage
+error. The message goes to stderr. For an input error nothing is reconciled, and for a refused
+output name no report is written.
 
 **Reports** are written to `--out-dir` under fixed names: `findings.csv`, `findings.json` and
 `report.md`. The output is deterministic. The same inputs give byte-identical reports, whatever
@@ -107,6 +108,9 @@ export's header row, and set the mapping to match it.
   listed value is compared case-insensitively. A type not listed in any of the three is an error,
   so an unexpected row type never passes silently. Refund checks need a kind column on both sides.
 - Unknown keys are rejected.
+- The mapping file is read as UTF-8 and may be at most **262,144 bytes (256 KiB)**. A larger file,
+  invalid UTF-8, or JSON nested too deeply for the parser exits with status 2 and a message that
+  names the file. The limit applies to the mapping only. CSV inputs have no size limit.
 
 ## The nine exception kinds
 
@@ -134,10 +138,27 @@ is failed does not count as landed.
 - `findings.json`: `{"summary": {...}, "findings": [...]}`. The summary has row counts, counts for
   all nine kinds, and the list of checks that were not evaluated.
 - `report.md`: the summary and the findings table. Money is in paise. The findings table is
-  streamed row by row, so a large run does not hold it in memory.
+  streamed row by row, so a large run does not hold it in memory. In the table, each cell escapes
+  `|`, `&`, `<` and `>`, so a reference cannot split a column or start raw HTML. The CSV and JSON
+  reports keep each reference exactly as read.
 
 Ordering is by exception name, then kind, reference and side. Output is UTF-8, with `\n` line
 endings.
+
+Each report is written to an exclusively created private temporary file in `--out-dir`, synced,
+and then replaced over its name. If rendering or replacement fails, the previous report stays in
+place and the temporary file is removed. Reports already replaced earlier in a run remain replaced.
+A process
+killed outright (SIGKILL) cannot clean up, so it can leave a hidden `.<name>.*.tmp` file behind.
+Before anything is written, every
+requested name is checked. If one is a symbolic link (even a dangling one), a hard link to another
+file, or not a regular file, the run exits with status 2 and writes no report. Where supported,
+names are resolved against the output directory's open descriptor. Elsewhere, path-based checks
+and replacement are used; the operator must control and trust the output directory and its parent
+paths, since concurrent changes can race those checks. The `--out-dir` path itself may be a
+symlink, and the directory it names is used. A regular file from an earlier run is replaced.
+On POSIX the final report inherits the temporary file's `0600` mode, including on reruns; on
+other platforms access follows the platform's temporary-file permissions and ACLs.
 
 ## Limits
 
@@ -147,6 +168,9 @@ endings.
   file can shift a TIMING result by a day.
 - CSV cells are written as they were read. A reference that starts with `=` can be treated as a
   formula when the CSV is opened in a spreadsheet. Treat the reports as data, not as a sheet.
+  The Markdown table escapes raw HTML, but it does not escape `[`, `]` or `!`, so a reference that
+  holds Markdown link or image syntax can render as one in some viewers.
+- Each report is synced to disk before its rename, so a large run pays for that sync.
 - A crash that is not one of the handled errors still produces a traceback. Its exit status is
   Python's default, 1, which is also the findings status. Read stderr before trusting the code.
 - Refunds and fee reversals are matched by reference only, one row per reference and side.

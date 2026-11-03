@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from relaypay_reconcile.errors import ReconcileInputError
-from relaypay_reconcile.mapping import DEFAULT_TIMING_WINDOW, load_mapping
+from relaypay_reconcile.mapping import DEFAULT_TIMING_WINDOW, MAX_MAPPING_BYTES, load_mapping
 
 
 def _json(tmp_path: Path, document: Any) -> Path:
@@ -143,3 +143,44 @@ def test_cli_overrides_are_range_checked_like_the_file() -> None:
         load_mapping(None, None, tolerance_paise=2**63)
     with pytest.raises(ReconcileInputError, match="within"):
         load_mapping(None, None, timing_window_days=(-2_000_000_000, 0))
+
+
+def test_a_mapping_of_exactly_the_size_limit_is_read(tmp_path: Path) -> None:
+    prefix = '{"settled_values": ["'
+    suffix = '"]}'
+    padding = "c" * (MAX_MAPPING_BYTES - len(prefix) - len(suffix))
+    path = tmp_path / "mapping.json"
+    path.write_text(prefix + padding + suffix, encoding="utf-8")
+    assert path.stat().st_size == MAX_MAPPING_BYTES
+    (value,) = load_mapping(path, None).settled_values
+    assert value == padding
+
+
+def test_a_mapping_one_byte_over_the_limit_is_refused_before_it_is_parsed(tmp_path: Path) -> None:
+    path = tmp_path / "mapping.json"
+    path.write_bytes(b" " * (MAX_MAPPING_BYTES + 1))
+    with pytest.raises(ReconcileInputError, match="larger than 262144 bytes"):
+        load_mapping(path, None)
+
+
+@pytest.mark.parametrize("text", ["[" * 100_000, '{"a":' * 50_000], ids=["arrays", "objects"])
+def test_nesting_too_deep_for_the_parser_is_an_input_error(tmp_path: Path, text: str) -> None:
+    path = tmp_path / "mapping.json"
+    path.write_text(text, encoding="utf-8")
+    assert path.stat().st_size <= MAX_MAPPING_BYTES
+    with pytest.raises(ReconcileInputError, match="nested too deeply"):
+        load_mapping(path, None)
+
+
+def test_an_integer_past_the_parser_digit_limit_is_an_input_error(tmp_path: Path) -> None:
+    path = tmp_path / "mapping.json"
+    path.write_text('{"tolerance_paise": ' + "1" * 5_000 + "}", encoding="utf-8")
+    with pytest.raises(ReconcileInputError, match="not valid JSON|tolerance_paise must be"):
+        load_mapping(path, None)
+
+
+def test_a_mapping_that_is_not_utf8_names_the_encoding(tmp_path: Path) -> None:
+    path = tmp_path / "mapping.json"
+    path.write_bytes(b'{"tolerance_paise": 1}\xff')
+    with pytest.raises(ReconcileInputError, match="must be UTF-8"):
+        load_mapping(path, None)

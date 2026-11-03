@@ -49,6 +49,10 @@ SCHEDULE_SECONDS: dict[str, float] = {
     "apply_psp_events": 1.0,
 }
 OUTBOX_DRAIN_CAP = 100
+# Inbound webhooks are claimed at most this many per tick. An unbounded drain lets a steady
+# arrival stream hold one tick in the claim loop, starving the safety tasks scheduled after it;
+# the remainder is picked up at the next due tick.
+INBOUND_CLAIMS_PER_BATCH = 25
 
 
 @observe_worker_task("recover_provider_operations")
@@ -106,10 +110,13 @@ def _run_subscription_recovery(factory: sessionmaker[Session], settings: Setting
 
 @observe_worker_task("process_inbound_webhooks")
 def _process_inbound_webhooks(
-    factory: sessionmaker[Session], commerce_factory: sessionmaker[Session]
+    factory: sessionmaker[Session],
+    commerce_factory: sessionmaker[Session],
+    *,
+    max_claims: int = INBOUND_CLAIMS_PER_BATCH,
 ) -> int:
     processed = 0
-    while (claim := claim_inbound_webhook(factory)) is not None:
+    while processed < max_claims and (claim := claim_inbound_webhook(factory)) is not None:
         process_inbound_claim(
             factory,
             claim,

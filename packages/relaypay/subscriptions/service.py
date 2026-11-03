@@ -192,10 +192,17 @@ def record_payment_attempt(
         )
     )
     if existing is not None:
-        if existing.evidence_sha256 != digest:
+        if (
+            existing.organisation_id != invoice.organisation_id
+            or existing.environment_id != invoice.environment_id
+            or existing.invoice_id != invoice.id
+            or existing.provider_code != provider_code
+            or existing.outcome != outcome
+            or existing.evidence_sha256 != digest
+        ):
             raise RelayPayError(
                 code="RECURRING_ATTEMPT_CONFLICT",
-                message="Provider attempt was reused with different evidence",
+                message="Provider attempt identifier is already bound to a different payment",
                 http_status=409,
             )
         return existing

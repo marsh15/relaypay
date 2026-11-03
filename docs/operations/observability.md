@@ -4,9 +4,11 @@ RelayPay telemetry is off by default. Set `OBSERVABILITY_ENABLED=true` and enabl
 `observability` profile to run the OpenTelemetry Collector, Prometheus, and provisioned Grafana
 dashboard.
 
-The API exposes `/metrics` only while observability is enabled. Histograms use bounded route
-templates rather than raw paths. Request logs store only request ID, tenant/environment IDs when
-known, method, route template, status, duration, and timestamp. Authorization headers, API keys,
+The API exposes `/metrics` only while observability is enabled. Metric labels and request logs use
+the matched route template. A request that matches no route is recorded as `unmatched`, and a
+non-standard method token as `OTHER`, so the API persists or logs no raw unmatched path and no
+non-standard method. Request logs store only request ID, tenant/environment IDs when known, method,
+route template, status, duration, and timestamp. Authorization headers, API keys,
 cookies, arbitrary headers, and bodies are never persisted. `REQUEST_LOG_RETENTION` bounds raw
 metadata rows; hourly rollups remain durable.
 

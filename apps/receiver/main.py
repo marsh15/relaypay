@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse
+from relaypay.body_limit import install_request_body_limit
 from relaypay.config import Settings, get_settings
 from relaypay.database import build_engine, build_session_factory
 from relaypay.observability.metrics import install_asgi_metrics
@@ -28,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine.dispose()
 
     app = FastAPI(title="RelayPay Receiver", version="1.0.1", lifespan=lifespan)
+    install_request_body_limit(app)
 
     @app.get("/health/live")
     def live() -> dict[str, str]:

@@ -1,7 +1,9 @@
 from typing import Annotated
 
 from fastapi import Body, FastAPI, Header
+from relaypay.body_limit import install_request_body_limit
 from relaypay.disputes.network import DeterministicDisputeNetwork
+from relaypay.disputes.package import MAX_PACKAGE_BYTES
 
 
 def create_app(network: DeterministicDisputeNetwork | None = None) -> FastAPI:
@@ -11,6 +13,9 @@ def create_app(network: DeterministicDisputeNetwork | None = None) -> FastAPI:
         version="1.0.1",
         description="Synthetic data only. Never send real dispute or customer evidence.",
     )
+    # Packages are raw zips capped at MAX_PACKAGE_BYTES (20 MiB), so a 2 MiB cap would reject
+    # valid submissions. The cap is the package bound itself.
+    install_request_body_limit(app, max_bytes=MAX_PACKAGE_BYTES)
 
     @app.get("/health/live")
     def live() -> dict[str, str]:

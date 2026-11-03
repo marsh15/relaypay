@@ -142,6 +142,7 @@ def consume_recurring_payment_failed(
     )
     if invoice is None:
         raise not_found("Invoice")
+    provider_attempt_id = envelope.payload.provider_attempt_id
     if not record_consumption(
         session,
         organisation_id=organisation.id,
@@ -150,9 +151,14 @@ def consume_recurring_payment_failed(
         event_id=envelope.event_id,
         payload_sha256=payload_digest,
     ):
+        # A replay resolves only inside its own organisation, environment and invoice. The
+        # provider attempt id is not tenant-scoped, so it must never select a row on its own.
         attempt = session.scalar(
             select(RecurringPaymentAttempt).where(
-                RecurringPaymentAttempt.provider_attempt_id == envelope.payload.provider_attempt_id
+                RecurringPaymentAttempt.organisation_id == organisation.id,
+                RecurringPaymentAttempt.environment_id == environment.id,
+                RecurringPaymentAttempt.invoice_id == invoice.id,
+                RecurringPaymentAttempt.provider_attempt_id == provider_attempt_id,
             )
         )
         if attempt is None:
@@ -161,7 +167,13 @@ def consume_recurring_payment_failed(
                 message="Consumed event has no matching recurring attempt",
                 http_status=409,
             )
-        case = session.scalar(select(RecoveryCase).where(RecoveryCase.invoice_id == invoice.id))
+        case = session.scalar(
+            select(RecoveryCase).where(
+                RecoveryCase.organisation_id == organisation.id,
+                RecoveryCase.environment_id == environment.id,
+                RecoveryCase.invoice_id == invoice.id,
+            )
+        )
         return RecoveryIntakeResult(attempt, case)
     attempt = record_payment_attempt(
         session,

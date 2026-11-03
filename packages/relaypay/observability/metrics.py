@@ -22,6 +22,24 @@ from relaypay.config import Settings
 P = ParamSpec("P")
 R = TypeVar("R")
 
+# Finite label values for request-derived dimensions. Client-chosen paths and method
+# tokens must never become label values, or every probe mints a new Prometheus series.
+UNMATCHED_ROUTE = "unmatched"
+OTHER_METHOD = "OTHER"
+_STANDARD_METHODS = frozenset(
+    {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"}
+)
+
+
+def http_method_label(method: str) -> str:
+    return method if method in _STANDARD_METHODS else OTHER_METHOD
+
+
+def http_route_label(request: Request) -> str:
+    """Route template for a matched request, otherwise the single unmatched sentinel."""
+    route = getattr(request.scope.get("route"), "path", None)
+    return route if isinstance(route, str) else UNMATCHED_ROUTE
+
 
 class OperationsMetrics:
     """Low-cardinality metrics shared by API and worker instrumentation."""
@@ -131,6 +149,7 @@ class OperationsMetrics:
         status_code: int,
         duration_seconds: float,
     ) -> None:
+        method = http_method_label(method)
         status_class = f"{status_code // 100}xx"
         self.http_requests.labels(service, method, route, status_class).inc()
         self.http_latency.labels(service, method, route).observe(duration_seconds)
@@ -178,12 +197,10 @@ def install_asgi_metrics(app: FastAPI, settings: Settings, *, service: str) -> N
     async def observe(request: Request, call_next):  # type: ignore[no-untyped-def]
         started = time.monotonic()
         response = await call_next(request)
-        route_object = request.scope.get("route")
-        route = getattr(route_object, "path", request.url.path)
         metrics.observe_http(
             service=service,
             method=request.method,
-            route=route,
+            route=http_route_label(request),
             status_code=response.status_code,
             duration_seconds=time.monotonic() - started,
         )

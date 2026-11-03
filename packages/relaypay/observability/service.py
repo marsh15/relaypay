@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
-from relaypay.observability.metrics import OperationsMetrics
+from relaypay.observability.metrics import OperationsMetrics, http_method_label
 from relaypay.observability.models import RequestLog, UsageRollup
 
 logger = logging.getLogger("relaypay.operations")
@@ -38,6 +38,7 @@ def record_request(
     """Persist bounded metadata and a durable rollup after the response is produced."""
 
     now = recorded_at or datetime.now(UTC)
+    method = http_method_label(method)
     scope_key = f"{organisation_id or 'anonymous'}:{environment_id or 'none'}"
     status_class = f"{status_code // 100}xx"
     with factory() as session, session.begin():

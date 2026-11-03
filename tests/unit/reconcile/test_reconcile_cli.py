@@ -1,14 +1,17 @@
 """The command line: exit codes, report selection, machine-readable output and input errors."""
 
 import json
+import os
 import sqlite3
+import stat
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-from relaypay_reconcile import matching
+from relaypay_reconcile import matching, report
 from relaypay_reconcile.cli import main
+from relaypay_reconcile.mapping import MAX_MAPPING_BYTES
 
 
 def test_invalid_utf8_mapping_exits_two(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -261,3 +264,217 @@ def test_an_unmapped_settlement_status_is_reported_as_not_evaluated(tmp_path: Pa
     document = json.loads((out / "findings.json").read_text(encoding="utf-8"))
     notes = document["summary"]["not_evaluated"]
     assert any("every settlement row counts as landed" in note for note in notes)
+
+
+def _one_missing_settlement(tmp_path: Path) -> tuple[Path, Path, Path]:
+    settlement, orders = _files(tmp_path, "pay_1,payment,1.00,,,2026-10-01,captured\n", "")
+    out = tmp_path / "out"
+    out.mkdir()
+    return settlement, orders, out
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_a_symlink_at_a_report_name_is_refused_and_its_target_is_untouched(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    portable: bool,
+) -> None:
+    if portable:
+        monkeypatch.setattr(report, "_supports_dir_fd", lambda: False)
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("SENTINEL", encoding="utf-8")
+    (out / "findings.csv").symlink_to(sentinel)
+    status = main(["--settlement", str(settlement), "--orders", str(orders), "--out-dir", str(out)])
+    assert status == 2
+    assert "symbolic link" in capsys.readouterr().err
+    assert sentinel.read_text(encoding="utf-8") == "SENTINEL"
+    assert [path.name for path in out.iterdir()] == ["findings.csv"]
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_a_hard_link_at_a_report_name_is_refused_and_both_names_keep_their_content(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    portable: bool,
+) -> None:
+    if portable:
+        monkeypatch.setattr(report, "_supports_dir_fd", lambda: False)
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    shared = tmp_path / "shared.md"
+    shared.write_text("SENTINEL", encoding="utf-8")
+    os.link(shared, out / "report.md")
+    status = main(
+        [
+            "--settlement",
+            str(settlement),
+            "--orders",
+            str(orders),
+            "--out-dir",
+            str(out),
+            "--report",
+            "md",
+        ]
+    )
+    assert status == 2
+    assert "hard-linked" in capsys.readouterr().err
+    assert shared.read_text(encoding="utf-8") == "SENTINEL"
+    assert (out / "report.md").read_text(encoding="utf-8") == "SENTINEL"
+
+
+def test_a_refusal_writes_no_report_even_when_an_earlier_name_is_free(tmp_path: Path) -> None:
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    missing = tmp_path / "never-created.json"
+    (out / "findings.json").symlink_to(missing)  # a dangling link is still a link
+    status = main(
+        [
+            "--settlement",
+            str(settlement),
+            "--orders",
+            str(orders),
+            "--out-dir",
+            str(out),
+            "--report",
+            "csv,json",
+        ]
+    )
+    assert status == 2
+    assert not missing.exists()
+    assert [path.name for path in out.iterdir()] == ["findings.json"]
+
+
+def test_a_rerun_replaces_an_existing_regular_report_with_a_private_file(tmp_path: Path) -> None:
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    (out / "findings.csv").write_text("OLD\n", encoding="utf-8")
+    status = main(
+        [
+            "--settlement",
+            str(settlement),
+            "--orders",
+            str(orders),
+            "--out-dir",
+            str(out),
+            "--report",
+            "csv",
+        ]
+    )
+    assert status == 1
+    report_path = out / "findings.csv"
+    assert report_path.read_text(encoding="utf-8").startswith("exception,kind,reference,side,")
+    assert [path.name for path in out.iterdir()] == ["findings.csv"]
+    assert (stat.S_IMODE(report_path.stat().st_mode) & 0o077) == 0
+
+
+def test_an_interrupted_write_keeps_the_previous_report_and_leaves_no_temporary_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    (out / "findings.json").write_text("PREVIOUS\n", encoding="utf-8")
+
+    def interrupted(_summary: object) -> None:
+        raise KeyboardInterrupt  # the temporary file already exists when the write is cut short
+
+    monkeypatch.setattr(report, "_summary_document", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        main(
+            [
+                "--settlement",
+                str(settlement),
+                "--orders",
+                str(orders),
+                "--out-dir",
+                str(out),
+                "--report",
+                "json",
+            ]
+        )
+    assert (out / "findings.json").read_text(encoding="utf-8") == "PREVIOUS\n"
+    assert [path.name for path in out.iterdir()] == ["findings.json"]
+
+
+def test_portable_report_writer_replaces_deterministically_and_cleans_up_on_render_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(report, "_supports_dir_fd", lambda: False)
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    args = ["--settlement", str(settlement), "--orders", str(orders), "--out-dir", str(out)]
+    assert main(args) == 1
+    previous = {path.name: path.read_bytes() for path in out.iterdir()}
+    assert main(args) == 1
+    assert {path.name: path.read_bytes() for path in out.iterdir()} == previous
+
+    def interrupted(_summary: object) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(report, "_summary_document", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        main([*args, "--report", "json"])
+    assert {path.name: path.read_bytes() for path in out.iterdir()} == previous
+
+
+def test_portable_report_writer_refuses_nonregular_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(report, "_supports_dir_fd", lambda: False)
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    (out / "findings.json").mkdir()
+    status = main(["--settlement", str(settlement), "--orders", str(orders), "--out-dir", str(out)])
+    assert status == 2
+    assert [path.name for path in out.iterdir()] == ["findings.json"]
+
+
+def test_a_failed_rename_keeps_the_previous_report_and_leaves_no_temporary_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settlement, orders, out = _one_missing_settlement(tmp_path)
+    (out / "findings.json").write_text("PREVIOUS\n", encoding="utf-8")
+
+    def failed_rename(*_args: object, **_kwargs: object) -> None:
+        raise OSError("simulated rename failure")
+
+    monkeypatch.setattr(os, "replace", failed_rename)
+    status = main(
+        [
+            "--settlement",
+            str(settlement),
+            "--orders",
+            str(orders),
+            "--out-dir",
+            str(out),
+            "--report",
+            "json",
+        ]
+    )
+    assert status == 2
+    assert "simulated rename failure" in capsys.readouterr().err
+    assert (out / "findings.json").read_text(encoding="utf-8") == "PREVIOUS\n"
+    assert [path.name for path in out.iterdir()] == ["findings.json"]
+
+
+def test_markdown_escapes_raw_html_while_csv_and_json_keep_the_reference(tmp_path: Path) -> None:
+    reference = "<img src=x onerror=alert(1)>&amp;|x"
+    settlement, orders = _files(tmp_path, f"{reference},payment,1.00,,,2026-10-01,captured\n", "")
+    out = tmp_path / "out"
+    status = main(["--settlement", str(settlement), "--orders", str(orders), "--out-dir", str(out)])
+    assert status == 1
+    markdown = (out / "report.md").read_text(encoding="utf-8")
+    assert "<img" not in markdown
+    assert "&lt;img src=x onerror=alert(1)&gt;&amp;amp;\\|x" in markdown
+    assert reference in (out / "findings.csv").read_text(encoding="utf-8")
+    findings = json.loads((out / "findings.json").read_text(encoding="utf-8"))["findings"]
+    assert findings[0]["reference"] == reference
+
+
+def test_an_oversized_mapping_exits_two_with_a_size_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settlement, orders = _files(tmp_path, "", "")
+    mapping = tmp_path / "mapping.json"
+    mapping.write_bytes(b" " * (MAX_MAPPING_BYTES + 1))
+    status = main(
+        ["--settlement", str(settlement), "--orders", str(orders), "--mapping", str(mapping)]
+    )
+    assert status == 2
+    assert "larger than" in capsys.readouterr().err

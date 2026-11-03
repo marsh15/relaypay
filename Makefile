@@ -1,4 +1,4 @@
-.PHONY: install lint format format-check typecheck unit test handwritten proof chaos chaos-full evaluations portfolio-demo api-contract sdk-drift sdk-example m7-evidence edge-install edge-check compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo console-install console-check console-e2e check
+.PHONY: install lint format format-check typecheck unit test handwritten proof chaos chaos-full evaluations portfolio-demo api-contract sdk-drift sdk-example m7-evidence edge-install edge-check compose-check infra-up infra-down migrate seed reset demo reconciliation-demo merchant-balance-demo connector-demo dependency-audit console-install console-check console-e2e check
 
 install:
 	uv sync --frozen
@@ -59,7 +59,7 @@ m7-evidence:
 	uv run python -m scripts.verify_m7_evidence output/m7/performance.json output/m7/query-plans.json
 
 edge-install:
-	npm ci --prefix apps/edge
+	npm ci --ignore-scripts --prefix apps/edge
 
 edge-check:
 	npm run check --prefix apps/edge
@@ -68,6 +68,7 @@ compose-check:
 	docker compose --env-file .env.example config --quiet
 	docker compose --env-file .env.example --profile observability config --quiet
 	docker compose --env-file .env.production.example -f compose.yaml -f compose.production.yaml config --quiet
+	docker compose --env-file .env.production.example -f compose.yaml -f compose.production.yaml --profile observability config --quiet
 
 infra-up:
 	docker compose up -d postgres
@@ -101,10 +102,10 @@ connector-demo:
 	uv run python -m scripts.connector_demo
 
 console-install:
-	cd apps/console && npm ci
+	cd apps/console && npm ci --ignore-scripts
 
 console-check:
-	cd apps/console && npm run lint && npm run typecheck && npm run build && npm audit --omit=dev
+	cd apps/console && npm run lint && npm run typecheck && npm run build && npm audit --package-lock-only --ignore-scripts --audit-level=high
 
 console-e2e:
 	cd apps/console && npm run test:e2e
@@ -125,3 +126,9 @@ reconcile-check:
 
 reconcile-proof:
 	uv run pytest tests/unit/reconcile/test_reconcile_memory_proof.py -m proof -q
+
+# Inspect committed locks without running dependency installation scripts.
+dependency-audit:
+	uv audit --frozen
+	npm audit --prefix apps/console --package-lock-only --ignore-scripts --audit-level=high
+	npm audit --prefix apps/edge --package-lock-only --ignore-scripts --audit-level=high

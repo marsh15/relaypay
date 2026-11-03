@@ -8,16 +8,16 @@ dependencies = [
   "alembic==1.18.5",
   "argon2-cffi>=25.1.0,<26",
   "attrs==26.1.0",
-  "cryptography>=46.0.0,<47",
+  "cryptography>=50.0.0,<51",
   "fastapi[standard-no-fastapi-cloud-cli]==0.139.0",
   "httpx==0.28.1",
   "kafka-python-ng>=2.2.3,<3",
-  "opentelemetry-api==1.44.0",
-  "opentelemetry-exporter-otlp-proto-http==1.44.0",
-  "opentelemetry-instrumentation-fastapi==0.65b0",
-  "opentelemetry-instrumentation-httpx==0.65b0",
-  "opentelemetry-instrumentation-sqlalchemy==0.65b0",
-  "opentelemetry-sdk==1.44.0",
+  "opentelemetry-api==1.45.1",
+  "opentelemetry-exporter-otlp-proto-http==1.45.1",
+  "opentelemetry-instrumentation-fastapi==0.66b1",
+  "opentelemetry-instrumentation-httpx==0.66b1",
+  "opentelemetry-instrumentation-sqlalchemy==0.66b1",
+  "opentelemetry-sdk==1.45.1",
   "prometheus-client==0.25.0",
   "psycopg[binary,pool]>=3.2.0,<4",
   "pydantic-settings>=2.10.0,<3",
@@ -28,8 +28,8 @@ dependencies = [
 dev = [
   "hypothesis>=6.170.2,<7",
   "mypy>=1.17.0,<2",
-  "openapi-python-client==0.29.0",
-  "pytest>=8.4.0,<9",
+  "openapi-python-client==0.29.1",
+  "pytest>=9.0.3,<10",
   "pytest-cov>=6.2.0,<7",
   "pytest-xdist>=3.8.0,<4",
   "relaypay-reconcile",
@@ -82,3 +82,6 @@ strict = true
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 mypy_path = ["packages"]
 exclude = ["migrations", "packages/relaypay_sdk/_generated"]
+
+[tool.uv]
+required-version = "==0.12.19"

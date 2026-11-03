@@ -2,9 +2,10 @@
 
 This is an optional single-host, synthetic-data sandbox. It is a disposable portfolio layout, not
 a regulated production architecture, and the repository does not host or deploy it for you. Use a
-current Ubuntu LTS host with Docker Engine and Compose v2.24 or newer (the overlay uses
-`ports: !reset []`), DNS pointed at the host, inbound TCP 80/443 and UDP 443 only, and SSH
-restricted to operator addresses.
+current Ubuntu LTS host with Docker Engine and Compose v2.24.4 or newer (the overlay uses the
+`ports: !reset []` and [`ports: !override`](https://docs.docker.com/reference/compose-file/merge/)
+merge tags), DNS pointed at the host, inbound TCP 80/443 and UDP 443 only, and SSH restricted to
+operator addresses.
 
 ## Configure
 
@@ -17,8 +18,17 @@ Replace every `GENERATE_...` value with independent random material. Never reuse
 values. The overlay (`compose.production.yaml`) requires every database password and secret
 (`${VAR:?}`), sets `APP_ENV=production` (HTTPS-only `PUBLIC_BASE_URL`, `Secure` session cookies,
 rejection of development secrets), removes the host port bindings of PostgreSQL, Redpanda, the API,
-the console, and every simulator, and leaves Caddy as the only published service. Variable
-reference: [configuration](configuration.md).
+the receiver, the console, and every simulator, and leaves Caddy as the only service published on all
+interfaces. Variable reference: [configuration](configuration.md).
+
+`.dockerignore` excludes `.env` files at any depth (the `.env*.example` templates stay),
+`.dev.vars` files, private key and PKCS#12/PFX bundles, `.npmrc` and `.netrc`, and local
+tool-state directories such as `.claude` and `.wrangler`. The Python images copy all of `apps/`,
+and the console build copies `apps/console`, so a credential file left in those trees would
+otherwise be sent to the build. A COPY-only build from a dummy context verified representative
+nested `.env`, `.dev.vars`, PEM, `.npmrc`, `.claude` and `.aws` exclusions and example-template
+retention. It did not read real secrets or build the application images. Keep real values in
+`.env.production`, which only Compose reads on the host.
 
 ## Start
 
@@ -50,9 +60,15 @@ scenario from the Scenario Lab, and confirm the lost-response proof passes.
   organisations) before the host is reachable by anyone you do not trust.
 - **Redpanda** runs in `dev-container` mode with no data volume. It carries only derived events and
   is rebuilt empty on restart; nothing in this repository consumes the topics.
-- **Observability.** If you also enable the `observability` profile, its ports (Prometheus 9090,
-  Grafana 3001 with anonymous viewer access, collector 4317/4318) are published on the host: the
-  overlay does not reset them. Bind them to a private interface or leave the profile off.
+- **Observability.** Add `--profile observability` to the start command to run the collector,
+  Prometheus, and Grafana. The overlay binds their ports to loopback only: Prometheus
+  `127.0.0.1:9090`, Grafana `127.0.0.1:3001` (anonymous viewer access, as in development), and the
+  collector `127.0.0.1:4317` and `127.0.0.1:4318`. Containers reach them by service name over the
+  Compose network, so only host access changes. Check the effective Docker networking and host
+  policy as part of deployment; loopback binding does not replace that review. From a workstation,
+  forward the ports over SSH: `ssh -N -L 9090:127.0.0.1:9090 -L 3001:127.0.0.1:3001 operator@HOST`.
+  Anyone with a shell on the host can still open Grafana without signing in, so leave the profile
+  off unless you need it.
 - Container hardening in place: non-root application images (`relaypay` uid 10001 for Python,
   `nextjs` uid 1001 for the console), `no-new-privileges`, `init`, and 1 CPU / 512 MB limits.
   Containers are not read-only, drop no capabilities, and the console, poller, and Caddy have no

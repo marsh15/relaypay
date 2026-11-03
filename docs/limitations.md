@@ -74,6 +74,13 @@
   spoof it to rotate keys. The sandbox assumes the API port is not directly exposed.
 - Merchant API-key routes have no rate limit at the API. The optional edge Worker adds a
   per-key-prefix per-minute window when it fronts the API.
+- Request body caps are per service: 2 MiB for the API, receiver, and console proxy, 20 MiB for the
+  dispute network, and 1 MiB at the edge. Each bounds the bytes one request can make its service
+  read. They are not a rate limit, a concurrency limit, or an availability guarantee. The provider,
+  bank, commerce, recovery-network, and merchant-site services have no cap in this checkout.
+- A native COPY-only dummy-context build verified representative nested `.dockerignore`
+  exclusions and template retention. It did not inspect real credentials or establish the contents
+  of a deployed application image.
 - The API's `/metrics` endpoint and the poller's metrics port are unauthenticated by design
   (CI and the local Prometheus scrape them directly). They expose route shapes, latencies, and
   counters (including connector ids on one gauge), but no secrets or personal data, so the sandbox
@@ -136,6 +143,17 @@
   pending.
 - The fee calculator (`packages/relaypay/fees/calculator.py`) and the payout locking strategies are
   hand-written and pending as well. See [PROVENANCE.md](../PROVENANCE.md).
+- Until these four maintainer-written modules are implemented and their `handwritten` tests pass,
+  the project is not complete.
+- The 2026-11-03 source audit ([report](security/audits/2026-11-03/REPORT.md)) reviewed commit
+  `41f3774` plus a pre-existing working-tree edit. It retained 0 confirmed vulnerabilities, 24
+  needs-validation records, and 1 rejected claim across 151 coverage units (119 covered, 31 linked
+  to candidate records, 1 blocked). The needs-validation records are unresolved conditional risks,
+  not confirmed findings, and carry no severity until their actor, deployment, runtime, or impact
+  prerequisites are established. The blocked unit concerns effective Caddy and Uvicorn
+  forwarded-header behavior and needs an owner-observed topology; no ingress fixture was run. The
+  audit is not a guarantee of security or proof that a deployment is safe, and it does not cover
+  changes made after its snapshot.
 
 ## Documentation and tooling inconsistencies
 

@@ -18,6 +18,9 @@ DEFAULT_TIMING_WINDOW = (0, 2)
 DEFAULT_SETTLED_VALUES = ("captured", "processed", "settled")
 DEFAULT_FAILED_VALUES = ("failed",)
 MAX_DAY_WINDOW = 1_000_000_000
+# A mapping is a small JSON object. Larger files are refused before they are parsed. CSV inputs
+# have no such limit; they stream.
+MAX_MAPPING_BYTES = 256 * 1024
 _SIDE_KEYS = frozenset({"ref", "amount", "unit", "fee", "tax", "date", "status", "kind"})
 _KIND_KEYS = frozenset({"column", "payment", "refund", "ignore"})
 _TOP_KEYS = frozenset(
@@ -172,10 +175,25 @@ def load_mapping(
 
 
 def _read_document(path: Path) -> dict[str, Any]:
+    # Read at most one byte past the limit, so an oversized file is detected without loading it.
+    with path.open("rb") as handle:
+        data = handle.read(MAX_MAPPING_BYTES + 1)
+    if len(data) > MAX_MAPPING_BYTES:
+        raise ReconcileInputError(
+            f"{path}: larger than {MAX_MAPPING_BYTES} bytes; a mapping is a small JSON object, "
+            "so check that this is the mapping file and not a data export"
+        )
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        raise ReconcileInputError(f"{path}: not valid JSON: {error}") from error
+        document = json.loads(data.decode("utf-8"))
+    except RecursionError as error:
+        raise ReconcileInputError(
+            f"{path}: nested too deeply to be a mapping; a mapping needs two levels of objects"
+        ) from error
+    except ValueError as error:
+        # UnicodeDecodeError, JSONDecodeError, and an integer over Python's digit limit.
+        raise ReconcileInputError(
+            f"{path}: not valid JSON (the file must be UTF-8): {error}"
+        ) from error
     if not isinstance(document, dict):
         raise ReconcileInputError(f"{path}: the mapping must be a JSON object")
     return document

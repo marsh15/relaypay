@@ -10,7 +10,8 @@ summarizes the surface; the OpenAPI document is the contract for request and res
 
 All amounts are integer paise in `INR`. Every response includes `X-Request-ID` (the inbound value is
 echoed, otherwise generated). Errors use `{"error": {"code", "message", "details"}}`; see the
-[error catalog](error-catalog.md).
+[error catalog](error-catalog.md). Request bodies are capped per service (2 MiB on the API); see
+[request size](error-catalog.md#request-size).
 
 ## Authentication
 
@@ -124,7 +125,7 @@ layer (see `apps/api/routes/admin.py`); the table lists the permission where the
 | Ledger investigation | `GET /operations/journals`, `GET /journals/{id}` | Journal list and read-only postings detail with `debitTotal`, `creditTotal`, and `balanced` |
 | Merchant accounts and balances | `GET`/`POST /merchant-accounts`, `GET /merchant-accounts/{id}/balances`, `/balance-transactions`, `POST /merchant-accounts/{id}/settlements` | Settlement takes an `Idempotency-Key` |
 | Payouts | `GET`/`POST /beneficiaries`, `GET`/`POST /payouts`, `POST /payouts/{id}/attempts` | Create and retry take an `Idempotency-Key` |
-| Reconciliation | `POST /statement-imports` (multipart: `provider`, `sourceReference`, `sourceFormat` CSV or JSON, `file`), `GET /reconciliation-mismatches`, `POST .../{id}/acknowledge`, `/resolve`, `/evidence-versions` | Statement size is capped at 1 MiB |
+| Reconciliation | `POST /statement-imports` (multipart: `provider`, `sourceReference`, `sourceFormat` CSV or JSON, `file`), `GET /reconciliation-mismatches`, `POST .../{id}/acknowledge`, `/resolve`, `/evidence-versions` | Statement file is capped at 1 MiB; the whole request is capped at 2 MiB (`REQUEST_BODY_TOO_LARGE`, see [error catalog](error-catalog.md#request-size)) |
 | Connectors | `POST /connector-versions`, `.../{id}/verify`, `.../{id}/activate` | Verify and activate return `204` |
 | Disputes | `GET /disputes`, `GET /disputes/{id}`, `POST .../agent-drafts`, `.../drafts`, `.../packages`, `GET /dispute-packages/{id}/download`, `POST .../submit` | Submit needs `workflows:write` and a session user |
 | Subscription recovery | `GET`/`POST /subscriptions`, `POST /subscriptions/{id}/invoices`, `POST /subscription-invoices/{id}/failures`, `GET /recovery-cases[/{id}]`, `POST /recovery-actions/{id}/execute`, `POST /recovery-cases/{id}/opt-outs` | Reads need `financial:read`; writes `workflows:write` |
@@ -145,8 +146,9 @@ reads use the same session and tenant/environment scope as the existing generic 
 connector. Headers: `X-Provider-Event-ID`, `X-Provider-Timestamp` (Unix seconds), and
 `X-Provider-Signature`, the hex HMAC-SHA256 of `"<timestamp>." + raw body` (an optional `v1=`
 prefix is accepted) keyed with `COMMERCE_CONTROL_SECRET`. Timestamps outside
-`INBOUND_WEBHOOK_REPLAY_SECONDS` (default 300) are rejected. The signature is checked before the
-body is parsed; accepted bytes are stored once and processed by the poller. Response `202`; a
+`INBOUND_WEBHOOK_REPLAY_SECONDS` (default 300) are rejected. The body cap runs first; the signature
+is checked before the body is parsed. Accepted bytes are stored once and processed by the poller
+([backlog](../operations/runbook.md#inbound-connector-event-backlog)). Response `202`; a
 byte-identical replay returns `200` with `Inbound-Replayed: true`; the same provider event id with
 different bytes returns `409 WEBHOOK_EVENT_CONFLICT`. When `EDGE_ORIGIN_SIGNATURE_REQUIRED=true`
 this path (like `/api/v1*`) also requires the edge origin signature.
@@ -155,7 +157,7 @@ this path (like `/api/v1*`) also requires the edge origin signature.
 
 `POST /api/inbound/v1/psp/{provider}` receives signed webhooks from a payment provider. The path
 segment is upper-cased, and only `SIMULATOR` (the provider simulator) has an adapter wired. Any
-other value returns `404 PSP_PROVIDER_UNSUPPORTED` before the body is read. The Razorpay and
+other value returns `404 PSP_PROVIDER_UNSUPPORTED` before the body is parsed. The Razorpay and
 Cashfree adapters exist as code only and are not routed; see [limitations](../limitations.md).
 When `EDGE_ORIGIN_SIGNATURE_REQUIRED=true`, this path also requires the edge origin signature.
 
@@ -168,7 +170,7 @@ When `EDGE_ORIGIN_SIGNATURE_REQUIRED=true`, this path also requires the edge ori
 The body is a simulator envelope, `{eventId, eventType: "effect.updated", occurredAt, effect}`, where
 `effect.stableKey` names the operation. Unknown top-level fields are rejected.
 
-The checks run in this order. The body is not parsed until the signature passes.
+The checks run in this order, after the API body cap. The body is not parsed until the signature passes.
 
 1. All three headers present (`401 PSP_WEBHOOK_HEADERS_MISSING`).
 2. Timestamp is an integer (`401 INVALID_WEBHOOK_TIMESTAMP`).

@@ -167,3 +167,14 @@ def test_mapping_settled_values_decide_which_statuses_land(
     path = _write(tmp_path, f"{HEADER}\npay_1,payment,1.00,,,,PAID\npay_2,payment,1.00,,,,void\n")
     assert _load(conn, path, mapping).rows == 2
     assert [row[-1] for row in _rows(conn)] == [0, 1]
+
+
+def test_every_duplicate_header_is_named_in_one_message(
+    conn: sqlite3.Connection, tmp_path: Path, generic: Mapping
+) -> None:
+    # A wide header with several repeated names: all of them are reported, sorted, in one pass.
+    filler = [f"extra_{n}" for n in range(5_000)]
+    header = ",".join(["reference", "type", "amount", "reference", "amount", *filler])
+    path = _write(tmp_path, header + "\n")
+    with pytest.raises(ReconcileInputError, match=r"duplicate header columns: amount, reference$"):
+        _load(conn, path, generic)

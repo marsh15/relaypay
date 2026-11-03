@@ -1,0 +1,31 @@
+{
+  "run_id": "run-2",
+  "repo": "relaypay",
+  "source_ref": {
+    "commit": "41f3774439f642638dcf662bc8dab6a6f64326b7",
+    "dirty": true,
+    "modified": [
+      "scripts/portfolio_demo.py"
+    ],
+    "untracked": [
+      "docs/handoff/codex-handoff-prompt.md"
+    ]
+  },
+  "profile": "standard",
+  "scope_paths": [
+    ". (excluding project .claude; reserved modules read-only)"
+  ],
+  "budget": null,
+  "execution_policy": "sandboxed-source-and-local-only",
+  "run_status": "complete",
+  "completed_at": "2026-11-03",
+  "final_counts": {
+    "snapshot_files": 866,
+    "reviewed_paths": 217,
+    "coverage_units": 151,
+    "confirmed": 0,
+    "needs_validation": 24,
+    "rejected": 1,
+    "blocked_units": 1
+  }
+}
