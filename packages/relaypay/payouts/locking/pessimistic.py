@@ -1,21 +1,17 @@
-"""Pessimistic payout reservation. HAND-WRITTEN BY THE MAINTAINER; this file is a stub.
+"""Pessimistic payout reservation (implemented by Claude at the maintainer's request).
 
-Spec: inside one transaction, take ``SELECT ... FOR UPDATE`` on the ``merchant_accounts`` row,
-recompute balances with ``derive_balances`` and reserve only if ``amount <= payout_eligible``.
-The row lock serialises all reservations for one merchant, so concurrent callers can never
-overdraw. Idempotency: a repeated key returns REPLAYED with the original payout id.
+Inside one transaction, take ``SELECT ... FOR UPDATE`` on the ``merchant_accounts`` row, recompute
+balances with ``derive_balances`` and reserve only if ``amount <= payout_eligible``. The row lock
+serialises all reservations for one merchant, so concurrent callers can never overdraw. A repeated
+idempotency key returns REPLAYED with the original payout id. See PROVENANCE.md.
 """
 
 from typing import ClassVar
 
-from sqlalchemy.orm import Session, sessionmaker
+from relaypay.payouts.locking.base import GuardedReserver
+from relaypay.payouts.service import ReservationGuard
 
-from relaypay.payouts.locking.types import ReserveOutcome, ReserveRequest
 
-
-class PessimisticReserver:
+class PessimisticReserver(GuardedReserver):
     name: ClassVar[str] = "pessimistic"
-
-    def reserve(self, factory: sessionmaker[Session], request: ReserveRequest) -> ReserveOutcome:
-        """Lock the merchant row FOR UPDATE, recompute balances, reserve if within eligible."""
-        raise NotImplementedError("hand-written by the maintainer; see PROVENANCE")
+    guard: ClassVar[ReservationGuard] = ReservationGuard.ROW_LOCK

@@ -47,6 +47,10 @@ class MerchantAccount(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE")
+    # Compare-and-swap token for the optimistic payout reservation strategy.
+    balance_version: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
 
 
 class SettlementRun(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

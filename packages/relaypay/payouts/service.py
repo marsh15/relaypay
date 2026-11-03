@@ -4,6 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Protocol
 
 import httpx
@@ -61,6 +62,18 @@ class HTTPBankTransport:
             timeout=self._timeout,
         )
         return ProviderObservation(response.status_code, response.content, dict(response.headers))
+
+
+class ReservationGuard(StrEnum):
+    """How concurrent payout reservations for one merchant are kept from overdrawing."""
+
+    ROW_LOCK = "ROW_LOCK"  # SELECT ... FOR UPDATE on the merchant account
+    VERSION = "VERSION"  # optimistic compare-and-swap on merchant_accounts.balance_version
+    CONSTRAINT = "CONSTRAINT"  # no lock; the deferred coverage trigger rejects an overdraw
+
+
+class StaleBalanceVersion(Exception):
+    """Another reservation advanced ``balance_version`` first; the caller retries."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +257,7 @@ def _create_payout_transaction(
     amount: int,
     key_digest: bytes,
     fingerprint: Fingerprint,
+    guard: ReservationGuard = ReservationGuard.ROW_LOCK,
 ) -> CommandResult:
     require_organisation_admin(principal)
     environment = _environment(session, principal, environment_public_id)
@@ -283,10 +297,13 @@ def _create_payout_transaction(
         organisation_id=principal.organisation_id,
         environment_id=environment.id,
         public_id=merchant_public_id,
-        lock=True,
+        lock=guard is ReservationGuard.ROW_LOCK,
     )
+    read_version = merchant.balance_version
     balances = derive_balances(session, merchant)
-    if amount <= 0 or amount > balances.payout_eligible:
+    # The constraint guard leaves the overdraw decision to the deferred trigger at commit.
+    overdraws = amount > balances.payout_eligible and guard is not ReservationGuard.CONSTRAINT
+    if amount <= 0 or overdraws:
         raise RelayPayError(
             code="INSUFFICIENT_PAYOUT_BALANCE",
             message="The payout exceeds the positive payout-eligible balance",
@@ -326,6 +343,19 @@ def _create_payout_transaction(
         amount_delta=amount,
         reason_code="PAYOUT_CREATED",
     )
+    if guard is ReservationGuard.VERSION:
+        advanced = session.scalar(
+            update(MerchantAccount)
+            .where(
+                MerchantAccount.id == merchant.id,
+                MerchantAccount.balance_version == read_version,
+            )
+            .values(balance_version=read_version + 1)
+            .returning(MerchantAccount.id)
+            .execution_options(synchronize_session=False)
+        )
+        if advanced is None:
+            raise StaleBalanceVersion
     _history(
         session,
         payout,
@@ -362,6 +392,7 @@ def create_payout(
     idempotency_key: str,
     fingerprint: Fingerprint,
     key_pepper: str,
+    guard: ReservationGuard = ReservationGuard.ROW_LOCK,
 ) -> CommandResult:
     key_digest = digest_secret(idempotency_key, key_pepper)
     try:
@@ -375,6 +406,7 @@ def create_payout(
                 amount=amount,
                 key_digest=key_digest,
                 fingerprint=fingerprint,
+                guard=guard,
             )
     except IntegrityError:
         with factory() as session, session.begin():
@@ -387,6 +419,7 @@ def create_payout(
                 amount=amount,
                 key_digest=key_digest,
                 fingerprint=fingerprint,
+                guard=guard,
             )
 
 
