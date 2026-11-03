@@ -1,10 +1,14 @@
-"""PSP webhook ordering decision: HAND-WRITTEN BY THE MAINTAINER (see PROVENANCE.md).
+"""PSP webhook ordering decision (implemented by Claude at the maintainer's request).
 
-AI tooling wrote only this interface, its specification and the red tests in
-tests/unit/test_psp_ordering_spec.py. The implementation is the maintainer's.
+Written against the specification and the pre-existing tests in
+tests/unit/test_psp_ordering_spec.py; see PROVENANCE.md.
 """
 
-from relaypay.psp.types import Decision, NormalizedPspEvent, OperationView
+from relaypay.psp.types import Apply, Decision, Ignore, NormalizedPspEvent, OperationView, Review
+
+TERMINAL_STATUSES = frozenset({"SUCCEEDED", "FAILED"})
+# The operation status each non-pending event outcome corresponds to.
+AGREEING_STATUS = {"SUCCEEDED": "SUCCEEDED", "DECLINED": "FAILED"}
 
 
 def decide(view: OperationView, event: NormalizedPspEvent) -> Decision:
@@ -27,4 +31,12 @@ def decide(view: OperationView, event: NormalizedPspEvent) -> Decision:
     delivered up to three times, through ``decide`` plus the finalizer's terminal no-op always
     reaches the same final state as applying the events once, in order.
     """
-    raise NotImplementedError("hand-written by the maintainer; see PROVENANCE")
+    if event.event_id in view.applied_event_ids:
+        return Ignore("DUPLICATE")
+    if event.outcome == "PENDING":
+        return Ignore("STALE")
+    if view.status not in TERMINAL_STATUSES:
+        return Apply(event.outcome)
+    if AGREEING_STATUS[event.outcome] == view.status:
+        return Ignore("DUPLICATE")
+    return Review("CONTRADICTS_TERMINAL_STATE")

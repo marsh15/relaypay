@@ -1,10 +1,17 @@
-"""Fee and GST calculation: HAND-WRITTEN BY THE MAINTAINER (see PROVENANCE.md).
+"""Fee and GST calculation (implemented by Claude at the maintainer's request; see PROVENANCE.md).
 
-AI tooling wrote only this interface, its specification and the red tests in
-tests/unit/test_fee_calculator_spec.py. The implementation is the maintainer's.
+Written against the specification and the pre-existing tests in
+tests/unit/test_fee_calculator_spec.py.
 """
 
 from relaypay.fees.types import FeeBreakdown, FeeScheduleTerms
+
+BPS_DENOMINATOR = 10_000
+
+
+def _round_half_up(numerator: int, denominator: int) -> int:
+    """Round a non-negative fraction to the nearest integer, exact halves upward."""
+    return (2 * numerator + denominator) // (2 * denominator)
 
 
 def compute_capture_fee(amount_paise: int, terms: FeeScheduleTerms) -> FeeBreakdown:
@@ -22,4 +29,15 @@ def compute_capture_fee(amount_paise: int, terms: FeeScheduleTerms) -> FeeBreakd
 
     Returns ``FeeBreakdown(fee, gst, net)`` with ``fee + gst + net == amount_paise``.
     """
-    raise NotImplementedError("hand-written by the maintainer; see PROVENANCE")
+    if amount_paise <= 0:
+        raise ValueError("amount_paise must be positive")
+    fee = _round_half_up(amount_paise * terms.mdr_bps, BPS_DENOMINATOR) + terms.fixed_paise
+    if terms.min_fee_paise is not None:
+        fee = max(fee, terms.min_fee_paise)
+    if terms.max_fee_paise is not None:
+        fee = min(fee, terms.max_fee_paise)
+    gst = _round_half_up(fee * terms.gst_bps, BPS_DENOMINATOR)
+    net = amount_paise - fee - gst
+    if net < 0:
+        raise ValueError("fee and GST exceed the captured amount")
+    return FeeBreakdown(fee=fee, gst=gst, net=net)
