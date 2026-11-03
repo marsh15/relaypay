@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from relaypay.config import Settings
 from relaypay.errors import RelayPayError
+from relaypay.fees.service import create_fee_schedule_version
 from relaypay.identity.models import OrganisationMembership, User
 from relaypay.identity.security import Principal, hash_password
 from relaypay.ledger.models import Journal
@@ -366,3 +367,30 @@ def test_admin_http_routes_need_a_session_and_expose_the_status_filter(
         missing = client.get(f"{base}/journals/{foreign_journal}")
         assert missing.status_code == 404
         assert missing.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
+def test_fee_schedules_list_is_tenant_scoped(
+    factory: sessionmaker[Session], scenario: Scenario
+) -> None:
+    effective = datetime(2026, 1, 1, tzinfo=UTC)
+    with factory() as session, session.begin():
+        for world, mdr in ((scenario.world, 200), (scenario.other, 999)):
+            for rate in (mdr, mdr + 10):
+                create_fee_schedule_version(
+                    session,
+                    merchant_account_id=world.merchant_account_id,
+                    effective_from=effective,
+                    mdr_bps=rate,
+                    fixed_paise=0,
+                )
+    world = scenario.world
+    ids, _ = _walk(
+        factory, world.admin_principal, world.environment_public_id, "fee-schedules", limit=1
+    )
+    page = _page(
+        factory, world.admin_principal, world.environment_public_id, "fee-schedules", limit=10
+    )
+    assert len(ids) == len(set(ids)) == 2
+    assert sorted(row["version"] for row in page.data) == [1, 2]
+    assert {row["mdrBps"] for row in page.data} == {200, 210}
+    assert {row["merchantAccountId"] for row in page.data} == {world.merchant_public_id}

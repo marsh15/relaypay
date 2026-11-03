@@ -123,6 +123,7 @@ layer (see `apps/api/routes/admin.py`); the table lists the permission where the
 | Generic lists | `GET /operations/{resource}` | Cursor-paginated lists over an allowlist of resources |
 | Payment investigation | `GET /operations/payments?status=captured` | Optional persisted status filter; cursor binds to the filter; links to payment evidence in the console |
 | Ledger investigation | `GET /operations/journals`, `GET /journals/{id}` | Journal list and read-only postings detail with `debitTotal`, `creditTotal`, and `balanced` |
+| Fee schedules | `GET /operations/fee-schedules` | Read-only fee schedule versions per merchant account (`version`, `effectiveFrom`, `mdrBps`, `fixedPaise`, `gstBps`, bounds, `refundFeePolicy`); the current terms are the highest version whose `effectiveFrom` has passed |
 | Merchant accounts and balances | `GET`/`POST /merchant-accounts`, `GET /merchant-accounts/{id}/balances`, `/balance-transactions`, `POST /merchant-accounts/{id}/settlements` | Settlement takes an `Idempotency-Key` |
 | Payouts | `GET`/`POST /beneficiaries`, `GET`/`POST /payouts`, `POST /payouts/{id}/attempts` | Create and retry take an `Idempotency-Key` |
 | Reconciliation | `POST /statement-imports` (multipart: `provider`, `sourceReference`, `sourceFormat` CSV or JSON, `file`), `GET /reconciliation-mismatches`, `POST .../{id}/acknowledge`, `/resolve`, `/evidence-versions` | Statement file is capped at 1 MiB; the whole request is capped at 2 MiB (`REQUEST_BODY_TOO_LARGE`, see [error catalog](error-catalog.md#request-size)) |

@@ -117,6 +117,15 @@ _RESOURCES: dict[str, ResourceQuery] = {
         'public_id AS "id", journal_type AS "journalType", '
         'reference_type AS "referenceType", currency, posted_at AS "postedAt"',
     ),
+    # Read-only: versions are appended by a separate admin write path, never edited.
+    "fee-schedules": ResourceQuery(
+        "(SELECT f.*, m.public_id AS merchant_public_id FROM fee_schedule_versions f "
+        "JOIN merchant_accounts m ON m.id = f.merchant_account_id) AS fee_schedule_rows",
+        'public_id AS "id", merchant_public_id AS "merchantAccountId", version, '
+        'effective_from AS "effectiveFrom", mdr_bps AS "mdrBps", fixed_paise AS "fixedPaise", '
+        'gst_bps AS "gstBps", min_fee_paise AS "minFeePaise", max_fee_paise AS "maxFeePaise", '
+        'refund_fee_policy AS "refundFeePolicy"',
+    ),
 }
 
 
@@ -223,7 +232,7 @@ def list_operations_resource(
         f'SELECT {definition.fields}, created_at AS "createdAt", id AS "cursorId" '  # noqa: S608
         f"FROM {definition.source} WHERE organisation_id = :organisation_id "
         f"AND environment_id = :environment_id {dead_letter_clause} {status_clause} "
-        f"{cursor_clause} ORDER BY created_at DESC, id DESC LIMIT :limit"
+        f'{cursor_clause} ORDER BY created_at DESC, "cursorId" DESC LIMIT :limit'
     )
     rows = list(session.execute(statement, parameters).mappings())
     page_rows = rows[:limit]
