@@ -17,6 +17,7 @@ from relaypay.provider_operations.models import ProviderOperation
 from relaypay.settlement_intelligence.execution import run_forecast_batch
 from relaypay.settlement_intelligence.models import (
     SettlementForecast,
+    SettlementForecastItem,
     SettlementPolicy,
     SettlementQuestion,
 )
@@ -860,5 +861,33 @@ def test_provider_failure_fails_the_question_instead_of_stuck_processing() -> No
             assert question.answer == {"failureCode": "SETTLEMENT_PROVIDER_FAILED"}
             run = session.get(WorkflowRun, question.workflow_run_id)
             assert run is not None and run.status == "FAILED"
+    finally:
+        engine.dispose()
+
+
+def test_forecast_holds_a_capture_and_its_own_refund() -> None:
+    engine = build_engine(DATABASE_URL, application_name="m13-forecast-refund")
+    factory = build_session_factory(engine)
+    now = SCENARIO_ANCHOR
+    moments = scenario_moments(now)
+    try:
+        organisation, environment, account = _organisation(factory, "M13 forecast refund")
+        capture = _successful_capture(
+            factory, organisation, environment, 10_000, moments.early_capture
+        )
+        _successful_refund(factory, organisation, environment, capture, 4_000, moments.refund)
+
+        forecast = record_pre_cutoff_forecast_via(factory, organisation, environment, account, now)
+
+        assert (forecast.capture_count, forecast.refund_count) == (1, 1)
+        assert forecast.expected_settlement_amount == 6_000
+        with factory() as session, session.begin():
+            items = session.scalars(
+                select(SettlementForecastItem).where(
+                    SettlementForecastItem.forecast_id == forecast.id
+                )
+            ).all()
+            assert sorted(item.item_type for item in items) == ["CAPTURE", "REFUND"]
+            assert {item.capture_id for item in items} == {capture.id}
     finally:
         engine.dispose()

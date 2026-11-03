@@ -90,7 +90,6 @@ class SettlementForecast(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint("sequence > 0"),
         CheckConstraint("capture_total >= 0 AND refund_total >= 0"),
         CheckConstraint("receivable_offset_total >= 0"),
-        CheckConstraint("expected_settlement_amount >= 0"),
         CheckConstraint(
             "expected_settlement_amount = capture_total - refund_total - receivable_offset_total"
         ),
@@ -143,7 +142,7 @@ class SettlementForecastItem(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             "forecast_id",
             "capture_id",
             unique=True,
-            postgresql_where=text("capture_id IS NOT NULL"),
+            postgresql_where=text("item_type = 'CAPTURE'"),
         ),
         Index(
             "uq_settlement_forecast_items_refund",
