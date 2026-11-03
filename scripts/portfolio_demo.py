@@ -114,7 +114,10 @@ def _run(factory: sessionmaker[Session], settings: Settings) -> dict[str, object
         )
         session.flush([customer])
         environment = session.scalar(
-            select(Environment).where(Environment.organisation_id == organisation.id)
+            select(Environment).where(
+                Environment.organisation_id == organisation.id,
+                Environment.environment_type == "TEST",
+            )
         )
         assert environment is not None
         org_id, env_id = organisation.id, environment.id
