@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseLogoutApiSessionLogoutPost")
 
 @_attrs_define
 class ResponseLogoutApiSessionLogoutPost:
-    """ 
-     """
+    
 
     additional_properties: dict[str, bool] = _attrs_field(init=False, factory=dict)
 

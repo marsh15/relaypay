@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class ConnectorVerifyKind(str, Enum):
+class ConnectorVerifyKind(StrEnum):
     BANK = "BANK"
     PAYMENT = "PAYMENT"
 

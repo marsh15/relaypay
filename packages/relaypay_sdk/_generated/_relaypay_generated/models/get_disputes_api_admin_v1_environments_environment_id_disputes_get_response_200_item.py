@@ -20,8 +20,7 @@ T = TypeVar("T", bound="GetDisputesApiAdminV1EnvironmentsEnvironmentIdDisputesGe
 
 @_attrs_define
 class GetDisputesApiAdminV1EnvironmentsEnvironmentIdDisputesGetResponse200Item:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

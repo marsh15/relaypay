@@ -20,8 +20,7 @@ T = TypeVar("T", bound="GetSettlementPoliciesApiAdminV1EnvironmentsEnvironmentId
 
 @_attrs_define
 class GetSettlementPoliciesApiAdminV1EnvironmentsEnvironmentIdSettlementPoliciesGetResponse200Item:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

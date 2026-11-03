@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponsePostApprovalDecisionApiAdminV1EnvironmentsEnviro
 
 @_attrs_define
 class ResponsePostApprovalDecisionApiAdminV1EnvironmentsEnvironmentIdApprovalRequestsRequestIdDecisionsPost:
-    """ 
-     """
+    
 
     additional_properties: dict[str, str] = _attrs_field(init=False, factory=dict)
 

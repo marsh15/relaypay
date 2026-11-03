@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponsePatchApiKeyScopesApiAdminV1EnvironmentsEnvironme
 
 @_attrs_define
 class ResponsePatchApiKeyScopesApiAdminV1EnvironmentsEnvironmentIdApiKeysKeyIdScopesPatch:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

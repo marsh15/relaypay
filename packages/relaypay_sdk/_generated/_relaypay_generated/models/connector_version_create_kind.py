@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class ConnectorVersionCreateKind(str, Enum):
+class ConnectorVersionCreateKind(StrEnum):
     BANK = "BANK"
     COMMERCE = "COMMERCE"
     PAYMENT = "PAYMENT"

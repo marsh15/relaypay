@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class StructuredDisputeDraftConfidence(str, Enum):
+class StructuredDisputeDraftConfidence(StrEnum):
     HIGH = "HIGH"
     LOW = "LOW"
     MEDIUM = "MEDIUM"

@@ -43,7 +43,7 @@ class SubscriptionCreate:
 
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.subscription_consent import SubscriptionConsent
+        from ..models.subscription_consent import SubscriptionConsent # noqa: PLC0415
         amount = self.amount
 
         consent = self.consent.to_dict()
@@ -71,7 +71,7 @@ class SubscriptionCreate:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.subscription_consent import SubscriptionConsent
+        from ..models.subscription_consent import SubscriptionConsent # noqa: PLC0415
         d = dict(src_dict)
         amount = d.pop("amount")
 

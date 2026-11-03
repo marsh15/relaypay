@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class BodyPostStatementImportApiAdminV1EnvironmentsEnvironmentIdStatementImportsPostSourceformat(str, Enum):
+class BodyPostStatementImportApiAdminV1EnvironmentsEnvironmentIdStatementImportsPostSourceformat(StrEnum):
     CSV = "CSV"
     JSON = "JSON"
 

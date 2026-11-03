@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class RecurringFailureCreateOutcome(str, Enum):
+class RecurringFailureCreateOutcome(StrEnum):
     TRANSPORT_UNKNOWN = "TRANSPORT_UNKNOWN"
     VERIFIED_FAILED = "VERIFIED_FAILED"
 

@@ -44,7 +44,7 @@ class StructuredDisputeDraft:
 
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.citation import Citation
+        from ..models.citation import Citation # noqa: PLC0415
         citations = []
         for citations_item_data in self.citations:
             citations_item = citations_item_data.to_dict()
@@ -79,7 +79,7 @@ class StructuredDisputeDraft:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.citation import Citation
+        from ..models.citation import Citation # noqa: PLC0415
         d = dict(src_dict)
         citations = []
         _citations = d.pop("citations")

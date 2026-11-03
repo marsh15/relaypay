@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class RecoveryOptOutCreateChannel(str, Enum):
+class RecoveryOptOutCreateChannel(StrEnum):
     ALL = "ALL"
     EMAIL = "EMAIL"
     IN_APP = "IN_APP"

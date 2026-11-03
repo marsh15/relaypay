@@ -20,8 +20,7 @@ T = TypeVar("T", bound="EmptyCommand")
 
 @_attrs_define
 class EmptyCommand:
-    """ 
-     """
+    
 
 
 

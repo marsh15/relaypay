@@ -45,7 +45,7 @@ class ValidationError:
 
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.context import Context
+        from ..models.context import Context # noqa: PLC0415
         loc = []
         for loc_item_data in self.loc:
             loc_item: int | str
@@ -83,7 +83,7 @@ class ValidationError:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.context import Context
+        from ..models.context import Context # noqa: PLC0415
         d = dict(src_dict)
         loc = []
         _loc = d.pop("loc")

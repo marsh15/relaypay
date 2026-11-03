@@ -20,8 +20,7 @@ T = TypeVar("T", bound="GetMerchantAccountsApiAdminV1EnvironmentsEnvironmentIdMe
 
 @_attrs_define
 class GetMerchantAccountsApiAdminV1EnvironmentsEnvironmentIdMerchantAccountsGetResponse200Item:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

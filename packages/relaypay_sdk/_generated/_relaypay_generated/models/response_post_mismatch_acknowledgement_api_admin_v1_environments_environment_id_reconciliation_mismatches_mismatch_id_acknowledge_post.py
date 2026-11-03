@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponsePostMismatchAcknowledgementApiAdminV1Environment
 
 @_attrs_define
 class ResponsePostMismatchAcknowledgementApiAdminV1EnvironmentsEnvironmentIdReconciliationMismatchesMismatchIdAcknowledgePost:
-    """ 
-     """
+    
 
     additional_properties: dict[str, str] = _attrs_field(init=False, factory=dict)
 

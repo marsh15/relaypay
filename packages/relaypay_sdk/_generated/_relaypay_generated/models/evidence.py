@@ -20,8 +20,7 @@ T = TypeVar("T", bound="Evidence")
 
 @_attrs_define
 class Evidence:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

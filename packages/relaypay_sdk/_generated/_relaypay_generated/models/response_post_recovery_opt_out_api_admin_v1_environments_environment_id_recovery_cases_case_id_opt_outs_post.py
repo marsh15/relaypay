@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponsePostRecoveryOptOutApiAdminV1EnvironmentsEnvironm
 
 @_attrs_define
 class ResponsePostRecoveryOptOutApiAdminV1EnvironmentsEnvironmentIdRecoveryCasesCaseIdOptOutsPost:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

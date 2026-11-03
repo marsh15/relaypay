@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class SettlementPolicyCreateWeekendhandling(str, Enum):
+class SettlementPolicyCreateWeekendhandling(StrEnum):
     INCLUDE = "INCLUDE"
     SKIP = "SKIP"
 

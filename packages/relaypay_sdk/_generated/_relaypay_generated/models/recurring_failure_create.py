@@ -44,7 +44,7 @@ class RecurringFailureCreate:
 
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.evidence import Evidence
+        from ..models.evidence import Evidence # noqa: PLC0415
         evidence = self.evidence.to_dict()
 
         outcome = self.outcome.value
@@ -72,7 +72,7 @@ class RecurringFailureCreate:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.evidence import Evidence
+        from ..models.evidence import Evidence # noqa: PLC0415
         d = dict(src_dict)
         evidence = Evidence.from_dict(d.pop("evidence"))
 

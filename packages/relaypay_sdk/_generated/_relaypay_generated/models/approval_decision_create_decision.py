@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class ApprovalDecisionCreateDecision(str, Enum):
+class ApprovalDecisionCreateDecision(StrEnum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
 

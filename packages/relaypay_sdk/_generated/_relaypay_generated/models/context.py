@@ -20,8 +20,7 @@ T = TypeVar("T", bound="Context")
 
 @_attrs_define
 class Context:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

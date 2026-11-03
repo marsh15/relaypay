@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseGetDeliveryApiV1WebhookDeliveriesDeliveryIdGet")
 
 @_attrs_define
 class ResponseGetDeliveryApiV1WebhookDeliveriesDeliveryIdGet:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

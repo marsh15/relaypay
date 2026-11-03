@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseGetMerchantAccountBalancesApiAdminV1Environments
 
 @_attrs_define
 class ResponseGetMerchantAccountBalancesApiAdminV1EnvironmentsEnvironmentIdMerchantAccountsMerchantAccountIdBalancesGet:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

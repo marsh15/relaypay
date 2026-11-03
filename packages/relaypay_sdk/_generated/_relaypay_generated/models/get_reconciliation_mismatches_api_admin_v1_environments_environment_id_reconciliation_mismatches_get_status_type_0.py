@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class GetReconciliationMismatchesApiAdminV1EnvironmentsEnvironmentIdReconciliationMismatchesGetStatusType0(str, Enum):
+class GetReconciliationMismatchesApiAdminV1EnvironmentsEnvironmentIdReconciliationMismatchesGetStatusType0(StrEnum):
     ACKNOWLEDGED = "ACKNOWLEDGED"
     OPEN = "OPEN"
     RESOLVED = "RESOLVED"

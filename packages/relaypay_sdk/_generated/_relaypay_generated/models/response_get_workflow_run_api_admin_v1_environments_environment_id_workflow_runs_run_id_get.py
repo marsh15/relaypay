@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseGetWorkflowRunApiAdminV1EnvironmentsEnvironmentI
 
 @_attrs_define
 class ResponseGetWorkflowRunApiAdminV1EnvironmentsEnvironmentIdWorkflowRunsRunIdGet:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

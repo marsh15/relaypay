@@ -20,8 +20,7 @@ T = TypeVar("T", bound="GetPayoutsApiAdminV1EnvironmentsEnvironmentIdPayoutsGetR
 
 @_attrs_define
 class GetPayoutsApiAdminV1EnvironmentsEnvironmentIdPayoutsGetResponse200Item:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

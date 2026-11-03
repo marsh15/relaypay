@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseGetPaymentEvidenceApiV1PaymentIntentsPaymentIdEv
 
 @_attrs_define
 class ResponseGetPaymentEvidenceApiV1PaymentIntentsPaymentIdEvidenceGet:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

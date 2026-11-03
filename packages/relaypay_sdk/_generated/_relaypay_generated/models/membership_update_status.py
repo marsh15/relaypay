@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class MembershipUpdateStatus(str, Enum):
+class MembershipUpdateStatus(StrEnum):
     ACTIVE = "ACTIVE"
     DISABLED = "DISABLED"
 

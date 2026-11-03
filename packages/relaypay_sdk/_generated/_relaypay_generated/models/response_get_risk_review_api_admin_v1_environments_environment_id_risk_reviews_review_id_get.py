@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseGetRiskReviewApiAdminV1EnvironmentsEnvironmentId
 
 @_attrs_define
 class ResponseGetRiskReviewApiAdminV1EnvironmentsEnvironmentIdRiskReviewsReviewIdGet:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

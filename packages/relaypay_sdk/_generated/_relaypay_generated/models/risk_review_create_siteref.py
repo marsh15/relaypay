@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class RiskReviewCreateSiteref(str, Enum):
+class RiskReviewCreateSiteref(StrEnum):
     COMPLETE_CLEAN = "COMPLETE_CLEAN"
     MISSING_POLICIES = "MISSING_POLICIES"
     PRICE_OUTLIER = "PRICE_OUTLIER"

@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class SubscriptionConsentChannelsItem(str, Enum):
+class SubscriptionConsentChannelsItem(StrEnum):
     EMAIL = "EMAIL"
     IN_APP = "IN_APP"
     WHATSAPP = "WHATSAPP"

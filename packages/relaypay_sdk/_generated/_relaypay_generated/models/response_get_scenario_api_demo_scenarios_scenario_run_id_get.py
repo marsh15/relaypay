@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseGetScenarioApiDemoScenariosScenarioRunIdGet")
 
 @_attrs_define
 class ResponseGetScenarioApiDemoScenariosScenarioRunIdGet:
-    """ 
-     """
+    
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

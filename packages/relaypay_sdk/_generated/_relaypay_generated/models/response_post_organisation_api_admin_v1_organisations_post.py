@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponsePostOrganisationApiAdminV1OrganisationsPost")
 
 @_attrs_define
 class ResponsePostOrganisationApiAdminV1OrganisationsPost:
-    """ 
-     """
+    
 
     additional_properties: dict[str, str] = _attrs_field(init=False, factory=dict)
 

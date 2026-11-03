@@ -20,8 +20,7 @@ T = TypeVar("T", bound="ResponseReadyHealthReadyGet")
 
 @_attrs_define
 class ResponseReadyHealthReadyGet:
-    """ 
-     """
+    
 
     additional_properties: dict[str, str] = _attrs_field(init=False, factory=dict)
 
