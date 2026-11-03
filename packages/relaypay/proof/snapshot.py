@@ -514,20 +514,40 @@ def _stream_postings(
         yield PostingSnap(str(row.journal_id), str(row.account_id), row.side, row.amount)
 
 
+def _chain_order(
+    rows: list[tuple[str | None, str, str]],
+) -> list[tuple[str | None, str, str]]:
+    """Order one operation's rows as the walk they record.
+
+    Rows written in one transaction share ``created_at``, so (created_at, id) cannot tell which
+    came first. Follow from-status to to-status from PROCESSING (creation is not recorded); rows
+    that do not continue the walk keep their database order after it, so a corrupt history stays
+    visible to the checker instead of being repaired here.
+    """
+    remaining = list(rows)
+    ordered: list[tuple[str | None, str, str]] = []
+    current: str | None = "PROCESSING"
+    while remaining:
+        step = next((row for row in remaining if row[0] == current), None)
+        if step is None:
+            break
+        remaining.remove(step)
+        ordered.append(step)
+        current = step[1]
+    return [*ordered, *remaining]
+
+
 def _number_history(
     rows: Sequence[Row[tuple[uuid.UUID, str | None, str, str]]],
 ) -> tuple[OperationHistorySnap, ...]:
-    snaps: list[OperationHistorySnap] = []
-    previous: uuid.UUID | None = None
-    ordinal = 0
-    for row in rows:
-        operation_id, from_status, to_status, reason_code = row
-        ordinal = ordinal + 1 if operation_id == previous else 0
-        previous = operation_id
-        snaps.append(
-            OperationHistorySnap(str(operation_id), ordinal, from_status, to_status, reason_code)
-        )
-    return tuple(snaps)
+    by_operation: dict[uuid.UUID, list[tuple[str | None, str, str]]] = {}
+    for operation_id, from_status, to_status, reason_code in rows:
+        by_operation.setdefault(operation_id, []).append((from_status, to_status, reason_code))
+    return tuple(
+        OperationHistorySnap(str(operation_id), ordinal, from_status, to_status, reason_code)
+        for operation_id, steps in by_operation.items()
+        for ordinal, (from_status, to_status, reason_code) in enumerate(_chain_order(steps))
+    )
 
 
 def _read_provider_effects(
