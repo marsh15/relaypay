@@ -72,8 +72,14 @@ def _locked_graph(
     )
     if payment is None:
         raise RuntimeError("provider operation payment is missing")
+    # ``initial`` is already in the identity map with an unlocked read of ``status``; without
+    # populate_existing the locked re-read would keep that stale value, and a finalizer that
+    # waited on the lock would finalize an already-terminal operation a second time.
     operation = session.scalar(
-        select(ProviderOperation).where(ProviderOperation.id == operation_id).with_for_update()
+        select(ProviderOperation)
+        .where(ProviderOperation.id == operation_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if operation is None:
         raise RuntimeError("provider operation is missing")
