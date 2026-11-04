@@ -1,7 +1,7 @@
 """M17: inbox PSP events become WEBHOOK evidence and finalize through the one finalizer.
 
-``decide`` is hand-written by the maintainer (PROVENANCE.md), so these tests inject fixed
-deciders: they test the applier's plumbing, not the ordering rule.
+These tests inject fixed deciders: they test the applier's plumbing, not the ordering rule
+(``decide`` has its own specification tests).
 """
 
 from collections.abc import Iterator
@@ -136,11 +136,18 @@ def _webhook_attempts(factory: sessionmaker[Session], operation: ProviderOperati
         )
 
 
-def test_without_the_ordering_rule_events_are_deferred(factory: sessionmaker[Session]) -> None:
+def _unavailable(view: OperationView, event: NormalizedPspEvent) -> Decision:
+    del view, event
+    raise NotImplementedError
+
+
+def test_when_the_ordering_rule_is_unavailable_events_are_deferred(
+    factory: sessionmaker[Session],
+) -> None:
     world, operation, provider = _lost_authorization(factory, "psp-apply-deferred")
     event = _deliver(factory, _effect(provider, operation))
 
-    assert _run(factory, world, applier.decide) == 1
+    assert _run(factory, world, _unavailable) == 1
 
     row = _event(factory, event)
     assert (row.status, row.outcome_code) == ("DEFERRED", "ORDERING_DECISION_UNAVAILABLE")

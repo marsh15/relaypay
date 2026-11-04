@@ -94,10 +94,11 @@ def _seed(database_url: str) -> dict[str, int]:
                 )
             )
             assert environment is not None
-            merchant = session.scalar(
-                select(MerchantAccount).where(MerchantAccount.environment_id == environment.id)
+            # Only the id: the ORM entity also selects columns added by later migrations.
+            merchant_id = session.scalar(
+                select(MerchantAccount.id).where(MerchantAccount.environment_id == environment.id)
             )
-            assert merchant is not None
+            assert merchant_id is not None
             scope = {"organisation_id": organisation.id, "environment_id": environment.id}
 
             def add(row: object) -> uuid.UUID:
@@ -216,7 +217,7 @@ def _seed(database_url: str) -> dict[str, int]:
                 SettlementPolicy(
                     **scope,
                     public_id=f"spv_{tag}",
-                    merchant_account_id=merchant.id,
+                    merchant_account_id=merchant_id,
                     version=1,
                     timezone_name="Asia/Kolkata",
                     cutoff_hour=17,
