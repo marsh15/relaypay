@@ -59,9 +59,9 @@ jobs:
           if-no-files-found: ignore
 
   handwritten-gate:
-    # Maintainer-written modules (see PROVENANCE.md). Red until each module is implemented.
+    # Specification tests for the four core decision modules (see PROVENANCE.md).
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

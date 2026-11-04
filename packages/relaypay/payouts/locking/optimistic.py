@@ -19,7 +19,8 @@ from relaypay.payouts.locking.base import DEFAULT_KEY_PEPPER, GuardedReserver
 from relaypay.payouts.service import CommandResult, ReservationGuard, StaleBalanceVersion
 
 DEFAULT_MAX_ATTEMPTS = 1_000
-MAX_BACKOFF_SECONDS = 0.005
+BASE_BACKOFF_SECONDS = 0.005
+MAX_BACKOFF_SECONDS = 0.25
 
 
 class OptimisticReservationExhausted(RuntimeError):
@@ -41,8 +42,10 @@ class OptimisticReserver(GuardedReserver):
             try:
                 return create(), attempt
             except StaleBalanceVersion:
-                # Jitter keeps the losers from retrying in lockstep.
-                time.sleep(random.uniform(0, MAX_BACKOFF_SECONDS))  # noqa: S311 - not security
+                # Exponential backoff with full jitter: every round admits one winner, so losers
+                # that retry at once only add transactions that lose again.
+                ceiling = min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * 2 ** min(attempt, 6))
+                time.sleep(random.uniform(0, ceiling))  # noqa: S311 - not security
             except RelayPayError as error:
                 if error.code == "INSUFFICIENT_PAYOUT_BALANCE":
                     return None, attempt

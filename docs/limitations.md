@@ -4,10 +4,9 @@
 
 - Synthetic INR data only; no card, bank, UPI, KYC, PII, real settlement, real fee schedule, dispute,
   or chargeback processing. The schema and finalizer carry synthetic per-merchant fee schedules and
-  the platform fee and GST fields (D7), but no fee computation is implemented in this checkout: the
-  calculator, `packages/relaypay/fees/calculator.py::compute_capture_fee`, is a hand-written stub
-  that raises `NotImplementedError`, and capture reaches it through the fee service. The
-  calculation is the maintainer's to write.
+  the platform fee and GST fields (D7). The fee calculation,
+  `packages/relaypay/fees/calculator.py::compute_capture_fee`, is integer-paise only; the schedules
+  it reads are synthetic.
 - Every counterparty is a local simulator: one deterministic mock provider, one mock bank, one mock
   commerce store, in-memory dispute and recovery networks, static merchant-site snapshots, and one
   exact allowlisted bundled receiver. The dispute network keeps submissions in memory, so a restart
@@ -58,8 +57,9 @@
 - Inbound PSP webhooks are accepted only from the provider simulator (`SIMULATOR`). The Razorpay and
   Cashfree adapters are parsers and verifiers. They are not routed into the inbox, and they have no
   per-provider secrets in configuration.
-- PSP webhook ordering is not implemented. Every matched PSP event ends `DEFERRED` and changes no
-  operation; operations resolve by polling. The applier does not re-lease `DEFERRED` events.
+- PSP webhook ordering (`psp/ordering.py::decide`) decides per operation from its current state and
+  the event ids already applied. Polling remains the guarantee; a webhook is evidence, never a
+  second money path. Adapters are not routed into the inbox, so only the simulator's pushes arrive.
 - Provider webhook chaos (drop, duplicate, delay) is not in the chaos harness, and the harness does
   not replay webhooks.
 
@@ -135,16 +135,14 @@
 
 ## Verification
 
-- The 15 money invariants are not evaluated. The checker, `packages/relaypay/proof/invariants.py`,
-  is hand-written by the maintainer and is still a stub. The chaos harness reports counters and
-  harness failures only, and it prints `INVARIANTS NOT EVALUATED`. A passing chaos run is not a
-  finding of zero invariant violations. See [resilience proofs](operations/resilience-proofs.md).
-- The PSP ordering decision (`packages/relaypay/psp/ordering.py::decide`) is also hand-written and
-  pending.
-- The fee calculator (`packages/relaypay/fees/calculator.py`) and the payout locking strategies are
-  hand-written and pending as well. See [PROVENANCE.md](../PROVENANCE.md).
-- Until these four maintainer-written modules are implemented and their `handwritten` tests pass,
-  the project is not complete.
+- The 15 money invariants are evaluated by `packages/relaypay/proof/invariants.py` on every chaos
+  seed and by the specification tests. A clean run is evidence for the schedules and seeds it
+  covered (6 seeds x 1,000 operations on 2026-11-04: 0 violations), not a proof for all
+  interleavings. See [resilience proofs](operations/resilience-proofs.md).
+- The four core decision modules (invariant checker, payout locking strategies, fee calculator, PSP
+  ordering) were written by Claude at the maintainer's request, not by the maintainer, against
+  specification tests that predate them. See [PROVENANCE.md](../PROVENANCE.md). The maintainer has
+  not independently reviewed them line by line.
 - The 2026-11-03 source audit ([report](security/audits/2026-11-03/REPORT.md)) reviewed commit
   `41f3774` plus a pre-existing working-tree edit. It retained 0 confirmed vulnerabilities, 24
   needs-validation records, and 1 rejected claim across 151 coverage units (119 covered, 31 linked

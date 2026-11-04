@@ -19,8 +19,8 @@ Inbound PSP webhooks are stored in `psp_events` (migration 0026) and applied by 
 | `PENDING` | Accepted and matched to one operation | none | Nothing. The poller leases it on the next tick. A long-lived `PENDING` row means the poller is not running. |
 | `PROCESSING` | Leased by the poller | none | Nothing. A lease lapses after 30 seconds and the event is re-leased. |
 | `APPLIED` | Recorded as a `WEBHOOK` provider attempt and finalized | none | Nothing. |
-| `IGNORED` | The ordering decision says duplicate or stale | `DUPLICATE` or `STALE` | No code path produces this yet. It needs the hand-written `decide`. |
-| `DEFERRED` | Matched, but `decide` is not implemented | `ORDERING_DECISION_UNAVAILABLE` | Nothing. Every matched event ends here today. The operation is resolved by polling, not by the webhook. The applier does not re-lease `DEFERRED` rows, so they are not retried later by the poller. |
+| `IGNORED` | The ordering decision says duplicate or stale | `DUPLICATE` or `STALE` | Nothing. A duplicate or stale report changes no operation. |
+| `DEFERRED` | Matched, but the ordering decision was unavailable | `ORDERING_DECISION_UNAVAILABLE` | Nothing. The operation is resolved by polling. The applier does not re-lease `DEFERRED` rows, so they are not retried later by the poller. `decide` is implemented, so this status is not produced in normal operation. |
 | `REVIEW` | The envelope is invalid, or its identity does not match the operation | `INVALID_EVIDENCE` or `MISMATCHED_EVIDENCE` | Investigate, as described under [REQUIRES_REVIEW](#operations-in-requires_review). The operation is also moved to `REQUIRES_REVIEW` with the same reason. |
 | `UNMATCHED` | No operation has that stable key at ingest, or more than one does | none | Nothing automatic. The applier never claims or re-matches `UNMATCHED` rows. Keep the row for reconciliation, and find out which provider effect it describes. |
 | `DEAD_LETTER` | Claimed five times without finishing | `ATTEMPTS_EXHAUSTED` | Find the cause in the logs (`psp_event_apply_failed`, with the event id). Repeated finalize failures move the operation to `REQUIRES_REVIEW` with reason `APPLY_FAILURE` after three attempts. |
@@ -109,11 +109,12 @@ or is falling behind; check its logs.
 `--mode full --seeds 200 --ops 10000`, which is manual only.
 
 - The summary is written to `output/chaos/summary-ci-<UTC timestamp>.json`.
-- While the invariant checker is a stub, the run prints `INVARIANTS NOT EVALUATED`. The run does not
-  claim zero violations.
+- Each seed reports `invariants: N violations`. A seed with violations is dumped to
+  `output/chaos/seed-<n>.json`; the `violations` list names the invariant code and the offending row.
+  Reproduce it with the `repro seed` line the run prints.
 - Exit status is `1` when any seed has a harness failure, such as an unexpected exception, an
   operation that does not converge after quiesce, or a broken provider exactly-once check. Otherwise
-  it is `0`. `--require-invariants` returns `2` while the checker is absent.
+  it is `0`. `--require-invariants` returns `2` if the checker cannot run.
 - A failing seed writes `output/chaos/seed-<N>.json`. It holds the seed's summary, its failure
   messages (at most 25), any violations, the operation schedule, and the operation log. The run
   prints a repro line: `uv run python -m scripts.chaos.run --mode ci --seeds-list <N> --ops 1000`.

@@ -21,8 +21,9 @@ Current version: **1.0.1** ([release notes](docs/releases/v1.0.1.md)). Licensed 
 
 `main` also contains ongoing v2 work: persisted payment states, partial capture, void and
 expiry, a PSP evidence inbox, and fixtures-first gateway adapters. It is not a completed v2
-release. Four core decision modules remain reserved for the maintainer in
-[PROVENANCE.md](PROVENANCE.md); the handwritten CI gate remains red until they are implemented.
+release. Four core decision modules (invariant checker, payout locking, fee calculator, PSP
+ordering) were implemented by Claude at the maintainer's request; [PROVENANCE.md](PROVENANCE.md)
+states exactly who wrote what.
 
 For offline seller investigations, [relaypay-reconcile](packages/relaypay_reconcile/README.md)
 streams settlement and order CSVs through local SQLite and emits deterministic exception reports.
@@ -234,8 +235,8 @@ in `tests/unit` and `tests/integration`; console journeys in `apps/console/e2e`;
 `apps/edge/test`. Recorded release runs are in [docs/test-evidence.md](docs/test-evidence.md) and
 [docs/evidence/](docs/evidence/).
 
-The chaos harness explicitly reports when the handwritten invariant checker has not run.
-A passing harness schedule is not a claim that all fifteen money invariants were evaluated.
+The chaos harness evaluates the fifteen money invariants on every seed and reports violations. A clean
+run covers the schedules and seeds it ran, not every interleaving.
 
 ## Configuration and deployment
 

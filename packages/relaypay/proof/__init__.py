@@ -1,7 +1,7 @@
 """Proof harness: capture a point-in-time SystemSnapshot and check the money invariants on it.
 
-``snapshot_types`` and ``snapshot`` are agent-owned plumbing. ``invariants`` is hand-written
-by the maintainer (see PROVENANCE); until it is, ``check_invariants`` raises NotImplementedError.
+``snapshot_types`` and ``snapshot`` capture the state; ``invariants`` checks it (see PROVENANCE
+for who wrote which module).
 """
 
 from relaypay.proof.invariants import check_invariants

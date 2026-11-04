@@ -1,11 +1,12 @@
 # Resilience proofs
 
 Each resilience property below is mapped to an executable test in the canonical suite, and the
-suite runs in the CI release gate. The exception is the money invariants. The maintainer's
-invariant checker (`packages/relaypay/proof/invariants.py`) is still a hand-written stub that
-raises `NotImplementedError`, so no test currently evaluates the 15 money invariants, and no
-chaos run has an invariant verdict. The chaos harness reports counters and harness failures
-only. See [PROVENANCE.md](../../PROVENANCE.md).
+suite runs in the CI release gate. The 15 money invariants are evaluated by
+`packages/relaypay/proof/invariants.py` on every chaos seed and by `tests/unit/test_invariants_spec.py`.
+The checker was written by Claude at the maintainer's request; see
+[PROVENANCE.md](../../PROVENANCE.md). Its first run on real chaos data found a double-finalization bug
+(a waiting finalizer reused a stale operation status), now fixed and covered by
+`tests/integration/test_finalizer_locked_read.py`.
 
 | Requirement | Proof (test files) | Mechanism exercised |
 | --- | --- | --- |
@@ -28,12 +29,9 @@ only. See [PROVENANCE.md](../../PROVENANCE.md).
 ## v2.0 proof harness (M15, extended in M16 and M17)
 
 The CI `proof-gate` job runs `pytest -m "(proof or chaos) and not handwritten"` and `make chaos`.
-The invariant check runs in `handwritten-gate`, which is red by design until the maintainer's
-checker lands.
+The specification tests for the four core modules run in `handwritten-gate`.
 
-`make chaos` runs without `--require-invariants`, so an unevaluated invariant check does not fail
-the run. The run prints `INVARIANTS NOT EVALUATED` in that case. The run fails only on harness
-failures: unexpected exceptions, operations that do not converge after quiesce, or a broken
+`make chaos` fails on harness failures and reports invariant violations per seed: unexpected exceptions, operations that do not converge after quiesce, or a broken
 provider exactly-once check. The per-run `findings` counter is not incremented by any current
 code path, so it is always empty. See [the runbook](runbook.md#chaos-runs) for how to read a
 failing seed.
@@ -51,7 +49,7 @@ failing seed.
 ## PSP webhooks and provider chaos (M17)
 
 These cover the inbound PSP inbox, the applier, and the provider simulator's chaos and push. The
-ordering decision is not implemented, so every applied event currently ends `DEFERRED`. See
+ordering decision applies, ignores or reviews each event by operation state. See
 [ADR-012](../adr/012-webhooks-are-evidence-not-a-money-path.md).
 
 | Requirement | Proof (test files) | Mechanism exercised |
