@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.errors import RelayPayError, not_found
+from relaypay.event_delivery.service import append_payout_event
 from relaypay.idempotency import Fingerprint, canonical_json_bytes, digest_secret
 from relaypay.identity.models import Environment
 from relaypay.identity.security import Principal
@@ -878,6 +879,7 @@ def record_bank_observation(
                     event_sha256=hashlib.sha256(event_bytes).digest(),
                 )
             )
+            append_payout_event(session, payout=payout, occurred_at=payout.completed_at)
             _history(
                 session,
                 payout,

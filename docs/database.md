@@ -110,8 +110,11 @@ About 90 tables, grouped by package.
 - **One settlement per capture.** `settlement_items` is unique on `capture_id` and `journal_id`.
 - **One initial delivery per recipient.** A partial unique index on `webhook_deliveries` where
   `replay_of_delivery_id IS NULL`; replays are separate rows.
-- **Merchant event types** are limited by a check to `payment.authorized.v1`,
-  `payment.captured.v1`, and `refund.succeeded.v1`. Payout events use `payout_events`.
+- **Merchant event types** are limited by a check to the seven types in the
+  [API reference](api/reference.md#merchant-webhooks-relaypay-to-the-receiver). A `merchant_events`
+  row has exactly one parent shape, enforced by `merchant_events_parent_check`: a provider operation
+  (with its payment), a payout (`payout.succeeded.v1` only), or a payment alone
+  (`payment.expired.v1` only, because expiry is local). `payout_events` remains the internal log.
 - **Maker-checker.** `approval_decisions` checks `decision_maker_user_id <> maker_user_id`.
 - **Bounded recovery.** `recovery_cases.payment_retry_count` and `message_count` are each
   limited to 0 to 3.

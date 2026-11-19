@@ -197,9 +197,9 @@ def finalize_verified_attempt(
                 actor=actor_type,
             )
         elif isinstance(resource, Void):
-            # A void releases the hold: nothing is posted, and no merchant event type exists for
-            # it yet (merchant events gain non-capture parents in M17).
-            event_type = None
+            # A void releases the hold and posts nothing. A declined void changes nothing the
+            # merchant can see, so only a successful void is announced.
+            event_type = "payment.cancelled.v1"
             resource.status = terminal_status
             resource.voided_at = now if succeeded else None
             resource.failure_code = failure_code
@@ -237,7 +237,12 @@ def finalize_verified_attempt(
                     actor=actor_type,
                 )
 
-        if succeeded and event_type is not None:
+        # A declined authorization or capture fails the payment, which the merchant is told once.
+        # A declined void or refund leaves the payment as it was, so there is nothing to announce.
+        announced: str | None = event_type if succeeded else None
+        if not succeeded and isinstance(resource, Authorization | Capture):
+            announced = "payment.failed.v1"
+        if announced is not None:
             append_merchant_event(
                 session,
                 payment=payment,
@@ -245,8 +250,9 @@ def finalize_verified_attempt(
                 resource_public_id=resource.public_id,
                 amount=resource.amount,
                 currency=resource.currency,
-                event_type=event_type,
+                event_type=announced,
                 occurred_at=now,
+                failure_code=None if succeeded else failure_code,
             )
 
         response = canonical_json_bytes(

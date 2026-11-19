@@ -52,8 +52,9 @@
   covered by scheduler unit tests; a live broker-stop recovery drill is not recorded here.
   See the [runbook](operations/runbook.md#redpanda-and-the-outbox).
 - Redpanda runs in `dev-container` mode with no data volume, in the production overlay as well.
-- Merchant webhooks support three event types (`payment.authorized.v1`, `payment.captured.v1`,
-  `refund.succeeded.v1`) to one bundled receiver.
+- Merchant webhooks support seven event types (see the API reference) to one bundled receiver. The
+  seeded demo endpoints still subscribe only to the original three. A declined void or refund
+  emits no event.
 - Inbound PSP webhooks are accepted only from the provider simulator (`SIMULATOR`). The Razorpay and
   Cashfree adapters are parsers and verifiers. They are not routed into the inbox, and they have no
   per-provider secrets in configuration.

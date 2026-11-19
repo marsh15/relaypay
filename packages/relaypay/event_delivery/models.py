@@ -23,8 +23,13 @@ from relaypay.model_mixins import CreatedAtMixin, UpdatedAtMixin, UUIDPrimaryKey
 EVENT_TYPES = (
     "payment.authorized.v1",
     "payment.captured.v1",
+    "payment.failed.v1",
+    "payment.cancelled.v1",
+    "payment.expired.v1",
     "refund.succeeded.v1",
+    "payout.succeeded.v1",
 )
+_EVENT_TYPE_LIST = ", ".join(f"'{t}'" for t in EVENT_TYPES)
 
 
 class WebhookEndpoint(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -73,10 +78,7 @@ class WebhookEndpointVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint("version > 0"),
         CheckConstraint("active_until IS NULL OR active_until > active_from"),
         CheckConstraint("cardinality(subscribed_event_types) > 0"),
-        CheckConstraint(
-            "subscribed_event_types <@ ARRAY['payment.authorized.v1', "
-            "'payment.captured.v1', 'refund.succeeded.v1']::varchar[]"
-        ),
+        CheckConstraint(f"subscribed_event_types <@ ARRAY[{_EVENT_TYPE_LIST}]::varchar[]"),
     )
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -125,10 +127,35 @@ class MerchantEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         UniqueConstraint("organisation_id", "environment_id", "id"),
         UniqueConstraint("organisation_id", "id"),
         UniqueConstraint("provider_operation_id", "event_type"),
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "payout_id"],
+            ["payouts.organisation_id", "payouts.environment_id", "payouts.id"],
+        ),
+        CheckConstraint(f"event_type IN ({_EVENT_TYPE_LIST})"),
         CheckConstraint(
-            "event_type IN ('payment.authorized.v1', 'payment.captured.v1', 'refund.succeeded.v1')"
+            "(payment_intent_id IS NOT NULL AND provider_operation_id IS NOT NULL "
+            "AND payout_id IS NULL AND event_type <> 'payout.succeeded.v1') OR "
+            "(payment_intent_id IS NULL AND provider_operation_id IS NULL "
+            "AND payout_id IS NOT NULL AND event_type = 'payout.succeeded.v1') OR "
+            "(payment_intent_id IS NOT NULL AND provider_operation_id IS NULL "
+            "AND payout_id IS NULL AND event_type = 'payment.expired.v1')",
+            name="merchant_events_parent_check",
         ),
         CheckConstraint("schema_version = 1"),
+        Index(
+            "uq_merchant_events_payout_type",
+            "payout_id",
+            "event_type",
+            unique=True,
+            postgresql_where=text("payout_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_merchant_events_payment_expired",
+            "payment_intent_id",
+            "event_type",
+            unique=True,
+            postgresql_where=text("provider_operation_id IS NULL AND payout_id IS NULL"),
+        ),
         Index(
             "ix_merchant_events_payment_occurred",
             "organisation_id",
@@ -140,8 +167,9 @@ class MerchantEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
-    payment_intent_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
-    provider_operation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    payment_intent_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    provider_operation_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    payout_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     schema_version: Mapped[int] = mapped_column(nullable=False, default=1)
     event_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)

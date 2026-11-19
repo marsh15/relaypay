@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from relaypay.event_delivery.service import append_payment_expired_event
 from relaypay.payments.models import Authorization, Capture, PaymentIntent, Void
 from relaypay.payments.transitions import PaymentStatus, transition
 
@@ -65,6 +66,9 @@ def expire_authorizations(
                 PaymentStatus.EXPIRED,
                 reason="AUTHORIZATION_EXPIRED",
                 actor=EXPIRY_ACTOR,
+            )
+            append_payment_expired_event(
+                session, payment=payment, amount=payment.amount, currency=payment.currency
             )
             expired += 1
     return expired

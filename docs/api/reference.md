@@ -195,10 +195,19 @@ event's `status` is `PENDING` when its stable key matches exactly one provider o
 
 ## Merchant webhooks (RelayPay to the receiver)
 
-Events are created only when an operation finalizes successfully: `payment.authorized.v1`,
-`payment.captured.v1`, `refund.succeeded.v1`. The body is canonical JSON:
-`{id, type, schemaVersion: 1, occurredAt, data: {amount, currency, operationId, paymentIntentId,
-resourceId}}`.
+Events are created once, in the transaction that makes the fact true:
+
+| Type | When | `data` |
+| --- | --- | --- |
+| `payment.authorized.v1`, `payment.captured.v1`, `refund.succeeded.v1` | the operation finalizes successfully | `amount, currency, operationId, paymentIntentId, resourceId` |
+| `payment.cancelled.v1` | a void succeeds | the same fields |
+| `payment.failed.v1` | an authorization or capture is verifiably declined | the same fields plus `failureCode` |
+| `payment.expired.v1` | an authorization hold lapses without a capture (local; no provider operation) | `amount, currency, paymentIntentId` |
+| `payout.succeeded.v1` | the bank verifiably paid a payout | `amount, currency, payoutId` |
+
+A declined void or refund changes nothing the merchant can see, so it emits no event. The body is
+canonical JSON: `{id, type, schemaVersion: 1, occurredAt, data}`. An endpoint receives only the
+types it subscribed to.
 
 Delivery is a `POST` to `{RECEIVER_BASE_URL}/webhooks/relaypay` (the only URL the transport will
 call; redirects are not followed) with:

@@ -14,7 +14,7 @@ import os
 import uuid
 
 from alembic import command
-from sqlalchemy import create_engine, text
+from sqlalchemy import Engine, create_engine, text
 
 from scripts.verify_m2_upgrade import (
     RELAYPAY_CONFIG_PATH,
@@ -41,6 +41,27 @@ FROZEN_TRIGGER_COUNT = """
 """
 
 
+def _discard_v2_events(engine: Engine) -> None:
+    """Remove the v2-typed events the head-time seed produced, so the schema can step back.
+
+    The 0031 downgrade refuses to delete immutable events, so this proof acts as the migration
+    owner would: it lifts the trigger for this one deletion. Nothing else is touched.
+    """
+    old = "'payment.authorized.v1', 'payment.captured.v1', 'refund.succeeded.v1'"
+    with engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE merchant_events DISABLE TRIGGER merchant_events_immutable")
+        )
+        connection.execute(
+            text(
+                "DELETE FROM merchant_events WHERE event_type NOT IN (" + old + ")"  # noqa: S608
+            )
+        )
+        connection.execute(
+            text("ALTER TABLE merchant_events ENABLE TRIGGER merchant_events_immutable")
+        )
+
+
 def main() -> None:
     schema = f"m17_upgrade_{uuid.uuid4().hex}"
     base_url = _base_url(RELAYPAY_CONFIG_PATH, "RELAYPAY_MIGRATION_DATABASE_URL")
@@ -52,9 +73,10 @@ def main() -> None:
         config = _configuration(RELAYPAY_CONFIG_PATH, database_url)
         command.upgrade(config, "head")
         seeded = _seed(database_url)
-        command.downgrade(config, PREVIOUS_REVISION)
         engine = create_engine(database_url)
         try:
+            _discard_v2_events(engine)
+            command.downgrade(config, PREVIOUS_REVISION)
             with engine.connect() as connection:
                 before = _digests(connection)
                 assert "psp_events" not in before
@@ -80,6 +102,18 @@ def main() -> None:
             with engine.connect() as connection:
                 assert _digests(connection) == before, "downgrade must restore 0025 exactly"
             command.upgrade(config, "head")
+            with engine.connect() as connection:
+                # Columns added after 0025 are not part of the old rows' content.
+                head = _digests(
+                    connection,
+                    strip={
+                        "merchant_accounts": ("balance_version",),
+                        "merchant_events": ("payout_id",),
+                    },
+                )
+                head.pop("psp_events", None)
+                changed = sorted(t for t in head if head[t] != before.get(t))
+                assert not changed, f"0028 to 0031 must not change any existing row: {changed}"
         finally:
             engine.dispose()
     finally:
