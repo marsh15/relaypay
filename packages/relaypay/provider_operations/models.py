@@ -62,11 +62,13 @@ class ProviderOperation(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         ),
         Index("ix_provider_operations_recovery", "status", "next_lookup_at"),
         Index("ix_provider_operations_lease_expiry", "lookup_lease_expires_at"),
+        # created_at leads so this never competes with the (organisation_id, environment_id, id)
+        # foreign-key lookups; see migration 0033.
         Index(
-            "ix_provider_operations_scope_created",
+            "ix_provider_operations_created_scope",
+            "created_at",
             "organisation_id",
             "environment_id",
-            "created_at",
         ),
     )
 

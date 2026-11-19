@@ -448,8 +448,8 @@ _INTERNAL_EFFECT = """
     ) e ON true
 """
 
-# CREATE TABLE AS is a utility statement, so it cannot take bind parameters; the four values are
-# typed (a UUID, two ints and a float) and substituted as literals by ``_classify_sql``.
+# CREATE TABLE AS is a utility statement, so it cannot take bind parameters; the few values are
+# typed (a UUID, ints and a float) and substituted as literals by the helpers below.
 _CLASSIFY_TEMPLATE = f"""
     CREATE TEMP TABLE _recon_classified ON COMMIT DROP AS
     WITH joined AS (
@@ -466,12 +466,11 @@ _CLASSIFY_TEMPLATE = f"""
                 WHERE d.statement_import_id = c.statement_import_id
                   AND d.stable_key = c.stable_key AND d.id <> c.id
              ) AS dup
-        FROM statement_items c
+        FROM _recon_chunk c
         LEFT JOIN provider_operations o
           ON o.organisation_id = c.organisation_id AND o.environment_id = c.environment_id
          AND o.stable_provider_key = c.stable_key
         {_INTERNAL_EFFECT}
-       WHERE c.statement_import_id = :import_id AND c.ordinal > :lo AND c.ordinal <= :hi
     )
     SELECT j.*, CASE
       WHEN j.dup THEN ARRAY['DUPLICATE_PROVIDER_EFFECT']
@@ -497,14 +496,27 @@ _CLASSIFY_TEMPLATE = f"""
     """  # noqa: S608 - interpolates only module constants
 
 
-def _classify_sql(import_id: uuid.UUID, lo: int, hi: int, timing_seconds: float) -> TextClause:
-    sql = (
-        _CLASSIFY_TEMPLATE.replace(":import_id", f"'{uuid.UUID(str(import_id))}'::uuid")
+# The chunk is staged in its own temporary table so it can be ANALYZEd: statement_items was just
+# bulk-inserted, the application role cannot ANALYZE a table it does not own, and autovacuum may not
+# have reached it. A session may analyze its own temporary table, which gives the planner the real
+# row count and key distribution for the join to provider_operations.
+_STAGE_CHUNK_TEMPLATE = """
+    CREATE TEMP TABLE _recon_chunk ON COMMIT DROP AS
+    SELECT * FROM statement_items
+     WHERE statement_import_id = :import_id AND ordinal > :lo AND ordinal <= :hi
+"""
+
+
+def _stage_chunk_sql(import_id: uuid.UUID, lo: int, hi: int) -> TextClause:
+    return text(
+        _STAGE_CHUNK_TEMPLATE.replace(":import_id", f"'{uuid.UUID(str(import_id))}'::uuid")
         .replace(":lo", str(int(lo)))
         .replace(":hi", str(int(hi)))
-        .replace(":timing_seconds", repr(float(timing_seconds)))
     )
-    return text(sql)
+
+
+def _classify_sql(timing_seconds: float) -> TextClause:
+    return text(_CLASSIFY_TEMPLATE.replace(":timing_seconds", repr(float(timing_seconds))))
 
 
 _INSERT_MATCHES = text(
@@ -535,8 +547,7 @@ _MISSING_PROVIDER = text(
      WHERE o.organisation_id = :org AND o.environment_id = :env
        AND o.created_at >= :period_start AND o.created_at < :period_end
        AND NOT EXISTS (
-         SELECT 1 FROM statement_items s
-          WHERE s.statement_import_id = :import_id AND s.stable_key = o.stable_provider_key
+         SELECT 1 FROM _recon_statement_keys s WHERE s.stable_key = o.stable_provider_key
        )
        AND NOT EXISTS (
          SELECT 1 FROM reconciliation_mismatches m
@@ -698,9 +709,9 @@ def _item_chunk(
 ) -> ChunkResult:
     lo = run.progress_ordinal
     hi = min(lo + chunk_ordinals, total_items)
-    session.execute(
-        _classify_sql(run.statement_import_id, lo, hi, TIMING_TOLERANCE.total_seconds())
-    )
+    session.execute(_stage_chunk_sql(run.statement_import_id, lo, hi))
+    session.execute(text("ANALYZE _recon_chunk"))
+    session.execute(_classify_sql(TIMING_TOLERANCE.total_seconds()))
     matched = int(
         session.execute(
             _INSERT_MATCHES,
@@ -733,6 +744,23 @@ def _item_chunk(
     return ChunkResult(matched, mismatched, hi, hi >= total_items)
 
 
+def _stage_statement_keys(session: Session, statement_import_id: uuid.UUID) -> None:
+    """Copy the statement's keys to an analyzable temp table (see ``_STAGE_CHUNK_TEMPLATE``).
+
+    Without current statistics the planner takes ``statement_items`` for a one-row table and
+    chooses a nested-loop anti join, which compares every operation to every statement row.
+    """
+    import_id = uuid.UUID(str(statement_import_id))
+    session.execute(
+        text(
+            "CREATE TEMP TABLE _recon_statement_keys ON COMMIT DROP AS "  # noqa: S608
+            "SELECT stable_key FROM statement_items "
+            f"WHERE statement_import_id = '{import_id}'::uuid"
+        )
+    )
+    session.execute(text("ANALYZE _recon_statement_keys"))
+
+
 def _missing_provider_chunk(
     session: Session,
     run: ReconciliationRun,
@@ -741,6 +769,7 @@ def _missing_provider_chunk(
     chunk_ordinals: int,
     lease_seconds: int,
 ) -> int:
+    _stage_statement_keys(session, statement_import.id)
     rows = list(
         session.execute(
             _MISSING_PROVIDER,
@@ -749,7 +778,6 @@ def _missing_provider_chunk(
                 "env": run.environment_id,
                 "period_start": statement_import.period_start,
                 "period_end": statement_import.period_end,
-                "import_id": statement_import.id,
                 "run": run.id,
                 "missing_suffix": ":MISSING_PROVIDER_TRANSACTION",
                 "limit": chunk_ordinals,

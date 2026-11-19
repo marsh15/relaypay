@@ -34,7 +34,7 @@ NEW_COLUMNS = {
 SCOPE_CREATED_INDEX = """
     SELECT count(*) FROM pg_indexes
     WHERE tablename = 'provider_operations' AND schemaname = current_schema()
-      AND indexname = 'ix_provider_operations_scope_created'
+      AND indexname = 'ix_provider_operations_created_scope'
 """
 
 

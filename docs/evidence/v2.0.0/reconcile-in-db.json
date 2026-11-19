@@ -1,0 +1,41 @@
+{
+  "allCountsExact": true,
+  "benchmark": "reconciliation-in-database",
+  "childPeakRssBytes": 109494272,
+  "childPeakRssMiB": 104.4,
+  "exceptions": {
+    "AMOUNT_MISMATCH": {
+      "found": 1000,
+      "seeded": 1000
+    },
+    "DUPLICATE_PROVIDER_EFFECT": {
+      "found": 400,
+      "seeded": 400
+    },
+    "MISSING_INTERNAL_TRANSACTION": {
+      "found": 500,
+      "seeded": 500
+    },
+    "MISSING_PROVIDER_TRANSACTION": {
+      "found": 2000,
+      "seeded": 2000
+    }
+  },
+  "fixtureSeedSeconds": 349.341,
+  "importSeconds": 74.23,
+  "lines": 1000000,
+  "machine": {
+    "platform": "macOS-27.0-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.12.12"
+  },
+  "matchSeconds": 332.446,
+  "matched": {
+    "expected": 996800,
+    "found": 996800
+  },
+  "note": "One machine, one Postgres in Docker. The child process is the application: its peak RSS excludes the database server. Rows were seeded in bulk with triggers disabled for the fixture load only.",
+  "statementBytes": 91658835,
+  "statementRows": 998700,
+  "totalSeconds": 406.676
+}

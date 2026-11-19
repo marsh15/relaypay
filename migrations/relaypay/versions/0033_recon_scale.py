@@ -89,10 +89,13 @@ def upgrade() -> None:
         f"mismatch_type IN ({_in_list(NEW_TYPES)})",
     )
 
+    # created_at leads on purpose. An index starting (organisation_id, environment_id) shares its
+    # prefix with every foreign key into provider_operations, and the planner then picks it for
+    # the (organisation_id, environment_id, id) existence check and scans a whole tenant per row.
     op.create_index(
-        "ix_provider_operations_scope_created",
+        "ix_provider_operations_created_scope",
         "provider_operations",
-        ["organisation_id", "environment_id", "created_at"],
+        ["created_at", "organisation_id", "environment_id"],
     )
 
 
@@ -110,7 +113,7 @@ def downgrade() -> None:
             f"{blocking} streamed imports or v2 mismatches exist; they are immutable evidence "
             "and the 0033 downgrade will not delete them"
         )
-    op.drop_index("ix_provider_operations_scope_created", table_name="provider_operations")
+    op.drop_index("ix_provider_operations_created_scope", table_name="provider_operations")
     op.drop_constraint(
         "reconciliation_mismatches_mismatch_type_check", "reconciliation_mismatches", type_="check"
     )
