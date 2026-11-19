@@ -273,7 +273,7 @@ disposable-sandbox layout, not a regulated production architecture.
 
 The full list is in [docs/limitations.md](docs/limitations.md). The ones most likely to matter:
 
-- Synthetic INR only; one full capture per payment; the model roles are deterministic stand-ins.
+- Synthetic INR only; one capture per payment, of up to the authorized amount (the rest is released); the model roles are deterministic stand-ins.
 - The compose stack seeds fixed, public demo credentials on every `up`, including with the
   production overlay.
 - The login rate limiter is per process; API-key routes have no rate limit unless the optional

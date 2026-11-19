@@ -38,12 +38,12 @@ failing seed.
 
 | Requirement | Proof (test files) | Mechanism exercised |
 | --- | --- | --- |
-| Generated operation sequences keep money consistent | `tests/integration/test_stateful_payments.py` | Hypothesis state machine over create, authorize, capture, refund, replay, key reuse, recovery and pending resolution, with lost, declined and pending provider outcomes; journals balance, refunds ≤ captured, and one provider mutation per stable key after every step. These are assertions inside the test, not the maintainer's invariant checker |
+| Generated operation sequences keep money consistent | `tests/integration/test_stateful_payments.py` | Hypothesis state machine over create, authorize, capture, refund, replay, key reuse, recovery and pending resolution, with lost, declined and pending provider outcomes; journals balance, refunds ≤ captured, and one provider mutation per stable key after every step. These are assertions inside the test; the chaos harness and `test_invariants_spec.py` evaluate the 15-invariant checker separately |
 | Refunds never exceed captured, sequentially or concurrently | `tests/integration/test_property_refunds.py` | random partial-refund lists, 8 concurrent workers, exact `REFUND_AMOUNT_EXCEEDS_AVAILABLE` rejections |
 | No payout overdraft under contention | `tests/integration/test_payout_500_way.py` | 500 concurrent reservations against a balance that fits exactly 250 (with `compose.proof.yaml`) |
 | Refund cannot spend reserved payout funds (F1) | `tests/integration/test_f1_refund_vs_reserved_payout.py`, `tests/integration/test_payout_overdraft_guard.py` | closed in M16. Refunds draw only on AVAILABLE not reserved for payouts (`419ab3f`). Migration 0020's deferred trigger rejects any reservation or AVAILABLE debit that would overdraw at commit (`5cd01a4`) |
 | Duplicate HTTP requests are applied once | `tests/integration/test_http_duplicate_requests.py` | 50 concurrent identical POSTs through a real uvicorn server: one row, byte-identical bodies, and exactly one provider mutation for capture |
-| Crash at any protocol step converges | `tests/integration/test_chaos_ci.py`, `make chaos` | seeded schedules with crash points after send preparation, after the provider response, after finalizer commit, around payout bank sends and between poller tasks; quiesce, then snapshot. The invariant check is not evaluated (see above) |
+| Crash at any protocol step converges | `tests/integration/test_chaos_ci.py`, `make chaos` | seeded schedules with crash points after send preparation, after the provider response, after finalizer commit, around payout bank sends and between poller tasks; quiesce, then snapshot, then `check_invariants` on every seed |
 | Evidence tables from 0012–0017 are immutable | `tests/integration/test_m15_immutability.py`, `scripts/verify_m15_upgrade.py` | full-row and column-scoped triggers (SQLSTATE 55000), with checksums preserved across upgrade |
 
 ## PSP webhooks and provider chaos (M17)
@@ -57,16 +57,14 @@ ordering decision applies, ignores or reviews each event by operation state. See
 | Signed PSP webhooks are stored once; redelivery replays and conflicting bytes are refused | `tests/integration/test_psp_inbox.py` | verified events matched to their operation; unknown stable key kept as `UNMATCHED`; unauthenticated input refused before parsing; stale and body-id-mismatched events refused; concurrent duplicate deliveries store one row; the HTTP route accepts and replays |
 | Raw inbox bytes never change; only the lifecycle moves | `tests/integration/test_psp_inbox.py` | column-scoped immutability on `psp_events` |
 | Applied webhooks finalize only through the one finalizer | `tests/integration/test_psp_applier.py` | a verified event is recorded as a `WEBHOOK` provider attempt and finalized by the finalizer; a crash after recording resumes without a second attempt |
-| Without the ordering decision, events are deferred, not applied | `tests/integration/test_psp_applier.py` | `DEFERRED` with `ORDERING_DECISION_UNAVAILABLE`; polling remains the guarantee |
+| An unavailable ordering decision defers instead of applying | `tests/integration/test_psp_applier.py` | an injected decider that raises `NotImplementedError` yields `DEFERRED` with `ORDERING_DECISION_UNAVAILABLE`; polling remains the guarantee. The shipped `decide` is implemented |
 | Mismatched evidence goes to review; repeated failures dead-letter | `tests/integration/test_psp_applier.py` | an identity mismatch moves the operation to `REQUIRES_REVIEW`; an event that keeps failing is dead-lettered, and one failing event does not stall the batch |
 | Provider chaos is seeded and replayable | `tests/unit/test_provider_chaos.py`, `tests/integration/test_provider_chaos_webhooks.py` | each decision is a pure function of seed, stable key and aspect; pending takes precedence over decline; one-shot directives win over the profile; the same seed replays the same outcomes |
 | Provider push delivers each event at least once, with drop, duplicate and delay | `tests/integration/test_provider_chaos_webhooks.py` | signed events RelayPay accepts; duplicates are sent twice with the same bytes; dropped events are kept but never sent; failed pushes back off and then dead-letter |
 
 ## Not yet proven
 
-- **Money invariants.** The 15 invariants are not evaluated by any test or chaos run until the
-  maintainer's checker (`packages/relaypay/proof/invariants.py`) is implemented.
-- **PSP ordering.** `packages/relaypay/psp/ordering.py::decide` is pending, so PSP events are
-  `DEFERRED` and do not change operation state.
 - **Provider webhook chaos in the chaos harness.** Provider webhook drop, duplicate and delay are
   not yet fed into the chaos harness, so the harness does not exercise them.
+- **The full chaos sweep.** `make chaos-full` (200 seeds x 10,000 operations, real process kills and a
+  Postgres restart) has not been recorded. A clean `make chaos` covers only its seeds and schedules.
