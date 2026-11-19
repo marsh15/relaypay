@@ -78,3 +78,17 @@ threshold across the full graphs, including development dependencies.
 
 The project, CI and Python image use uv0.12.19, enforced by `tool.uv.required-version`.
 Run `make dependency-audit` against committed locks before release.
+
+## Follow-up, 2026-11-19
+
+`uv audit --frozen` started failing the release gate on two advisories published after the first
+pass. Both were upgraded and `uv audit --frozen` is clean again (92 packages).
+
+| Package | Locked (before → after) | Advisory | Fixed in | Reachability | Disposition |
+|---|---|---|---|---|---|
+| dnspython | 2.9.1 → 2.9.2 | GHSA-vvf4-9x63-8xvv, excessive memory and CPU use | 2.9.2 | Transitive via email-validator. RelayPay code does not parse DNS wire data. Low reachability. | Upgraded (lock only). |
+| opentelemetry-api | 1.45.1 → 1.45.2 | GHSA-mf5v-w3w3-f6cg, quadratic-time `traceparent` parsing | 1.45.2 | Reachable: FastAPI and httpx instrumentation extract trace context from request headers. | Upgraded. |
+
+The OpenTelemetry family moved together again: API, SDK and OTLP/HTTP exporter `1.45.2`, and the
+instrumentation packages `0.66b2`, because SDK 1.45.2 pins semantic-conventions `0.66b2` and
+`0.66b1` instrumentation pins `0.66b1`.
