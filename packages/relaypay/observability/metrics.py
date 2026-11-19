@@ -127,6 +127,12 @@ class OperationsMetrics:
             buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30),
             registry=self.registry,
         )
+        self.rate_limit_decisions = Counter(
+            "relaypay_api_rate_limit_decisions",
+            "Per-API-key rate limit decisions (allowed, limited, failed_open).",
+            ("outcome",),
+            registry=self.registry,
+        )
         self.recoveries = Counter(
             "relaypay_recoveries",
             "Recovery and expired-lease reclaim operations.",

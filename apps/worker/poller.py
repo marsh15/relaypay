@@ -16,6 +16,7 @@ from relaypay.connectors.service import claim_inbound_webhook, process_inbound_c
 from relaypay.database import build_engine, build_session_factory
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, run_delivery_batch
 from relaypay.event_delivery.materializer import materialize_deliveries
+from relaypay.identity.rate_limit import prune_rate_limit_state
 from relaypay.mock_commerce.service import synchronize_event
 from relaypay.observability.metrics import observe_worker_task, start_worker_metrics_server
 from relaypay.observability.telemetry import configure_tracing
@@ -47,6 +48,7 @@ SCHEDULE_SECONDS: dict[str, float] = {
     "record_settlement_forecasts": 3600.0,
     "expire_authorizations": 5.0,
     "apply_psp_events": 1.0,
+    "prune_rate_limit_state": 600.0,
 }
 OUTBOX_DRAIN_CAP = 100
 # Inbound webhooks are claimed at most this many per tick. An unbounded drain lets a steady
@@ -205,6 +207,12 @@ def _apply_psp_events(factory: sessionmaker[Session], settings: Settings) -> int
     return run_psp_event_batch(factory, provider_account_id=settings.PROVIDER_ACCOUNT_ID)
 
 
+@observe_worker_task("prune_rate_limit_state")
+def _prune_rate_limit_state(factory: sessionmaker[Session], settings: Settings) -> int:
+    del settings
+    return prune_rate_limit_state(factory)
+
+
 _RUNNERS = {
     "recover_provider_operations": _recover_provider_operations,
     "materialize_webhook_deliveries": _materialize_webhook_deliveries,
@@ -215,6 +223,7 @@ _RUNNERS = {
     "record_settlement_forecasts": _record_settlement_forecasts,
     "expire_authorizations": _expire_authorizations,
     "apply_psp_events": _apply_psp_events,
+    "prune_rate_limit_state": _prune_rate_limit_state,
 }
 
 

@@ -41,7 +41,7 @@ from relaypay.event_delivery.models import (
     WebhookEndpointVersion,
 )
 from relaypay.fees.models import FeeScheduleVersion
-from relaypay.identity.models import APIKey, Organisation, SessionRecord, User
+from relaypay.identity.models import APIKey, ApiRateLimitState, Organisation, SessionRecord, User
 from relaypay.ledger.models import Journal, LedgerAccount, Posting
 from relaypay.merchant_balances.models import (
     BalanceTransaction,
@@ -103,6 +103,7 @@ from relaypay.subscriptions.models import (
 
 __all__ = [
     "APIKey",
+    "ApiRateLimitState",
     "ApprovalDecision",
     "ApprovalRequest",
     "Authorization",

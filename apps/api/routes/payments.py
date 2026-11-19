@@ -15,6 +15,7 @@ from relaypay.contracts import (
 )
 from relaypay.errors import RelayPayError
 from relaypay.idempotency import build_fingerprint, canonical_json_bytes
+from relaypay.identity.rate_limit import GcraLimiter
 from relaypay.identity.security import Principal, authenticate_api_key, require_scopes
 from relaypay.pagination import derive_cursor_secret
 from relaypay.payments.service import (
@@ -67,7 +68,29 @@ def merchant_dependencies(
                 pepper=settings.API_KEY_PEPPER.get_secret_value(),
             )
         request.state.principal = principal
+        _enforce_rate_limit(request, principal)
         return principal
+
+    def _enforce_rate_limit(request: Request, principal: Principal) -> None:
+        limiter: GcraLimiter | None = request.app.state.api_rate_limiter
+        if limiter is None or principal.api_key_id is None:
+            return
+        decision = limiter.admit(
+            f"api_key:{principal.api_key_id}",
+            rps=principal.rate_limit_rps or settings.API_RATE_LIMIT_RPS,
+            burst=principal.rate_limit_burst or settings.API_RATE_LIMIT_BURST,
+        )
+        outcome = (
+            "failed_open" if decision.failed_open else "allowed" if decision.allowed else "limited"
+        )
+        request.app.state.operations_metrics.rate_limit_decisions.labels(outcome).inc()
+        if not decision.allowed:
+            raise RelayPayError(
+                code="RATE_LIMITED",
+                message="Too many requests for this API key",
+                http_status=429,
+                retry_after=decision.retry_after_seconds,
+            )
 
     def required_idempotency_key(
         value: Annotated[str | None, Header(alias="Idempotency-Key")] = None,

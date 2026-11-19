@@ -51,11 +51,15 @@ each route's OpenAPI responses.
 | `NOT_FOUND` | 404 | Returned by the evidence route and by `/metrics` when disabled | Do not retry unchanged |
 | `VALIDATION_ERROR` | 422 | Request failed strict schema validation; `details.errors` lists the fields | Correct the request |
 | `INVALID_CURSOR` | 400 | Cursor is malformed, tampered, or bound to different filters | Restart pagination |
-| `RATE_LIMITED` | 429 | Login limiter only (10 per 60 s per client address, per process) | Honor `Retry-After` |
+| `RATE_LIMITED` | 429 | The login limiter (10 per 60 s per client address, per process), or a merchant API key over its GCRA budget | Honor `Retry-After` |
 | `DEPENDENCY_UNAVAILABLE` | 503 | Returned only by `GET /health/ready` when the database check fails; carries `Retry-After: 5` | Poll again |
 | `EDGE_ORIGIN_SIGNATURE_INVALID` | 401 | Edge signature missing or invalid while `EDGE_ORIGIN_SIGNATURE_REQUIRED=true` | Send through the edge Worker |
 
-Merchant API keys are not rate limited by the API itself.
+Merchant API keys are limited per key (`API_RATE_LIMIT_RPS`, `API_RATE_LIMIT_BURST`, or the key's own
+`rate_limit_rps` and `rate_limit_burst`). A rested key may send `burst` requests at once and is then
+held to `rps`. A refused request spends nothing, and `Retry-After` is whole seconds. If the limiter's
+database errors the request is served and `relaypay_api_rate_limit_decisions{outcome="failed_open"}`
+counts it.
 
 ## Idempotency and commands
 

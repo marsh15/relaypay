@@ -18,7 +18,7 @@ from relaypay.edge.origin import install_edge_origin_boundary
 from relaypay.errors import RelayPayError
 from relaypay.event_delivery.delivery import HTTPWebhookTransport, WebhookTransport
 from relaypay.evidence.service import payment_evidence
-from relaypay.identity.rate_limit import FixedWindowRateLimiter
+from relaypay.identity.rate_limit import FixedWindowRateLimiter, GcraLimiter
 from relaypay.identity.security import (
     Principal,
     authenticate_session,
@@ -118,6 +118,12 @@ def create_app(
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.login_limiter = FixedWindowRateLimiter(limit=10, window_seconds=60)
+    # One statement per admission, so no transaction is needed; shares the API's pool.
+    app.state.api_rate_limiter = (
+        GcraLimiter(engine.execution_options(isolation_level="AUTOCOMMIT"))
+        if resolved.API_RATE_LIMIT_ENABLED
+        else None
+    )
     app.state.operations_metrics = operations_metrics()
     install_edge_origin_boundary(app, resolved)
     # Added after the edge boundary so it wraps it: the cap runs before the origin signature

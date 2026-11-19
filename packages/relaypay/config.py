@@ -44,6 +44,10 @@ class Settings(BaseSettings):
         default=SecretStr("dev-provider-webhook-secret-change-me"), min_length=16
     )
     PSP_WEBHOOK_REPLAY_SECONDS: int = Field(default=300, ge=30)
+    # Per API key GCRA limit; an api_keys row may override both. Fails open if Postgres errors.
+    API_RATE_LIMIT_ENABLED: bool = True
+    API_RATE_LIMIT_RPS: int = Field(default=100, ge=1)
+    API_RATE_LIMIT_BURST: int = Field(default=200, ge=1)
     # Where the provider simulator pushes its signed webhooks; unset disables the push.
     PROVIDER_WEBHOOK_URL: str | None = None
     PROVIDER_WEBHOOK_PUSH_SECONDS: float = Field(default=0.5, gt=0)

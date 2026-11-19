@@ -61,6 +61,8 @@ keys, cursors); rotating an encryption key without re-encrypting makes stored se
 | `PROVIDER_SIGNING_SECRET` | required, 16+ chars | yes | Verifies provider response signatures |
 | `PROVIDER_CONTROL_SECRET` | required, 16+ chars | yes | Authorizes provider `/control/*` calls |
 | `PROVIDER_WEBHOOK_SECRET` | default `dev-provider-webhook-secret-change-me`, 16+ chars | yes | Signs the provider simulator's pushed webhooks and verifies inbound PSP webhooks. Separate from `PROVIDER_SIGNING_SECRET`. Production rejects the development default |
+| `API_RATE_LIMIT_ENABLED` | `true` | no | Per-API-key GCRA limiter on `/api/v1` and `/api/v2`. Fails open if PostgreSQL errors |
+| `API_RATE_LIMIT_RPS`, `API_RATE_LIMIT_BURST` | `100`, `200` (each at least 1) | no | Sustained rate and burst for a key with no limits of its own. `api_keys.rate_limit_rps` and `rate_limit_burst` override them per key |
 | `PSP_WEBHOOK_REPLAY_SECONDS` | `300`, minimum 30 | no | Replay window for inbound PSP webhooks (`/api/inbound/v1/psp/{provider}`) |
 | `PROVIDER_WEBHOOK_URL` | unset | no | Where the provider simulator pushes its webhooks. Unset disables the push. Compose sets it to `http://api:8000/api/inbound/v1/psp/SIMULATOR`; `compose.production.yaml` does not set it, so production containers do not push |
 | `PROVIDER_WEBHOOK_PUSH_SECONDS` | `0.5`, greater than 0 | no | Interval between push batches |
@@ -119,7 +121,7 @@ have no default in `Settings`, but Compose supplies development values when unse
 ## Gaps to know about
 
 - Compose does not forward `LOG_LEVEL`, `SESSION_COOKIE_NAME`, `INBOUND_WEBHOOK_REPLAY_SECONDS`,
-  `PSP_WEBHOOK_REPLAY_SECONDS`, `PROVIDER_WEBHOOK_PUSH_SECONDS`, `REQUEST_LOG_RETENTION`,
+  `PSP_WEBHOOK_REPLAY_SECONDS`, `PROVIDER_WEBHOOK_PUSH_SECONDS`, `API_RATE_LIMIT_*`, `REQUEST_LOG_RETENTION`,
   `PROMETHEUS_WORKER_PORT`, or any `EDGE_*` variable to containers. They take effect only for
   processes you run on the host.
 - `INBOUND_WEBHOOK_REPLAY_SECONDS` is absent from both example files.

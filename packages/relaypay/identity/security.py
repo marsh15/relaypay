@@ -44,6 +44,8 @@ class Principal:
     user_id: uuid.UUID | None = None
     session_id: uuid.UUID | None = None
     api_key_id: uuid.UUID | None = None
+    rate_limit_rps: int | None = None
+    rate_limit_burst: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,6 +318,8 @@ def authenticate_api_key(session: Session, *, plaintext: str, pepper: str) -> Pr
         display_name=record.name,
         scopes=frozenset(record.scopes),
         api_key_id=record.id,
+        rate_limit_rps=record.rate_limit_rps,
+        rate_limit_burst=record.rate_limit_burst,
     )
 
 

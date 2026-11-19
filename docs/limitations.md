@@ -73,8 +73,11 @@
   when present (so users behind the console proxy or Caddy do not share one budget); that header
   is only as trustworthy as the ingress that sets it, and a hostile direct-to-API client can
   spoof it to rotate keys. The sandbox assumes the API port is not directly exposed.
-- Merchant API-key routes have no rate limit at the API. The optional edge Worker adds a
-  per-key-prefix per-minute window when it fronts the API.
+- Merchant API-key routes are limited per key by a GCRA limiter in PostgreSQL (UNLOGGED table, so
+  a database crash resets every budget). It fails open if the database errors, because a broken
+  limiter must not take the payment API down, and it counts only requests that authenticated. The
+  limit is on API keys only: session (admin) routes use the older per-process login limiter. The
+  optional edge Worker adds its own per-key-prefix per-minute window when it fronts the API.
 - Request body caps are per service: 2 MiB for the API, receiver, and console proxy, 20 MiB for the
   dispute network, and 1 MiB at the edge. Each bounds the bytes one request can make its service
   read. They are not a rate limit, a concurrency limit, or an availability guarantee. The provider,

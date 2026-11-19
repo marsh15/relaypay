@@ -116,6 +116,8 @@ class APIKey(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ),
         UniqueConstraint("organisation_id", "environment_id", "id"),
         CheckConstraint("status IN ('ACTIVE', 'REVOKED')"),
+        CheckConstraint("rate_limit_rps IS NULL OR rate_limit_rps > 0"),
+        CheckConstraint("rate_limit_burst IS NULL OR rate_limit_burst > 0"),
         Index("ix_api_keys_environment_status", "organisation_id", "environment_id", "status"),
     )
 
@@ -128,6 +130,19 @@ class APIKey(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     scopes: Mapped[list[str]] = mapped_column(ARRAY(String(64)), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE")
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # NULL means the deployment default (API_RATE_LIMIT_RPS / API_RATE_LIMIT_BURST).
+    rate_limit_rps: Mapped[int | None] = mapped_column()
+    rate_limit_burst: Mapped[int | None] = mapped_column()
+
+
+class ApiRateLimitState(Base):
+    """GCRA theoretical arrival time per limiter key. UNLOGGED: a crash resets everyone's budget."""
+
+    __tablename__ = "api_rate_limit_state"
+    __table_args__ = {"prefixes": ["UNLOGGED"]}  # noqa: RUF012
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    tat: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class APIKeyVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
