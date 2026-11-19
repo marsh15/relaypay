@@ -71,6 +71,17 @@ def _migration_module() -> ModuleType:
     return module
 
 
+def _discard_v2_events(engine: Engine) -> None:
+    """Drop the v2 merchant events the head-time seed wrote, so the schema can step back.
+
+    The 0031 downgrade refuses to delete immutable evidence; the proof lifts the trigger for this
+    one deletion, as a migration owner would. Nothing else is touched.
+    """
+    from scripts.verify_m17_upgrade import _discard_v2_events as discard
+
+    discard(engine)
+
+
 def _seed(database_url: str) -> dict[str, str]:
     """Drive payments into every lifecycle state at 0019; return label -> expected status.
 
@@ -464,6 +475,7 @@ def main() -> None:
                 recorded = _statuses(connection)
         finally:
             engine.dispose()
+        _discard_v2_events(create_engine(database_url))
         command.downgrade(config, PREVIOUS_REVISION)
 
         engine = create_engine(database_url)

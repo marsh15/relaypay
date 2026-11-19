@@ -214,7 +214,7 @@ def _evidence_digests(
         rows = connection.execute(
             text(
                 f"SELECT id::text, "  # noqa: S608 - fixed table allowlist
-                "(to_jsonb(t) - 'environment_id' - 'merchant_account_id')::text "
+                "(to_jsonb(t) - 'environment_id' - 'merchant_account_id' - 'payout_id')::text "
                 f"FROM {table} t ORDER BY id"
             )
         ).all()
