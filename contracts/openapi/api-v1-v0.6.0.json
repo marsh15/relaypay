@@ -6296,6 +6296,126 @@
         ]
       }
     },
+    "/api/admin/v1/environments/{environment_id}/statement-imports/stream": {
+      "post": {
+        "description": "Import a CSV statement of any size: the body is streamed, never held in memory.",
+        "operationId": "post_streamed_statement_import_api_admin_v1_environments__environment_id__statement_imports_stream_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sourceReference",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Sourcereference",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "periodStart",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Periodstart",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "periodEnd",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Periodend",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "relaypay_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relaypay Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Streamed Statement Import",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/v1/environments/{environment_id}/subscription-invoices/{invoice_id}/failures": {
       "post": {
         "operationId": "post_recurring_failure_api_admin_v1_environments__environment_id__subscription_invoices__invoice_id__failures_post",

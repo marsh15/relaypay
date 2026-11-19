@@ -205,6 +205,9 @@ jobs:
       - name: Prove v2.0 M17 migrations preserve evidence
         run: uv run python -m scripts.verify_m17_upgrade
 
+      - name: Prove v2.0 M18 migration preserves evidence
+        run: uv run python -m scripts.verify_m18_upgrade
+
       - name: Migrate remaining databases and seed synthetic tenants
         run: |
           make migrate

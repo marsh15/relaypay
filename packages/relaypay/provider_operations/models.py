@@ -62,6 +62,12 @@ class ProviderOperation(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         ),
         Index("ix_provider_operations_recovery", "status", "next_lookup_at"),
         Index("ix_provider_operations_lease_expiry", "lookup_lease_expires_at"),
+        Index(
+            "ix_provider_operations_scope_created",
+            "organisation_id",
+            "environment_id",
+            "created_at",
+        ),
     )
 
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)

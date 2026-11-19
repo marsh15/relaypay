@@ -1,11 +1,13 @@
 import hashlib
+import tempfile
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Request, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from relaypay.agent_runtime.contracts import StructuredModelProvider
@@ -84,6 +86,7 @@ from relaypay.payouts.service import (
     list_payouts,
 )
 from relaypay.provider_operations.service import ProviderTransport
+from relaypay.reconciliation.scale import StreamedStatementHasher, import_streamed_statement
 from relaypay.reconciliation.service import (
     MAX_STATEMENT_BYTES,
     acknowledge_mismatch,
@@ -826,6 +829,53 @@ def build_admin_router(
                 "sha256": result.statement_import.raw_sha256.hex(),
             }
         return JSONResponse(status_code=201 if result.created else 200, content=body)
+
+    @router.post("/admin/v1/environments/{environment_id}/statement-imports/stream")
+    async def post_streamed_statement_import(
+        request: Request,
+        environment_id: str,
+        principal: PrincipalDep,
+        source_reference: Annotated[
+            str, Query(alias="sourceReference", min_length=1, max_length=128)
+        ],
+        period_start: Annotated[AwareDatetime, Query(alias="periodStart")],
+        period_end: Annotated[AwareDatetime, Query(alias="periodEnd")],
+        csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> JSONResponse:
+        """Import a CSV statement of any size: the body is streamed, never held in memory."""
+        require_csrf(principal, csrf_token)
+        with tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024) as spool:
+            sink = StreamedStatementHasher(spool)
+            async for block in request.stream():
+                sink.write(block)
+            digest = sink.finish()
+
+            def load() -> tuple[dict[str, object], bool]:
+                with session_factory() as session, session.begin():
+                    result = import_streamed_statement(
+                        session,
+                        principal=principal,
+                        environment_public_id=environment_id,
+                        provider="PAYMENT_PROVIDER",
+                        source_reference=source_reference,
+                        period_start=period_start,
+                        period_end=period_end,
+                        body=spool,
+                        sha256=digest,
+                    )
+                    return (
+                        {
+                            "id": result.statement_import.public_id,
+                            "runId": result.reconciliation_run.public_id,
+                            "runStatus": result.reconciliation_run.status,
+                            "algorithmVersion": result.reconciliation_run.algorithm_version,
+                            "sha256": result.statement_import.raw_sha256.hex(),
+                        },
+                        result.created,
+                    )
+
+            body, created = await run_in_threadpool(load)
+        return JSONResponse(status_code=201 if created else 200, content=body)
 
     @router.get("/admin/v1/environments/{environment_id}/reconciliation-mismatches")
     def get_reconciliation_mismatches(

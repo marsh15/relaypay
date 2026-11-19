@@ -126,7 +126,7 @@ layer (see `apps/api/routes/admin.py`); the table lists the permission where the
 | Fee schedules | `GET /operations/fee-schedules` | Read-only fee schedule versions per merchant account (`version`, `effectiveFrom`, `mdrBps`, `fixedPaise`, `gstBps`, bounds, `refundFeePolicy`); the current terms are the highest version whose `effectiveFrom` has passed |
 | Merchant accounts and balances | `GET`/`POST /merchant-accounts`, `GET /merchant-accounts/{id}/balances`, `/balance-transactions`, `POST /merchant-accounts/{id}/settlements` | Settlement takes an `Idempotency-Key` |
 | Payouts | `GET`/`POST /beneficiaries`, `GET`/`POST /payouts`, `POST /payouts/{id}/attempts` | Create and retry take an `Idempotency-Key` |
-| Reconciliation | `POST /statement-imports` (multipart: `provider`, `sourceReference`, `sourceFormat` CSV or JSON, `file`), `GET /reconciliation-mismatches`, `POST .../{id}/acknowledge`, `/resolve`, `/evidence-versions` | Statement file is capped at 1 MiB; the whole request is capped at 2 MiB (`REQUEST_BODY_TOO_LARGE`, see [error catalog](error-catalog.md#request-size)) |
+| Reconciliation | `POST /statement-imports` (multipart: `provider`, `sourceReference`, `sourceFormat` CSV or JSON, `file`), `POST /statement-imports/stream` (raw CSV body, see below), `GET /reconciliation-mismatches`, `POST .../{id}/acknowledge`, `/resolve`, `/evidence-versions` | The multipart statement file is capped at 1 MiB and 10,000 items; the whole request is capped at 2 MiB (`REQUEST_BODY_TOO_LARGE`, see [error catalog](error-catalog.md#request-size)) |
 | Connectors | `POST /connector-versions`, `.../{id}/verify`, `.../{id}/activate` | Verify and activate return `204` |
 | Disputes | `GET /disputes`, `GET /disputes/{id}`, `POST .../agent-drafts`, `.../drafts`, `.../packages`, `GET /dispute-packages/{id}/download`, `POST .../submit` | Submit needs `workflows:write` and a session user |
 | Subscription recovery | `GET`/`POST /subscriptions`, `POST /subscriptions/{id}/invoices`, `POST /subscription-invoices/{id}/failures`, `GET /recovery-cases[/{id}]`, `POST /recovery-actions/{id}/execute`, `POST /recovery-cases/{id}/opt-outs` | Reads need `financial:read`; writes `workflows:write` |
@@ -134,6 +134,26 @@ layer (see `apps/api/routes/admin.py`); the table lists the permission where the
 | Risk review | `GET`/`POST /risk-reviews`, `GET /risk-reviews/{id}`, `POST .../annotations`, `POST .../escalation/disposition` | Disposition needs `approvals:write` |
 | Workflows and approvals | `GET /workflow-runs[/{id}]`, `POST /approval-requests/{id}/decisions` | Decisions need `approvals:write` and a different user than the maker |
 | Analytics | `GET /analytics/portfolio` | `technical:read` |
+
+### Streamed statement import
+
+`POST /api/admin/v1/environments/{id}/statement-imports/stream?sourceReference=...&periodStart=...&periodEnd=...`
+takes the statement as the raw request body (CSV, header row first) and needs the session CSRF
+header. The body is spooled to disk while it is hashed and then loaded with `COPY`, so memory does
+not grow with the file; the cap is 512 MiB and 10 million items, and this one route is exempt from
+the 2 MiB body cap. The header is the multipart CSV schema (`providerItemId, stableKey,
+operationKind, amount, currency, status, occurredAt`), optionally followed by `feeAmount,
+taxAmount`. The import is one transaction: a rejected statement leaves nothing behind, and a
+rejection names the row and field but never echoes the value. It returns `201` with `{id, runId,
+runStatus, algorithmVersion: 2, sha256}`, or `200` with the same body when the same
+`sourceReference` and bytes are sent again; different bytes under a known reference are `409
+STATEMENT_SOURCE_CONFLICT`.
+
+Streamed imports are matched by algorithm 2 in chunks of 50,000 ordinals, resumable after a crash.
+It reports the algorithm-1 mismatch types plus `FEE_MISMATCH` and `TAX_MISMATCH` (the statement's
+fee or tax differs from what RelayPay charged at capture) and `TIMING` (the statement time is more
+than a day from when RelayPay recorded the operation). Algorithm-1 runs stay readable and keep
+their own types.
 
 The payment status filter accepts `created`, `requires_action`, `authorised`, `captured`,
 `partially_refunded`, `refunded`, `failed`, `expired`, and `cancelled`. An unknown status or

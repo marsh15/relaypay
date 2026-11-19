@@ -61,6 +61,7 @@ keys, cursors); rotating an encryption key without re-encrypting makes stored se
 | `PROVIDER_SIGNING_SECRET` | required, 16+ chars | yes | Verifies provider response signatures |
 | `PROVIDER_CONTROL_SECRET` | required, 16+ chars | yes | Authorizes provider `/control/*` calls |
 | `PROVIDER_WEBHOOK_SECRET` | default `dev-provider-webhook-secret-change-me`, 16+ chars | yes | Signs the provider simulator's pushed webhooks and verifies inbound PSP webhooks. Separate from `PROVIDER_SIGNING_SECRET`. Production rejects the development default |
+| `AUTO_STATEMENT_IMPORT_ENABLED` | `false` | no | The poller imports the previous UTC day's provider statement (`source_reference` `auto:{date}`) into every active environment that had provider operations. Off by default because the sandbox's provider account is shared across tenants |
 | `API_RATE_LIMIT_ENABLED` | `true` | no | Per-API-key GCRA limiter on `/api/v1` and `/api/v2`. Fails open if PostgreSQL errors |
 | `API_RATE_LIMIT_RPS`, `API_RATE_LIMIT_BURST` | `100`, `200` (each at least 1) | no | Sustained rate and burst for a key with no limits of its own. `api_keys.rate_limit_rps` and `rate_limit_burst` override them per key |
 | `PSP_WEBHOOK_REPLAY_SECONDS` | `300`, minimum 30 | no | Replay window for inbound PSP webhooks (`/api/inbound/v1/psp/{provider}`) |

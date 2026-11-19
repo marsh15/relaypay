@@ -10,6 +10,7 @@ import logging
 import time
 from datetime import UTC, datetime
 
+import httpx
 from relaypay.agent_runtime.events import RedpandaPublisher, publish_one
 from relaypay.config import Settings, get_settings
 from relaypay.connectors.service import claim_inbound_webhook, process_inbound_claim
@@ -26,6 +27,7 @@ from relaypay.proof.crashpoints import maybe_crash
 from relaypay.provider_operations.recovery import run_recovery_batch
 from relaypay.provider_operations.service import HTTPProviderTransport
 from relaypay.psp.applier import run_psp_event_batch
+from relaypay.reconciliation.schedule import run_daily_statement_import
 from relaypay.reconciliation.service import run_reconciliation_batch
 from relaypay.settlement_intelligence.execution import run_forecast_batch
 from relaypay.subscriptions.execution import run_recovery_action_batch
@@ -49,6 +51,7 @@ SCHEDULE_SECONDS: dict[str, float] = {
     "expire_authorizations": 5.0,
     "apply_psp_events": 1.0,
     "prune_rate_limit_state": 600.0,
+    "import_daily_statements": 3600.0,
 }
 OUTBOX_DRAIN_CAP = 100
 # Inbound webhooks are claimed at most this many per tick. An unbounded drain lets a steady
@@ -213,6 +216,30 @@ def _prune_rate_limit_state(factory: sessionmaker[Session], settings: Settings) 
     return prune_rate_limit_state(factory)
 
 
+@observe_worker_task("import_daily_statements")
+def _import_daily_statements(factory: sessionmaker[Session], settings: Settings) -> int:
+    if not settings.AUTO_STATEMENT_IMPORT_ENABLED:
+        return 0
+    base_url = settings.PROVIDER_BASE_URL.rstrip("/")
+
+    def fetch(source_reference: str, start: datetime, end: datetime) -> bytes:
+        response = httpx.post(
+            f"{base_url}/control/statements",
+            headers={"X-Provider-Control": settings.PROVIDER_CONTROL_SECRET.get_secret_value()},
+            json={
+                "accountId": settings.PROVIDER_ACCOUNT_ID,
+                "sourceReference": source_reference,
+                "periodStart": start.isoformat(),
+                "periodEnd": end.isoformat(),
+            },
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        return bytes(response.content)
+
+    return run_daily_statement_import(factory, fetch=fetch)
+
+
 _RUNNERS = {
     "recover_provider_operations": _recover_provider_operations,
     "materialize_webhook_deliveries": _materialize_webhook_deliveries,
@@ -224,6 +251,7 @@ _RUNNERS = {
     "expire_authorizations": _expire_authorizations,
     "apply_psp_events": _apply_psp_events,
     "prune_rate_limit_state": _prune_rate_limit_state,
+    "import_daily_statements": _import_daily_statements,
 }
 
 

@@ -10,6 +10,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, MutableMapping
 from typing import Any
 
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from relaypay.body_limit import (
@@ -362,3 +363,57 @@ def test_dispute_network_accepts_a_small_package_byte_for_byte() -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "SUCCEEDED"
     assert network.effect_count == 1
+
+
+STREAM_PATH = r"/api/admin/v1/environments/[^/]+/statement-imports/stream"
+
+
+def _stream_scope(path: str, *headers: tuple[bytes, bytes], method: str = "POST") -> Message:
+    return {**_http_scope(*headers), "method": method, "path": path}
+
+
+def test_streaming_route_passes_a_body_over_the_default_cap_without_buffering() -> None:
+    downstream = Downstream()
+    receive = Receive(*_messages([b"x" * 10, b"y" * 10, b"z" * 10]))
+    app = BodyLimitMiddleware(downstream, max_bytes=LIMIT, streaming_routes={STREAM_PATH: 1_000})
+
+    _run(app, _stream_scope("/api/admin/v1/environments/env_1/statement-imports/stream"), receive)
+
+    assert downstream.body == b"x" * 10 + b"y" * 10 + b"z" * 10
+    # Not buffered and replayed: the application reads straight from the transport.
+    assert downstream.receive_seen is receive
+
+
+def test_streaming_route_still_refuses_a_declared_length_over_its_own_cap() -> None:
+    downstream = Downstream()
+    receive = Receive(*_messages([b"x"]))
+    app = BodyLimitMiddleware(downstream, max_bytes=LIMIT, streaming_routes={STREAM_PATH: 1_000})
+    scope = _stream_scope(
+        "/api/admin/v1/environments/env_1/statement-imports/stream",
+        (b"content-length", b"1001"),
+    )
+
+    send = _run(app, scope, receive)
+
+    assert send.messages[0]["status"] == 413
+    assert downstream.calls == 0 and receive.calls == 0
+    assert json.loads(send.messages[1]["body"])["error"]["details"] == {"maxBytes": 1_000}
+
+
+@pytest.mark.parametrize(
+    ("path", "method"),
+    [
+        ("/api/admin/v1/environments/env_1/statement-imports", "POST"),
+        ("/api/admin/v1/environments/env_1/statement-imports/stream", "GET"),
+        ("/api/admin/v1/environments/a/b/statement-imports/stream", "POST"),
+    ],
+)
+def test_the_streaming_exemption_is_exact(path: str, method: str) -> None:
+    downstream = Downstream()
+    receive = Receive(*_messages([b"x" * 10, b"y" * 10]))
+    app = BodyLimitMiddleware(downstream, max_bytes=LIMIT, streaming_routes={STREAM_PATH: 1_000})
+
+    send = _run(app, _stream_scope(path, method=method), receive)
+
+    assert send.messages[0]["status"] == 413
+    assert downstream.calls == 0

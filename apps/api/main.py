@@ -34,6 +34,7 @@ from relaypay.observability.telemetry import instrument_fastapi
 from relaypay.payments.service import read_operation
 from relaypay.provider_operations.recovery import claim_specific_operation, recover_claim
 from relaypay.provider_operations.service import HTTPProviderTransport, ProviderTransport
+from relaypay.reconciliation.scale import MAX_STREAMED_BYTES
 from relaypay.subscriptions.network import HTTPCommunicationNetwork, HTTPRecurringPaymentNetwork
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
@@ -128,7 +129,12 @@ def create_app(
     install_edge_origin_boundary(app, resolved)
     # Added after the edge boundary so it wraps it: the cap runs before the origin signature
     # check reads the body. security_headers below wraps this, so its headers cover the 413 too.
-    install_request_body_limit(app)
+    install_request_body_limit(
+        app,
+        streaming_routes={
+            r"/api/admin/v1/environments/[^/]+/statement-imports/stream": MAX_STREAMED_BYTES
+        },
+    )
     transport = provider_transport or HTTPProviderTransport(base_url=resolved.PROVIDER_BASE_URL)
     scenario_transport = provider_transport or HTTPProviderTransport(
         base_url=resolved.PROVIDER_BASE_URL,

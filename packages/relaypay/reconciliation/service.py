@@ -651,7 +651,22 @@ def _complete_reconciliation(session: Session, claim: ReconciliationClaim) -> bo
 def process_reconciliation_claim(
     factory: sessionmaker[Session], claim: ReconciliationClaim
 ) -> bool:
+    # scale.py builds on this module's result types, so it is imported here to avoid a cycle.
+    from relaypay.reconciliation.scale import (
+        STREAM_ALGORITHM_VERSION,
+        complete_chunked_reconciliation,
+    )
+
     try:
+        with factory() as session, session.begin():
+            algorithm_version = session.scalar(
+                select(ReconciliationRun.algorithm_version).where(
+                    ReconciliationRun.id == claim.run_id
+                )
+            )
+        if algorithm_version == STREAM_ALGORITHM_VERSION:
+            # Chunked runs commit as they go, so they cannot share algorithm 1's single transaction.
+            return complete_chunked_reconciliation(factory, claim.run_id, claim.lease_token)
         with factory() as session, session.begin():
             return _complete_reconciliation(session, claim)
     except Exception:

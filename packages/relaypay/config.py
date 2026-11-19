@@ -44,6 +44,9 @@ class Settings(BaseSettings):
         default=SecretStr("dev-provider-webhook-secret-change-me"), min_length=16
     )
     PSP_WEBHOOK_REPLAY_SECONDS: int = Field(default=300, ge=30)
+    # Import the previous UTC day's provider statement into every active environment. Off by
+    # default: the sandbox's single shared provider account makes tenants see each other's items.
+    AUTO_STATEMENT_IMPORT_ENABLED: bool = False
     # Per API key GCRA limit; an api_keys row may override both. Fails open if Postgres errors.
     API_RATE_LIMIT_ENABLED: bool = True
     API_RATE_LIMIT_RPS: int = Field(default=100, ge=1)

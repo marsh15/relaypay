@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     LargeBinary,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,6 +36,7 @@ class StatementImport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint("period_end > period_start"),
         CheckConstraint("octet_length(raw_bytes) BETWEEN 1 AND 1048576"),
         CheckConstraint("octet_length(raw_sha256) = 32"),
+        CheckConstraint("streamed OR raw_bytes IS NOT NULL"),
         Index(
             "ix_statement_imports_scope_period",
             "organisation_id",
@@ -51,8 +54,13 @@ class StatementImport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     source_format: Mapped[str] = mapped_column(String(8), nullable=False)
     period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    raw_bytes: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # NULL for a streamed import: its rows were loaded with COPY and never held in memory. The
+    # digest of the streamed bytes is still recorded, so a repeat import is recognised.
+    raw_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     raw_sha256: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    streamed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
 
 class StatementItem(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -78,6 +86,8 @@ class StatementItem(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint("amount > 0"),
         CheckConstraint("currency ~ '^[A-Z]{3}$'"),
         CheckConstraint("provider_status IN ('PENDING', 'SUCCEEDED', 'DECLINED')"),
+        CheckConstraint("fee_amount IS NULL OR fee_amount >= 0"),
+        CheckConstraint("tax_amount IS NULL OR tax_amount >= 0"),
         Index("ix_statement_items_stable_key", "statement_import_id", "stable_key"),
     )
 
@@ -92,6 +102,9 @@ class StatementItem(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     provider_status: Mapped[str] = mapped_column(String(16), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # What the provider charged for the item, when its statement says (paise).
+    fee_amount: Mapped[int | None] = mapped_column(BigInteger)
+    tax_amount: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class ReconciliationRun(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
@@ -114,6 +127,7 @@ class ReconciliationRun(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         CheckConstraint("algorithm_version > 0"),
         CheckConstraint("status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')"),
         CheckConstraint("attempt_count >= 0"),
+        CheckConstraint("progress_ordinal >= 0"),
         CheckConstraint(
             "(status = 'RUNNING' AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL) "
             "OR (status <> 'RUNNING' AND lease_token IS NULL AND lease_expires_at IS NULL)"
@@ -137,6 +151,17 @@ class ReconciliationRun(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     safe_error_code: Mapped[str | None] = mapped_column(String(64))
+    # Algorithm 2 matches in ordinal chunks. ``progress_ordinal`` is the last ordinal whose chunk
+    # committed, so a run that lost its lease resumes there instead of starting over.
+    progress_ordinal: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    matched_count: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+    mismatch_count: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
 
 
 class ReconciliationMatch(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -229,7 +254,8 @@ class ReconciliationMismatch(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
         CheckConstraint(
             "mismatch_type IN ('MISSING_INTERNAL_TRANSACTION', 'MISSING_PROVIDER_TRANSACTION', "
             "'AMOUNT_MISMATCH', 'CURRENCY_MISMATCH', 'STATUS_MISMATCH', "
-            "'DUPLICATE_PROVIDER_EFFECT', 'MISSING_INTERNAL_JOURNAL')"
+            "'DUPLICATE_PROVIDER_EFFECT', 'MISSING_INTERNAL_JOURNAL', "
+            "'FEE_MISMATCH', 'TAX_MISMATCH', 'TIMING')"
         ),
         CheckConstraint("workflow_status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED')"),
         CheckConstraint(

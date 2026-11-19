@@ -13,7 +13,7 @@ import json
 import re
 import uuid
 from collections import deque
-from collections.abc import Awaitable, Callable, MutableMapping
+from collections.abc import Awaitable, Callable, Mapping, MutableMapping
 from typing import Any, Final
 
 from fastapi import FastAPI
@@ -55,17 +55,38 @@ class _Disconnected(Exception):
 class BodyLimitMiddleware:
     """Refuse HTTP request bodies over ``max_bytes``; pass every other scope through unchanged."""
 
-    def __init__(self, app: ASGIApp, *, max_bytes: int = DEFAULT_MAX_BODY_BYTES) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int = DEFAULT_MAX_BODY_BYTES,
+        streaming_routes: Mapping[str, int] | None = None,
+    ) -> None:
         if max_bytes < 0:
             raise ValueError("max_bytes must not be negative")
         self.app = app
         self.max_bytes = max_bytes
+        # Routes that read their body as a stream and enforce their own cap (path regex -> cap).
+        # The middleware refuses a declared length over that cap but does not buffer the body,
+        # because buffering is exactly what these routes exist to avoid.
+        self._streaming = [
+            (re.compile(path), cap) for path, cap in (streaming_routes or {}).items()
+        ]
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         declared = _declared_length(scope)
+        streaming_cap = self._streaming_cap(scope)
+        if streaming_cap is not None:
+            if declared is not None and declared > streaming_cap:
+                await _send_error(
+                    scope, send, 413, REQUEST_BODY_TOO_LARGE, _TOO_LARGE_MESSAGE, streaming_cap
+                )
+                return
+            await self.app(scope, receive, send)
+            return
         if declared is not None and declared > self.max_bytes:
             await _send_error(
                 scope, send, 413, REQUEST_BODY_TOO_LARGE, _TOO_LARGE_MESSAGE, self.max_bytes
@@ -83,14 +104,28 @@ class BodyLimitMiddleware:
             return
         await self.app(scope, _replay(blocks, receive), send)
 
+    def _streaming_cap(self, scope: Scope) -> int | None:
+        if scope.get("method") != "POST":
+            return None
+        path = str(scope.get("path", ""))
+        for pattern, cap in self._streaming:
+            if pattern.fullmatch(path):
+                return cap
+        return None
 
-def install_request_body_limit(app: FastAPI, *, max_bytes: int = DEFAULT_MAX_BODY_BYTES) -> None:
+
+def install_request_body_limit(
+    app: FastAPI,
+    *,
+    max_bytes: int = DEFAULT_MAX_BODY_BYTES,
+    streaming_routes: Mapping[str, int] | None = None,
+) -> None:
     """Wrap ``app`` in the body cap.
 
     Starlette runs the most recently added middleware first. Call this after
     ``install_edge_origin_boundary`` so the cap runs before the origin signature reads the body.
     """
-    app.add_middleware(BodyLimitMiddleware, max_bytes=max_bytes)
+    app.add_middleware(BodyLimitMiddleware, max_bytes=max_bytes, streaming_routes=streaming_routes)
 
 
 def _declared_length(scope: Scope) -> int | None:
