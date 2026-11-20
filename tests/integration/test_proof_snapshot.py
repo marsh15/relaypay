@@ -240,7 +240,8 @@ def test_unscoped_snapshot_includes_every_world_and_acked_ops(
 
 def test_empty_scope_yields_an_empty_snapshot(factory: sessionmaker[Session]) -> None:
     snapshot = capture_snapshot(factory, None, organisation_ids=[])
-    assert snapshot == SystemSnapshot()
+    # A captured snapshot always reads the stored balances, so they are empty rather than None.
+    assert snapshot == SystemSnapshot(ledger_account_balances=())
 
 
 def test_capture_is_deterministic_and_read_only(

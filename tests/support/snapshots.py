@@ -29,6 +29,7 @@ from relaypay.proof.snapshot_types import (
     IdempotencyRecordSnap,
     InvariantCode,
     JournalSnap,
+    LedgerAccountBalanceSnap,
     LedgerAccountSnap,
     MerchantBalanceSnap,
     OperationHistorySnap,
@@ -67,12 +68,33 @@ def _sha(label: str) -> bytes:
 
 
 def _merge(*parts: SystemSnapshot) -> SystemSnapshot:
-    """Concatenate every collection of ``parts`` field by field."""
+    """Concatenate every collection of ``parts`` field by field (None, not captured, is empty)."""
     return SystemSnapshot(
         **{
-            field.name: tuple(row for part in parts for row in getattr(part, field.name))
+            field.name: tuple(row for part in parts for row in getattr(part, field.name) or ())
             for field in fields(SystemSnapshot)
         }
+    )
+
+
+def with_stored_balances(snapshot: SystemSnapshot) -> SystemSnapshot:
+    """Set ``ledger_account_balances`` to what the posting trigger would hold for ``snapshot``.
+
+    One row per merchant-owned account: its credit total, debit total and posting count.
+    """
+    merchant_accounts = [a.id for a in snapshot.ledger_accounts if a.merchant_account_id]
+    totals = {account_id: [0, 0, 0] for account_id in merchant_accounts}
+    for posting in snapshot.postings:
+        if posting.account_id in totals:
+            row = totals[posting.account_id]
+            row[0 if posting.side == "CREDIT" else 1] += posting.amount
+            row[2] += 1
+    return replace(
+        snapshot,
+        ledger_account_balances=tuple(
+            LedgerAccountBalanceSnap(account_id, *totals[account_id])
+            for account_id in sorted(totals)
+        ),
     )
 
 
@@ -276,13 +298,15 @@ def golden_snapshot() -> SystemSnapshot:
             AckedOp("REFUND", "public_ref_1", "key-op_r1", 30_000),
         ),
     )  # fmt: skip
-    return _merge(
-        base,
-        _authorized("pi_1", "1", 100_000),
-        _captured("pi_1", "1", 100_000),
-        _refunded("pi_1", "1", "cap_1", 30_000),
-        _authorized("pi_2", "2", 50_000),
-        _captured("pi_2", "2", 50_000),
+    return with_stored_balances(
+        _merge(
+            base,
+            _authorized("pi_1", "1", 100_000),
+            _captured("pi_1", "1", 100_000),
+            _refunded("pi_1", "1", "cap_1", 30_000),
+            _authorized("pi_2", "2", 50_000),
+            _captured("pi_2", "2", 50_000),
+        )
     )
 
 
@@ -458,6 +482,22 @@ def _acked_op_missing(snapshot: SystemSnapshot) -> SystemSnapshot:
     return replace(snapshot, acked_ops=(*snapshot.acked_ops, ghost))
 
 
+def _stored_balance_drift(snapshot: SystemSnapshot) -> SystemSnapshot:
+    # The stored pending total is one paisa ahead of its postings.
+    assert snapshot.ledger_account_balances is not None
+    return replace(
+        snapshot,
+        ledger_account_balances=_update(
+            snapshot.ledger_account_balances,
+            lambda b: b.account_id == PENDING,
+            credit_total=next(
+                b.credit_total for b in snapshot.ledger_account_balances if b.account_id == PENDING
+            )
+            + 1,
+        ),
+    )
+
+
 MUTATIONS: dict[InvariantCode, Callable[[SystemSnapshot], SystemSnapshot]] = {
     InvariantCode.JOURNAL_UNBALANCED: _unbalanced_journals,
     InvariantCode.LEDGER_EQUATION: _ledger_equation,
@@ -474,12 +514,20 @@ MUTATIONS: dict[InvariantCode, Callable[[SystemSnapshot], SystemSnapshot]] = {
     InvariantCode.UNKNOWN_PROVIDER_EFFECT: _unknown_provider_effect,
     InvariantCode.ACKED_OP_MISSING: _acked_op_missing,
     InvariantCode.NOT_QUIESCED: with_in_flight_operation,
+    InvariantCode.STORED_BALANCE_DRIFT: _stored_balance_drift,
 }
 
 
 def mutated_snapshot(code: InvariantCode) -> SystemSnapshot:
-    """Golden with exactly one defect of ``code`` (all of the defect's rows are of that code)."""
-    return MUTATIONS[code](golden_snapshot())
+    """Golden with exactly one defect of ``code`` (all of the defect's rows are of that code).
+
+    The stored balances follow the mutated postings, as the posting trigger would, except in
+    the mutation whose defect is the stored balance itself.
+    """
+    mutated = MUTATIONS[code](golden_snapshot())
+    if code is InvariantCode.STORED_BALANCE_DRIFT:
+        return mutated
+    return with_stored_balances(mutated)
 
 
 def fake_provider_effects(provider: "FakeProvider") -> tuple[ProviderEffectSnap, ...]:

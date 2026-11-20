@@ -47,7 +47,7 @@ principle, and it may name an operation that RelayPay has never seen.
 - Webhooks make resolution faster; they never make it correct. Operations still resolve by polling,
   so a dropped, duplicated or late webhook cannot change an outcome. The chaos harness sends each
   event three times in random order with stale copies mixed in (`WEBHOOK_STORM`) and checks the
-  fifteen money invariants at the end of every seed.
+  money invariants (fifteen when this was decided; sixteen since ADR-014) at the end of every seed.
 - Events that stay `DEFERRED` are not re-leased by the applier, which claims only `PENDING` and
   lapsed `PROCESSING` rows. A deferred event changes nothing, and polling resolves its operation.
 - Only the simulator provider is accepted at the inbox. The Razorpay and Cashfree adapters are

@@ -123,8 +123,10 @@ def main() -> None:
                 )
                 head.pop("psp_events", None)
                 head.pop("api_rate_limit_state", None)
+                # 0035's stored balances are derived from the postings; verify_m18 proves them.
+                head.pop("ledger_account_balances", None)
                 changed = sorted(t for t in head if head[t] != before.get(t))
-                assert not changed, f"0028 to 0034 must not change any existing row: {changed}"
+                assert not changed, f"0028 to 0035 must not change any existing row: {changed}"
         finally:
             engine.dispose()
     finally:

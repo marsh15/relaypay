@@ -1,0 +1,274 @@
+{
+  "benchmark": "contended-merchant-postings",
+  "errors": 0,
+  "machine": {
+    "platform": "macOS-27.0-arm64-arm-64bit",
+    "processor": "arm"
+  },
+  "note": "One machine, one Postgres in Docker. Each transaction inserts one journal and two postings in one statement and commits; holdMs sleeps inside the transaction after the insert. 'contended' credits one shared merchant account, 'spread' one per thread.",
+  "perThreadTransactions": 300,
+  "recordedAt": "2026-11-20T03:30:46.213002+00:00",
+  "revisions": {
+    "after": "0035_ledger_account_balances",
+    "before": "0034_pending_action"
+  },
+  "runs": {
+    "0034_pending_action/contended/hold0ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 2.575,
+        "latencyMsP95": 3.553,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 369.6,
+        "wallSeconds": 0.812
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 3.247,
+        "latencyMsP95": 7.192,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 996.7,
+        "wallSeconds": 1.204
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 7.542,
+        "latencyMsP95": 56.5,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 1099.1,
+        "wallSeconds": 4.367
+      }
+    ],
+    "0034_pending_action/contended/hold2ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 5.83,
+        "latencyMsP95": 7.036,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 168.3,
+        "wallSeconds": 1.782
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 4.815,
+        "latencyMsP95": 6.493,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 703.0,
+        "wallSeconds": 1.707
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 9.271,
+        "latencyMsP95": 52.805,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 960.6,
+        "wallSeconds": 4.997
+      }
+    ],
+    "0034_pending_action/spread/hold0ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 2.698,
+        "latencyMsP95": 5.825,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 295.8,
+        "wallSeconds": 1.014
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 3.487,
+        "latencyMsP95": 7.219,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 933.1,
+        "wallSeconds": 1.286
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 9.337,
+        "latencyMsP95": 64.972,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 935.6,
+        "wallSeconds": 5.13
+      }
+    ],
+    "0034_pending_action/spread/hold2ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 5.909,
+        "latencyMsP95": 6.815,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 166.6,
+        "wallSeconds": 1.801
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 5.385,
+        "latencyMsP95": 8.133,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 626.4,
+        "wallSeconds": 1.916
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 8.077,
+        "latencyMsP95": 53.88,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 1029.7,
+        "wallSeconds": 4.662
+      }
+    ],
+    "0035_ledger_account_balances/contended/hold0ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 2.633,
+        "latencyMsP95": 3.43,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 361.8,
+        "wallSeconds": 0.829
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 6.734,
+        "latencyMsP95": 11.762,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 551.2,
+        "wallSeconds": 2.177
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 18.415,
+        "latencyMsP95": 75.283,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 590.2,
+        "wallSeconds": 8.133
+      }
+    ],
+    "0035_ledger_account_balances/contended/hold2ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 6.037,
+        "latencyMsP95": 7.424,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 161.9,
+        "wallSeconds": 1.854
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 20.385,
+        "latencyMsP95": 32.562,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 189.6,
+        "wallSeconds": 6.328
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 63.103,
+        "latencyMsP95": 224.759,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 182.0,
+        "wallSeconds": 26.369
+      }
+    ],
+    "0035_ledger_account_balances/spread/hold0ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 2.61,
+        "latencyMsP95": 5.74,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 325.4,
+        "wallSeconds": 0.922
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 3.517,
+        "latencyMsP95": 6.249,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 990.4,
+        "wallSeconds": 1.212
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 6.923,
+        "latencyMsP95": 65.987,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 975.4,
+        "wallSeconds": 4.921
+      }
+    ],
+    "0035_ledger_account_balances/spread/hold2ms": [
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 6.642,
+        "latencyMsP95": 9.85,
+        "threads": 1,
+        "transactions": 300,
+        "transactionsPerSecond": 140.4,
+        "wallSeconds": 2.136
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 6.61,
+        "latencyMsP95": 9.762,
+        "threads": 4,
+        "transactions": 1200,
+        "transactionsPerSecond": 496.2,
+        "wallSeconds": 2.418
+      },
+      {
+        "errors": 0,
+        "firstError": null,
+        "latencyMsP50": 9.27,
+        "latencyMsP95": 58.207,
+        "threads": 16,
+        "transactions": 4800,
+        "transactionsPerSecond": 911.6,
+        "wallSeconds": 5.266
+      }
+    ]
+  },
+  "storedBalanceDriftAfter": 0
+}

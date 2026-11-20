@@ -32,7 +32,7 @@ def _codes(violations: list[Violation]) -> set[str]:
 @pytest.mark.parametrize("quiesced", [True, False])
 def test_golden_snapshot_has_no_violations(quiesced: bool) -> None:
     assert set(MUTATIONS) == set(InvariantCode)
-    assert len(ALL_CODES) == 15
+    assert len(ALL_CODES) == 16
     assert check_invariants(golden_snapshot(), quiesced=quiesced) == []
 
 

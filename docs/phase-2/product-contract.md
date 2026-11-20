@@ -40,7 +40,9 @@ deterministically to TEST; LIVE_LIKE begins empty.
 ## Financial contract
 
 Journals and postings are immutable and balanced. Merchant balances are derived from postings
-plus active payout reservations, never mutable counters. New captures credit pending payable;
+plus active payout reservations, never counters the application updates; the stored running
+totals read since ADR-014 are maintained by a database trigger in each posting's transaction and
+checked against the postings. New captures credit pending payable;
 settlement offsets receivable before moving value to available payable. Refunds draw from the
 payment's unsettled pending value, then available payable, then merchant receivable. Payout
 reservations do not post journals; only verified success posts available payable to payout

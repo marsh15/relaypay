@@ -167,3 +167,35 @@ class Posting(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     side: Mapped[str] = mapped_column(String(8), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
+
+
+class LedgerAccountBalance(Base):
+    """Running totals of one merchant-owned ledger account's postings (migration 0035, ADR-014).
+
+    A cache of the ledger, never a source of truth: database triggers create the row with the
+    account and add every posting to it in the posting's own statement, and a guard trigger plus
+    revoked privileges stop anything else from writing it. Read it; do not add or change rows.
+    ``relaypay_ledger_balance_drift()`` lists any account where it disagrees with the postings.
+    """
+
+    __tablename__ = "ledger_account_balances"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organisation_id", "environment_id", "account_id"],
+            [
+                "ledger_accounts.organisation_id",
+                "ledger_accounts.environment_id",
+                "ledger_accounts.id",
+            ],
+        ),
+        CheckConstraint("credit_total >= 0"),
+        CheckConstraint("debit_total >= 0"),
+        CheckConstraint("posting_count >= 0"),
+    )
+
+    account_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    environment_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    credit_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    debit_total: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    posting_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")

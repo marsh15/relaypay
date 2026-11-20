@@ -27,7 +27,7 @@ they select those specification tests; they no longer imply human authorship.
 
 | Module | Decides | Milestone | Implemented by | Commit |
 |---|---|---|---|---|
-| [`packages/relaypay/proof/invariants.py`](packages/relaypay/proof/invariants.py) | Whether a system snapshot breaks any of the 15 money invariants | M15 | Claude, at the maintainer's request | `7b591de` |
+| [`packages/relaypay/proof/invariants.py`](packages/relaypay/proof/invariants.py) | Whether a system snapshot breaks any of the money invariants (15 in M15; the 16th, STORED_BALANCE_DRIFT, was added with ADR-014) | M15 | Claude, at the maintainer's request | `7b591de` |
 | [`packages/relaypay/payouts/locking/pessimistic.py`](packages/relaypay/payouts/locking/pessimistic.py), [`optimistic.py`](packages/relaypay/payouts/locking/optimistic.py), [`constraint_guard.py`](packages/relaypay/payouts/locking/constraint_guard.py) | How concurrent payout reservations are serialised without overdraft | M15 stubs, M19 wired | Claude, at the maintainer's request | `50b8c08` |
 | [`packages/relaypay/fees/calculator.py`](packages/relaypay/fees/calculator.py) | Integer-paise MDR fee, GST on the fee, merchant net (`compute_capture_fee`) | M16 | Claude, at the maintainer's request | `b213fd0` |
 | [`packages/relaypay/psp/ordering.py`](packages/relaypay/psp/ordering.py) | What one verified PSP webhook means for its operation: apply, ignore as duplicate or stale, or review (`decide`) | M17 | Claude, at the maintainer's request | `b213fd0` |

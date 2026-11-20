@@ -497,6 +497,46 @@ def _not_quiesced(snapshot: SystemSnapshot, ledger: _Ledger) -> list[Violation]:
     return found
 
 
+# 16
+def _stored_balance_drift(snapshot: SystemSnapshot, ledger: _Ledger) -> list[Violation]:
+    if snapshot.ledger_account_balances is None:
+        return []
+    from_postings: dict[str, tuple[int, int, int]] = defaultdict(lambda: (0, 0, 0))
+    for posting in snapshot.postings:
+        credit, debit, count = from_postings[posting.account_id]
+        if posting.side == "CREDIT":
+            credit += posting.amount
+        else:
+            debit += posting.amount
+        from_postings[posting.account_id] = (credit, debit, count + 1)
+    stored: dict[str, list[tuple[int, int, int]]] = defaultdict(list)
+    for row in snapshot.ledger_account_balances:
+        stored[row.account_id].append((row.credit_total, row.debit_total, row.posting_count))
+    found: list[Violation] = []
+
+    def drift(subject: str, message: str) -> None:
+        found.append(_violation(InvariantCode.STORED_BALANCE_DRIFT, subject, message))
+
+    for account in snapshot.ledger_accounts:
+        rows = stored.pop(account.id, [])
+        if account.merchant_account_id is None:
+            if rows:
+                drift(account.id, "platform account has a stored balance row")
+            continue
+        if len(rows) != 1:
+            drift(account.id, f"merchant account has {len(rows)} stored balance rows, expected 1")
+            continue
+        expected = from_postings.get(account.id, (0, 0, 0))
+        if rows[0] != expected:
+            drift(
+                account.id,
+                f"stored credit, debit, count {rows[0]} != postings {expected}",
+            )
+    for account_id in stored:
+        drift(account_id, "stored balance row names no ledger account")
+    return found
+
+
 Check = Callable[[SystemSnapshot, _Ledger], list[Violation]]
 # In invariant order; the flag marks the checks evaluated only when quiesced (13 and 15).
 CHECKS: tuple[tuple[Check, bool], ...] = (
@@ -515,6 +555,7 @@ CHECKS: tuple[tuple[Check, bool], ...] = (
     (_unknown_provider_effect, True),
     (_acked_op_missing, False),
     (_not_quiesced, True),
+    (_stored_balance_drift, False),
 )
 
 
@@ -612,6 +653,14 @@ def check_invariants(snapshot: SystemSnapshot, *, quiesced: bool) -> list[Violat
     15. NOT_QUIESCED. Only when ``quiesced``: no provider operation is PROCESSING, and none is
         REQUIRES_REVIEW without a ``review_reason`` (subject: operation id). REQUIRES_REVIEW with
         a reason is an accepted resting state.
+
+    16. STORED_BALANCE_DRIFT. Only when ``ledger_account_balances`` is not None: every ledger
+        account with a ``merchant_account_id`` has exactly one ``LedgerAccountBalanceSnap``, whose
+        credit_total, debit_total and posting_count equal the sum of the account's CREDIT
+        posting amounts, the sum of its DEBIT posting amounts and its number of postings; no
+        platform account (``merchant_account_id`` None) has one, and every row names a ledger
+        account in the snapshot (subject: account id). The stored row is a cache of the
+        ledger (ADR-014); this is the proof that it equals the ledger.
     """
     ledger = _Ledger.of(snapshot)
     found: list[Violation] = []

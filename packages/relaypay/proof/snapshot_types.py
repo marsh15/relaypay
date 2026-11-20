@@ -29,6 +29,7 @@ class InvariantCode(StrEnum):
     UNKNOWN_PROVIDER_EFFECT = "UNKNOWN_PROVIDER_EFFECT"  # 13 (quiesced only)
     ACKED_OP_MISSING = "ACKED_OP_MISSING"  # 14
     NOT_QUIESCED = "NOT_QUIESCED"  # 15 (quiesced only)
+    STORED_BALANCE_DRIFT = "STORED_BALANCE_DRIFT"  # 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +66,16 @@ class LedgerAccountSnap:
     organisation_id: str
     environment_id: str
     merchant_account_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LedgerAccountBalanceSnap:
+    """One ``ledger_account_balances`` row: the stored running totals of a merchant account."""
+
+    account_id: str
+    credit_total: int
+    debit_total: int
+    posting_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,3 +275,6 @@ class SystemSnapshot:
     provider_effects: tuple[ProviderEffectSnap, ...] = ()
     balance_transactions: tuple[BalanceTransactionSnap, ...] = ()
     acked_ops: tuple[AckedOp, ...] = ()
+    # None when the stored balances were not captured (hand-built snapshots); invariant 16 is
+    # then skipped. ``capture_snapshot`` always reads them.
+    ledger_account_balances: tuple[LedgerAccountBalanceSnap, ...] | None = None

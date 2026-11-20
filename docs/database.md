@@ -150,7 +150,10 @@ In the database, deferred constraint triggers on `journals` and `postings` check
 there are at least two postings, debits equal credits, and every posting's currency matches the
 journal's. A further deferred trigger ties `CAPTURE` and `REFUND` journals to the matching
 provider operation and amount. Balances are always derived from postings;
-`balance_transactions` is an immutable per-journal projection, not an authority.
+`balance_transactions` is an immutable per-journal projection, not an authority. Since 0035 a
+merchant balance is read from `ledger_account_balances`, running totals a posting trigger adds
+each posting to in the posting's own statement (ADR-014); they are a cache of the postings, and
+money invariant 16 and `relaypay_ledger_balance_drift()` check they equal them.
 
 ## Immutability
 
@@ -185,6 +188,16 @@ Evidence tables are protected by `BEFORE UPDATE OR DELETE` triggers that raise a
   `dispute_submission_attempts`, `subscriptions`, `subscription_invoices`, `recovery_cases`,
   `scheduled_recovery_actions`, `settlement_questions`, `risk_reviews`, `risk_escalations`, and
   the bank and commerce databases. A privileged connection can `UPDATE` them.
+- **Trigger-maintained, migration 0035** (ADR-014): `ledger_account_balances`, the stored credit
+  total, debit total and posting count of every merchant-owned ledger account. It is the one
+  table where privileges are revoked too: the app role has `SELECT` only, and
+  `ledger_account_balances_guard` rejects `INSERT`, `UPDATE` and `DELETE` from any role unless
+  they come from the maintenance triggers (`pg_trigger_depth() >= 2`). Those triggers
+  (`ledger_account_balances_open` on `ledger_accounts`, `ledger_account_balances_apply` on
+  `postings`) are `SECURITY DEFINER` with `search_path` pinned to the migrated schema.
+  `SELECT * FROM relaypay_ledger_balance_drift()` lists any account whose row disagrees with its
+  postings; it must return nothing. A bulk load with `session_replication_role = replica`
+  bypasses the triggers and must rebuild the rows (see `scripts/capture_money_path_plans.py`).
 - `TRUNCATE` is not blocked by row triggers. `scripts/reset_sandbox.py` relies on this and
   connects with the migrator role.
 

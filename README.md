@@ -235,7 +235,7 @@ in `tests/unit` and `tests/integration`; console journeys in `apps/console/e2e`;
 `apps/edge/test`. Recorded release runs are in [docs/test-evidence.md](docs/test-evidence.md) and
 [docs/evidence/](docs/evidence/).
 
-The chaos harness evaluates the fifteen money invariants on every seed and reports violations. A clean
+The chaos harness evaluates the sixteen money invariants on every seed and reports violations. A clean
 run covers the schedules and seeds it ran, not every interleaving.
 
 ## Configuration and deployment

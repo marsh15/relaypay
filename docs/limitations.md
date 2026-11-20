@@ -2,10 +2,17 @@
 
 ## Scope
 
-- A merchant balance is summed from the ledger on every read (three sums per `derive_balances`). It
-  stays an index-only scan for a typical account, but for an account that holds nearly every posting
-  it is a sequential scan: 320 ms at one million postings, growing linearly
-  ([evidence](evidence/v2.0.0-m19-plans.md)). A stored running total is not implemented.
+- Concurrent postings to one merchant ledger account run one at a time from the posting to the
+  commit. The trigger that keeps the account's stored running total (ADR-014; it made the balance
+  read 0.15 ms where the ledger sum took 105 to 320 ms at one million postings) locks the
+  account's row for that long. Measured with 16 threads on one machine, capture-shaped postings to
+  one merchant fell from 961 to 182 per second when each transaction spent 2 ms after its posting,
+  and from 1,099 to 590 with none; different merchants are unaffected
+  ([evidence](evidence/v2.0.0-m19-plans.md#what-it-costs-on-the-write-side)). Platform accounts
+  (provider clearing, fee, GST) keep no stored total and are still summed when read; no money path
+  reads them. The payout-coverage trigger (0020) still sums the merchant's AVAILABLE postings at
+  each commit that debits AVAILABLE or reserves a payout, deliberately against the ledger rather
+  than the stored total, so that check stays linear in those postings.
 - UPI collect exists only as a simulator flow (the `UPI_COLLECT` fault in the provider simulator
   settles three seconds after the request). The customer's approval is simulated, and `nextAction`
   carries a placeholder VPA.
@@ -154,7 +161,7 @@
 
 ## Verification
 
-- The 15 money invariants are evaluated by `packages/relaypay/proof/invariants.py` on every chaos
+- The 16 money invariants are evaluated by `packages/relaypay/proof/invariants.py` on every chaos
   seed and by the specification tests. A clean run is evidence for the schedules and seeds it
   covered (6 seeds x 1,000 operations on 2026-11-04: 0 violations), not a proof for all
   interleavings. See [resilience proofs](operations/resilience-proofs.md).

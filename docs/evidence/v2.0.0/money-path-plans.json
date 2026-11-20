@@ -9,466 +9,176 @@
     "processingOperations": 2000,
     "refunds": 20000
   },
-  "fixtureSeedSeconds": 184.8,
+  "fixtureSeedSeconds": 154.9,
   "machine": {
     "platform": "macOS-27.0-arm64-arm-64bit",
     "processor": "arm"
   },
   "note": "One machine, one Postgres in Docker; warm-cache run of each plan. The tenant is lopsided on purpose: two ledger accounts carry 98% of the postings.",
   "queries": {
-    "balance_sum": {
+    "balance_read": {
       "cold": {
         "actualRows": 1,
-        "executionMs": 2399.337,
-        "indexesUsed": [],
-        "nodes": [
-          "Aggregate",
-          "Gather",
-          "Seq Scan"
-        ],
-        "planningMs": 4.244,
-        "rootNode": "Aggregate",
-        "sequentialScans": [
-          "postings"
-        ],
-        "sharedHitBlocks": 9698,
-        "sharedReadBlocks": 7815
-      },
-      "source": "merchant_balances/service.py::_account_balance (derive_balances, 3 per call)",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 319.632,
-        "indexesUsed": [],
-        "nodes": [
-          "Aggregate",
-          "Gather",
-          "Seq Scan"
-        ],
-        "planningMs": 0.334,
-        "rootNode": "Aggregate",
-        "sequentialScans": [
-          "postings"
-        ],
-        "sharedHitBlocks": 9794,
-        "sharedReadBlocks": 7719
-      }
-    },
-    "balance_sum_selective_account": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 2.2,
+        "executionMs": 0.227,
         "indexesUsed": [
-          "ix_postings_account_balance"
-        ],
-        "nodes": [
-          "Aggregate",
-          "Index Only Scan"
-        ],
-        "planningMs": 0.264,
-        "rootNode": "Aggregate",
-        "sequentialScans": [],
-        "sharedHitBlocks": 60,
-        "sharedReadBlocks": 0
-      },
-      "source": "the same query for an account holding 2% of the postings (a typical merchant)",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 1.898,
-        "indexesUsed": [
-          "ix_postings_account_balance"
-        ],
-        "nodes": [
-          "Aggregate",
-          "Index Only Scan"
-        ],
-        "planningMs": 0.05,
-        "rootNode": "Aggregate",
-        "sequentialScans": [],
-        "sharedHitBlocks": 60,
-        "sharedReadBlocks": 0
-      }
-    },
-    "gcra_admit": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 0.131,
-        "indexesUsed": [],
-        "nodes": [
-          "ModifyTable",
-          "Result"
-        ],
-        "planningMs": 0.112,
-        "rootNode": "ModifyTable",
-        "sequentialScans": [],
-        "sharedHitBlocks": 6,
-        "sharedReadBlocks": 0
-      },
-      "source": "identity/rate_limit.py::GcraLimiter.admit (every API-key request)",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 0.04,
-        "indexesUsed": [],
-        "nodes": [
-          "ModifyTable",
-          "Result"
-        ],
-        "planningMs": 0.037,
-        "rootNode": "ModifyTable",
-        "sequentialScans": [],
-        "sharedHitBlocks": 5,
-        "sharedReadBlocks": 0
-      }
-    },
-    "idempotency_lookup": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 0.042,
-        "indexesUsed": [
-          "idempotency_records_scope_digest_key"
+          "ledger_account_balances_pkey"
         ],
         "nodes": [
           "Index Scan"
         ],
-        "planningMs": 0.543,
+        "planningMs": 6.481,
         "rootNode": "Index Scan",
-        "sequentialScans": [],
-        "sharedHitBlocks": 4,
-        "sharedReadBlocks": 0
-      },
-      "source": "payments/service.py idempotency lookup (every command)",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 0.011,
-        "indexesUsed": [
-          "idempotency_records_scope_digest_key"
-        ],
-        "nodes": [
-          "Index Scan"
-        ],
-        "planningMs": 0.044,
-        "rootNode": "Index Scan",
-        "sequentialScans": [],
-        "sharedHitBlocks": 4,
-        "sharedReadBlocks": 0
-      }
-    },
-    "locked_payment": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 0.092,
-        "indexesUsed": [
-          "payment_intents_public_id_key"
-        ],
-        "nodes": [
-          "Index Scan",
-          "LockRows"
-        ],
-        "planningMs": 0.746,
-        "rootNode": "LockRows",
-        "sequentialScans": [],
-        "sharedHitBlocks": 6,
-        "sharedReadBlocks": 0
-      },
-      "source": "payments/service.py::_locked_payment (every payment command)",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 0.04,
-        "indexesUsed": [
-          "payment_intents_public_id_key"
-        ],
-        "nodes": [
-          "Index Scan",
-          "LockRows"
-        ],
-        "planningMs": 0.048,
-        "rootNode": "LockRows",
-        "sequentialScans": [],
-        "sharedHitBlocks": 6,
-        "sharedReadBlocks": 0
-      }
-    },
-    "payments_list_deep_page_with_status": {
-      "cold": {
-        "actualRows": 51,
-        "executionMs": 0.852,
-        "indexesUsed": [
-          "ix_payment_intents_organisation_created"
-        ],
-        "nodes": [
-          "Incremental Sort",
-          "Index Scan",
-          "Limit"
-        ],
-        "planningMs": 0.088,
-        "rootNode": "Limit",
-        "sequentialScans": [],
-        "sharedHitBlocks": 6,
-        "sharedReadBlocks": 2
-      },
-      "source": "operations/service.py payments resource: status filter, cursor deep in the set",
-      "warm": {
-        "actualRows": 51,
-        "executionMs": 0.053,
-        "indexesUsed": [
-          "ix_payment_intents_organisation_created"
-        ],
-        "nodes": [
-          "Incremental Sort",
-          "Index Scan",
-          "Limit"
-        ],
-        "planningMs": 0.08,
-        "rootNode": "Limit",
-        "sequentialScans": [],
-        "sharedHitBlocks": 8,
-        "sharedReadBlocks": 0
-      }
-    },
-    "payments_list_first_page": {
-      "cold": {
-        "actualRows": 51,
-        "executionMs": 0.239,
-        "indexesUsed": [
-          "ix_payment_intents_organisation_created"
-        ],
-        "nodes": [
-          "Incremental Sort",
-          "Index Scan",
-          "Limit"
-        ],
-        "planningMs": 0.089,
-        "rootNode": "Limit",
-        "sequentialScans": [],
-        "sharedHitBlocks": 51,
-        "sharedReadBlocks": 0
-      },
-      "source": "operations/service.py payments resource: newest page, keyset order",
-      "warm": {
-        "actualRows": 51,
-        "executionMs": 0.068,
-        "indexesUsed": [
-          "ix_payment_intents_organisation_created"
-        ],
-        "nodes": [
-          "Incremental Sort",
-          "Index Scan",
-          "Limit"
-        ],
-        "planningMs": 0.059,
-        "rootNode": "Limit",
-        "sequentialScans": [],
-        "sharedHitBlocks": 51,
-        "sharedReadBlocks": 0
-      }
-    },
-    "recovery_claim": {
-      "cold": {
-        "actualRows": 20,
-        "executionMs": 0.595,
-        "indexesUsed": [
-          "ix_provider_operations_recovery"
-        ],
-        "nodes": [
-          "Incremental Sort",
-          "Index Scan",
-          "Limit",
-          "LockRows"
-        ],
-        "planningMs": 0.722,
-        "rootNode": "Limit",
-        "sequentialScans": [],
-        "sharedHitBlocks": 86,
-        "sharedReadBlocks": 0
-      },
-      "source": "provider_operations/recovery.py::claim_due_operations (poller, every second)",
-      "warm": {
-        "actualRows": 20,
-        "executionMs": 0.175,
-        "indexesUsed": [
-          "ix_provider_operations_recovery"
-        ],
-        "nodes": [
-          "Incremental Sort",
-          "Index Scan",
-          "Limit",
-          "LockRows"
-        ],
-        "planningMs": 0.079,
-        "rootNode": "Limit",
-        "sequentialScans": [],
-        "sharedHitBlocks": 77,
-        "sharedReadBlocks": 0
-      }
-    },
-    "refund_trigger_capture_lookup": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 0.03,
-        "indexesUsed": [
-          "captures_organisation_id_id_key"
-        ],
-        "nodes": [
-          "Index Scan"
-        ],
-        "planningMs": 0.508,
-        "rootNode": "Index Scan",
-        "sequentialScans": [],
-        "sharedHitBlocks": 4,
-        "sharedReadBlocks": 0
-      },
-      "source": "relaypay_validate_refund_reservations: the capture row",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 0.009,
-        "indexesUsed": [
-          "captures_organisation_id_id_key"
-        ],
-        "nodes": [
-          "Index Scan"
-        ],
-        "planningMs": 0.043,
-        "rootNode": "Index Scan",
-        "sequentialScans": [],
-        "sharedHitBlocks": 4,
-        "sharedReadBlocks": 0
-      }
-    },
-    "refund_trigger_reserved_sum": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 0.038,
-        "indexesUsed": [
-          "ix_refunds_payment_status"
-        ],
-        "nodes": [
-          "Aggregate",
-          "Index Scan"
-        ],
-        "planningMs": 0.704,
-        "rootNode": "Aggregate",
-        "sequentialScans": [],
-        "sharedHitBlocks": 4,
-        "sharedReadBlocks": 0
-      },
-      "source": "relaypay_validate_refund_reservations: refunds reserved against one payment",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 0.032,
-        "indexesUsed": [
-          "ix_refunds_payment_status"
-        ],
-        "nodes": [
-          "Aggregate",
-          "Index Scan"
-        ],
-        "planningMs": 0.076,
-        "rootNode": "Aggregate",
-        "sequentialScans": [],
-        "sharedHitBlocks": 4,
-        "sharedReadBlocks": 0
-      }
-    }
-  },
-  "queriesFreshlyLoaded": {
-    "balance_sum": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 269.149,
-        "indexesUsed": [],
-        "nodes": [
-          "Aggregate",
-          "Gather",
-          "Seq Scan"
-        ],
-        "planningMs": 6.622,
-        "rootNode": "Aggregate",
-        "sequentialScans": [
-          "postings"
-        ],
-        "sharedHitBlocks": 256,
-        "sharedReadBlocks": 17257
-      },
-      "source": "merchant_balances/service.py::_account_balance (derive_balances, 3 per call)",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 210.893,
-        "indexesUsed": [],
-        "nodes": [
-          "Aggregate",
-          "Gather",
-          "Seq Scan"
-        ],
-        "planningMs": 0.19,
-        "rootNode": "Aggregate",
-        "sequentialScans": [
-          "postings"
-        ],
-        "sharedHitBlocks": 352,
-        "sharedReadBlocks": 17161
-      }
-    },
-    "balance_sum_selective_account": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 306.938,
-        "indexesUsed": [
-          "ix_postings_account_balance"
-        ],
-        "nodes": [
-          "Aggregate",
-          "Bitmap Heap Scan",
-          "Bitmap Index Scan"
-        ],
-        "planningMs": 0.076,
-        "rootNode": "Aggregate",
-        "sequentialScans": [],
-        "sharedHitBlocks": 0,
-        "sharedReadBlocks": 10059
-      },
-      "source": "the same query for an account holding 2% of the postings (a typical merchant)",
-      "warm": {
-        "actualRows": 1,
-        "executionMs": 37.223,
-        "indexesUsed": [
-          "ix_postings_account_balance"
-        ],
-        "nodes": [
-          "Aggregate",
-          "Bitmap Heap Scan",
-          "Bitmap Index Scan"
-        ],
-        "planningMs": 0.089,
-        "rootNode": "Aggregate",
-        "sequentialScans": [],
-        "sharedHitBlocks": 9199,
-        "sharedReadBlocks": 860
-      }
-    },
-    "gcra_admit": {
-      "cold": {
-        "actualRows": 1,
-        "executionMs": 0.473,
-        "indexesUsed": [],
-        "nodes": [
-          "ModifyTable",
-          "Result"
-        ],
-        "planningMs": 0.968,
-        "rootNode": "ModifyTable",
         "sequentialScans": [],
         "sharedHitBlocks": 3,
-        "sharedReadBlocks": 3
+        "sharedReadBlocks": 0
       },
-      "source": "identity/rate_limit.py::GcraLimiter.admit (every API-key request)",
+      "source": "ledger/service.py::credit_balance via merchant_balances/service.py::_account_balance (derive_balances, 3 per call): the stored running total of an account holding 98% of the postings",
       "warm": {
         "actualRows": 1,
-        "executionMs": 0.061,
+        "executionMs": 0.149,
+        "indexesUsed": [
+          "ledger_account_balances_pkey"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.1,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 3,
+        "sharedReadBlocks": 0
+      }
+    },
+    "balance_read_selective_account": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 0.067,
+        "indexesUsed": [
+          "ledger_account_balances_pkey"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.074,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2,
+        "sharedReadBlocks": 1
+      },
+      "source": "the same read for an account holding 2% of the postings (a typical merchant)",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.026,
+        "indexesUsed": [
+          "ledger_account_balances_pkey"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.046,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 3,
+        "sharedReadBlocks": 0
+      }
+    },
+    "balance_recompute_sum": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 1016.502,
+        "indexesUsed": [
+          "ix_postings_account_balance"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Gather",
+          "Index Only Scan"
+        ],
+        "planningMs": 9.772,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 3,
+        "sharedReadBlocks": 2773
+      },
+      "source": "ledger/service.py::recompute_balance: the ledger SUM the stored total is verified against (the read before 0035), for the 98% account",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 104.587,
+        "indexesUsed": [
+          "ix_postings_account_balance"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Gather",
+          "Index Only Scan"
+        ],
+        "planningMs": 0.127,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2776,
+        "sharedReadBlocks": 0
+      }
+    },
+    "balance_recompute_sum_selective_account": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 70.763,
+        "indexesUsed": [
+          "ix_postings_account_balance"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Index Only Scan"
+        ],
+        "planningMs": 0.106,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2,
+        "sharedReadBlocks": 58
+      },
+      "source": "the same SUM for the 2% account",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 2.037,
+        "indexesUsed": [
+          "ix_postings_account_balance"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Index Only Scan"
+        ],
+        "planningMs": 0.093,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 60,
+        "sharedReadBlocks": 0
+      }
+    },
+    "gcra_admit": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 1.114,
         "indexesUsed": [],
         "nodes": [
           "ModifyTable",
           "Result"
         ],
-        "planningMs": 0.047,
+        "planningMs": 0.356,
+        "rootNode": "ModifyTable",
+        "sequentialScans": [],
+        "sharedHitBlocks": 5,
+        "sharedReadBlocks": 4
+      },
+      "source": "identity/rate_limit.py::GcraLimiter.admit (every API-key request)",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.081,
+        "indexesUsed": [],
+        "nodes": [
+          "ModifyTable",
+          "Result"
+        ],
+        "planningMs": 0.062,
         "rootNode": "ModifyTable",
         "sequentialScans": [],
         "sharedHitBlocks": 5,
@@ -478,18 +188,18 @@
     "idempotency_lookup": {
       "cold": {
         "actualRows": 1,
-        "executionMs": 0.041,
+        "executionMs": 0.052,
         "indexesUsed": [
           "idempotency_records_scope_digest_key"
         ],
         "nodes": [
           "Index Scan"
         ],
-        "planningMs": 5.178,
+        "planningMs": 12.706,
         "rootNode": "Index Scan",
         "sequentialScans": [],
-        "sharedHitBlocks": 1,
-        "sharedReadBlocks": 3
+        "sharedHitBlocks": 4,
+        "sharedReadBlocks": 0
       },
       "source": "payments/service.py idempotency lookup (every command)",
       "warm": {
@@ -501,7 +211,7 @@
         "nodes": [
           "Index Scan"
         ],
-        "planningMs": 0.052,
+        "planningMs": 0.077,
         "rootNode": "Index Scan",
         "sequentialScans": [],
         "sharedHitBlocks": 4,
@@ -511,7 +221,7 @@
     "locked_payment": {
       "cold": {
         "actualRows": 1,
-        "executionMs": 2.583,
+        "executionMs": 0.131,
         "indexesUsed": [
           "payment_intents_public_id_key"
         ],
@@ -519,16 +229,16 @@
           "Index Scan",
           "LockRows"
         ],
-        "planningMs": 12.302,
+        "planningMs": 0.903,
         "rootNode": "LockRows",
         "sequentialScans": [],
-        "sharedHitBlocks": 1,
-        "sharedReadBlocks": 4
+        "sharedHitBlocks": 6,
+        "sharedReadBlocks": 0
       },
       "source": "payments/service.py::_locked_payment (every payment command)",
       "warm": {
         "actualRows": 1,
-        "executionMs": 0.078,
+        "executionMs": 0.029,
         "indexesUsed": [
           "payment_intents_public_id_key"
         ],
@@ -536,91 +246,87 @@
           "Index Scan",
           "LockRows"
         ],
-        "planningMs": 0.135,
+        "planningMs": 0.054,
         "rootNode": "LockRows",
         "sequentialScans": [],
-        "sharedHitBlocks": 5,
+        "sharedHitBlocks": 6,
         "sharedReadBlocks": 0
       }
     },
     "payments_list_deep_page_with_status": {
       "cold": {
         "actualRows": 51,
-        "executionMs": 1.773,
+        "executionMs": 0.103,
         "indexesUsed": [
-          "ix_payment_intents_organisation_created"
+          "ix_payment_intents_scope_created_id"
         ],
         "nodes": [
-          "Incremental Sort",
           "Index Scan",
           "Limit"
         ],
-        "planningMs": 0.108,
+        "planningMs": 0.134,
         "rootNode": "Limit",
         "sequentialScans": [],
-        "sharedHitBlocks": 1,
-        "sharedReadBlocks": 5
+        "sharedHitBlocks": 5,
+        "sharedReadBlocks": 0
       },
       "source": "operations/service.py payments resource: status filter, cursor deep in the set",
       "warm": {
         "actualRows": 51,
-        "executionMs": 0.055,
+        "executionMs": 0.053,
         "indexesUsed": [
-          "ix_payment_intents_organisation_created"
+          "ix_payment_intents_scope_created_id"
         ],
         "nodes": [
-          "Incremental Sort",
           "Index Scan",
           "Limit"
         ],
-        "planningMs": 0.094,
+        "planningMs": 0.113,
         "rootNode": "Limit",
         "sequentialScans": [],
-        "sharedHitBlocks": 6,
+        "sharedHitBlocks": 5,
         "sharedReadBlocks": 0
       }
     },
     "payments_list_first_page": {
       "cold": {
         "actualRows": 51,
-        "executionMs": 22.872,
+        "executionMs": 0.1,
         "indexesUsed": [
-          "ix_payment_intents_organisation_created"
+          "ix_payment_intents_scope_created_id"
         ],
         "nodes": [
-          "Incremental Sort",
           "Index Scan",
           "Limit"
         ],
-        "planningMs": 0.152,
+        "planningMs": 0.64,
         "rootNode": "Limit",
         "sequentialScans": [],
-        "sharedHitBlocks": 2,
-        "sharedReadBlocks": 49
+        "sharedHitBlocks": 13,
+        "sharedReadBlocks": 0
       },
       "source": "operations/service.py payments resource: newest page, keyset order",
       "warm": {
         "actualRows": 51,
-        "executionMs": 0.071,
+        "executionMs": 0.038,
         "indexesUsed": [
-          "ix_payment_intents_organisation_created"
+          "ix_payment_intents_scope_created_id"
         ],
         "nodes": [
-          "Incremental Sort",
           "Index Scan",
           "Limit"
         ],
-        "planningMs": 0.091,
+        "planningMs": 0.069,
         "rootNode": "Limit",
         "sequentialScans": [],
-        "sharedHitBlocks": 51,
+        "sharedHitBlocks": 13,
         "sharedReadBlocks": 0
       }
     },
     "recovery_claim": {
       "cold": {
         "actualRows": 20,
-        "executionMs": 665.287,
+        "executionMs": 0.588,
         "indexesUsed": [
           "ix_provider_operations_recovery"
         ],
@@ -630,16 +336,16 @@
           "Limit",
           "LockRows"
         ],
-        "planningMs": 28.65,
+        "planningMs": 15.854,
         "rootNode": "Limit",
         "sequentialScans": [],
-        "sharedHitBlocks": 57,
-        "sharedReadBlocks": 832
+        "sharedHitBlocks": 80,
+        "sharedReadBlocks": 0
       },
       "source": "provider_operations/recovery.py::claim_due_operations (poller, every second)",
       "warm": {
         "actualRows": 20,
-        "executionMs": 0.354,
+        "executionMs": 0.092,
         "indexesUsed": [
           "ix_provider_operations_recovery"
         ],
@@ -649,40 +355,40 @@
           "Limit",
           "LockRows"
         ],
-        "planningMs": 0.162,
+        "planningMs": 0.085,
         "rootNode": "Limit",
         "sequentialScans": [],
-        "sharedHitBlocks": 77,
+        "sharedHitBlocks": 71,
         "sharedReadBlocks": 0
       }
     },
     "refund_trigger_capture_lookup": {
       "cold": {
         "actualRows": 1,
-        "executionMs": 3.107,
+        "executionMs": 0.035,
         "indexesUsed": [
           "captures_organisation_id_id_key"
         ],
         "nodes": [
           "Index Scan"
         ],
-        "planningMs": 18.778,
+        "planningMs": 0.605,
         "rootNode": "Index Scan",
         "sequentialScans": [],
-        "sharedHitBlocks": 0,
-        "sharedReadBlocks": 4
+        "sharedHitBlocks": 4,
+        "sharedReadBlocks": 0
       },
       "source": "relaypay_validate_refund_reservations: the capture row",
       "warm": {
         "actualRows": 1,
-        "executionMs": 0.016,
+        "executionMs": 0.01,
         "indexesUsed": [
           "captures_organisation_id_id_key"
         ],
         "nodes": [
           "Index Scan"
         ],
-        "planningMs": 0.092,
+        "planningMs": 0.046,
         "rootNode": "Index Scan",
         "sequentialScans": [],
         "sharedHitBlocks": 4,
@@ -692,7 +398,7 @@
     "refund_trigger_reserved_sum": {
       "cold": {
         "actualRows": 1,
-        "executionMs": 0.628,
+        "executionMs": 0.037,
         "indexesUsed": [
           "ix_refunds_payment_status"
         ],
@@ -700,11 +406,11 @@
           "Aggregate",
           "Index Scan"
         ],
-        "planningMs": 28.406,
+        "planningMs": 0.478,
         "rootNode": "Aggregate",
         "sequentialScans": [],
-        "sharedHitBlocks": 0,
-        "sharedReadBlocks": 4
+        "sharedHitBlocks": 4,
+        "sharedReadBlocks": 0
       },
       "source": "relaypay_validate_refund_reservations: refunds reserved against one payment",
       "warm": {
@@ -717,7 +423,7 @@
           "Aggregate",
           "Index Scan"
         ],
-        "planningMs": 0.091,
+        "planningMs": 0.07,
         "rootNode": "Aggregate",
         "sequentialScans": [],
         "sharedHitBlocks": 4,
@@ -725,14 +431,428 @@
       }
     }
   },
-  "recordedAt": "2026-11-19T12:04:15.603902+00:00",
-  "sequentialScansAfterVacuum": {
-    "balance_sum": [
-      "postings"
-    ]
+  "queriesFreshlyLoaded": {
+    "balance_read": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 0.838,
+        "indexesUsed": [
+          "ledger_account_balances_pkey"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 6.909,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2,
+        "sharedReadBlocks": 1
+      },
+      "source": "ledger/service.py::credit_balance via merchant_balances/service.py::_account_balance (derive_balances, 3 per call): the stored running total of an account holding 98% of the postings",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.017,
+        "indexesUsed": [
+          "ledger_account_balances_pkey"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.042,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 3,
+        "sharedReadBlocks": 0
+      }
+    },
+    "balance_read_selective_account": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 0.037,
+        "indexesUsed": [
+          "ledger_account_balances_pkey"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.018,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2,
+        "sharedReadBlocks": 1
+      },
+      "source": "the same read for an account holding 2% of the postings (a typical merchant)",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.009,
+        "indexesUsed": [
+          "ledger_account_balances_pkey"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.016,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 3,
+        "sharedReadBlocks": 0
+      }
+    },
+    "balance_recompute_sum": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 230.009,
+        "indexesUsed": [],
+        "nodes": [
+          "Aggregate",
+          "Gather",
+          "Seq Scan"
+        ],
+        "planningMs": 3.077,
+        "rootNode": "Aggregate",
+        "sequentialScans": [
+          "postings"
+        ],
+        "sharedHitBlocks": 14260,
+        "sharedReadBlocks": 3796
+      },
+      "source": "ledger/service.py::recompute_balance: the ledger SUM the stored total is verified against (the read before 0035), for the 98% account",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 289.523,
+        "indexesUsed": [],
+        "nodes": [
+          "Aggregate",
+          "Gather",
+          "Seq Scan"
+        ],
+        "planningMs": 0.1,
+        "rootNode": "Aggregate",
+        "sequentialScans": [
+          "postings"
+        ],
+        "sharedHitBlocks": 14356,
+        "sharedReadBlocks": 3700
+      }
+    },
+    "balance_recompute_sum_selective_account": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 68.047,
+        "indexesUsed": [
+          "ix_postings_account_balance"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Bitmap Heap Scan",
+          "Bitmap Index Scan"
+        ],
+        "planningMs": 0.084,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 8891,
+        "sharedReadBlocks": 1168
+      },
+      "source": "the same SUM for the 2% account",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 12.098,
+        "indexesUsed": [
+          "ix_postings_account_balance"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Bitmap Heap Scan",
+          "Bitmap Index Scan"
+        ],
+        "planningMs": 0.079,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 10059,
+        "sharedReadBlocks": 0
+      }
+    },
+    "gcra_admit": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 2.155,
+        "indexesUsed": [],
+        "nodes": [
+          "ModifyTable",
+          "Result"
+        ],
+        "planningMs": 0.542,
+        "rootNode": "ModifyTable",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2,
+        "sharedReadBlocks": 6
+      },
+      "source": "identity/rate_limit.py::GcraLimiter.admit (every API-key request)",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.059,
+        "indexesUsed": [],
+        "nodes": [
+          "ModifyTable",
+          "Result"
+        ],
+        "planningMs": 0.038,
+        "rootNode": "ModifyTable",
+        "sequentialScans": [],
+        "sharedHitBlocks": 5,
+        "sharedReadBlocks": 0
+      }
+    },
+    "idempotency_lookup": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 6.39,
+        "indexesUsed": [
+          "idempotency_records_scope_digest_key"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 17.434,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 0,
+        "sharedReadBlocks": 4
+      },
+      "source": "payments/service.py idempotency lookup (every command)",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.013,
+        "indexesUsed": [
+          "idempotency_records_scope_digest_key"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.074,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 4,
+        "sharedReadBlocks": 0
+      }
+    },
+    "locked_payment": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 1.126,
+        "indexesUsed": [
+          "payment_intents_public_id_key"
+        ],
+        "nodes": [
+          "Index Scan",
+          "LockRows"
+        ],
+        "planningMs": 17.799,
+        "rootNode": "LockRows",
+        "sequentialScans": [],
+        "sharedHitBlocks": 1,
+        "sharedReadBlocks": 4
+      },
+      "source": "payments/service.py::_locked_payment (every payment command)",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.038,
+        "indexesUsed": [
+          "payment_intents_public_id_key"
+        ],
+        "nodes": [
+          "Index Scan",
+          "LockRows"
+        ],
+        "planningMs": 0.065,
+        "rootNode": "LockRows",
+        "sequentialScans": [],
+        "sharedHitBlocks": 5,
+        "sharedReadBlocks": 0
+      }
+    },
+    "payments_list_deep_page_with_status": {
+      "cold": {
+        "actualRows": 51,
+        "executionMs": 3.074,
+        "indexesUsed": [
+          "ix_payment_intents_scope_created_id"
+        ],
+        "nodes": [
+          "Index Scan",
+          "Limit"
+        ],
+        "planningMs": 0.09,
+        "rootNode": "Limit",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2,
+        "sharedReadBlocks": 5
+      },
+      "source": "operations/service.py payments resource: status filter, cursor deep in the set",
+      "warm": {
+        "actualRows": 51,
+        "executionMs": 0.039,
+        "indexesUsed": [
+          "ix_payment_intents_scope_created_id"
+        ],
+        "nodes": [
+          "Index Scan",
+          "Limit"
+        ],
+        "planningMs": 0.085,
+        "rootNode": "Limit",
+        "sequentialScans": [],
+        "sharedHitBlocks": 7,
+        "sharedReadBlocks": 0
+      }
+    },
+    "payments_list_first_page": {
+      "cold": {
+        "actualRows": 51,
+        "executionMs": 6.259,
+        "indexesUsed": [
+          "ix_payment_intents_scope_created_id"
+        ],
+        "nodes": [
+          "Index Scan",
+          "Limit"
+        ],
+        "planningMs": 0.145,
+        "rootNode": "Limit",
+        "sequentialScans": [],
+        "sharedHitBlocks": 2,
+        "sharedReadBlocks": 11
+      },
+      "source": "operations/service.py payments resource: newest page, keyset order",
+      "warm": {
+        "actualRows": 51,
+        "executionMs": 0.032,
+        "indexesUsed": [
+          "ix_payment_intents_scope_created_id"
+        ],
+        "nodes": [
+          "Index Scan",
+          "Limit"
+        ],
+        "planningMs": 0.061,
+        "rootNode": "Limit",
+        "sequentialScans": [],
+        "sharedHitBlocks": 13,
+        "sharedReadBlocks": 0
+      }
+    },
+    "recovery_claim": {
+      "cold": {
+        "actualRows": 20,
+        "executionMs": 8.219,
+        "indexesUsed": [
+          "ix_provider_operations_recovery"
+        ],
+        "nodes": [
+          "Incremental Sort",
+          "Index Scan",
+          "Limit",
+          "LockRows"
+        ],
+        "planningMs": 21.957,
+        "rootNode": "Limit",
+        "sequentialScans": [],
+        "sharedHitBlocks": 44,
+        "sharedReadBlocks": 36
+      },
+      "source": "provider_operations/recovery.py::claim_due_operations (poller, every second)",
+      "warm": {
+        "actualRows": 20,
+        "executionMs": 0.138,
+        "indexesUsed": [
+          "ix_provider_operations_recovery"
+        ],
+        "nodes": [
+          "Incremental Sort",
+          "Index Scan",
+          "Limit",
+          "LockRows"
+        ],
+        "planningMs": 0.141,
+        "rootNode": "Limit",
+        "sequentialScans": [],
+        "sharedHitBlocks": 71,
+        "sharedReadBlocks": 0
+      }
+    },
+    "refund_trigger_capture_lookup": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 0.624,
+        "indexesUsed": [
+          "captures_organisation_id_id_key"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 9.215,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 0,
+        "sharedReadBlocks": 4
+      },
+      "source": "relaypay_validate_refund_reservations: the capture row",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.143,
+        "indexesUsed": [
+          "captures_organisation_id_id_key"
+        ],
+        "nodes": [
+          "Index Scan"
+        ],
+        "planningMs": 0.329,
+        "rootNode": "Index Scan",
+        "sequentialScans": [],
+        "sharedHitBlocks": 4,
+        "sharedReadBlocks": 0
+      }
+    },
+    "refund_trigger_reserved_sum": {
+      "cold": {
+        "actualRows": 1,
+        "executionMs": 4.119,
+        "indexesUsed": [
+          "ix_refunds_payment_status"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Index Scan"
+        ],
+        "planningMs": 8.136,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 0,
+        "sharedReadBlocks": 4
+      },
+      "source": "relaypay_validate_refund_reservations: refunds reserved against one payment",
+      "warm": {
+        "actualRows": 1,
+        "executionMs": 0.021,
+        "indexesUsed": [
+          "ix_refunds_payment_status"
+        ],
+        "nodes": [
+          "Aggregate",
+          "Index Scan"
+        ],
+        "planningMs": 0.088,
+        "rootNode": "Aggregate",
+        "sequentialScans": [],
+        "sharedHitBlocks": 4,
+        "sharedReadBlocks": 0
+      }
+    }
   },
+  "recordedAt": "2026-11-20T03:27:42.536778+00:00",
+  "sequentialScansAfterVacuum": {},
   "sequentialScansFreshlyLoaded": {
-    "balance_sum": [
+    "balance_recompute_sum": [
       "postings"
     ]
   }

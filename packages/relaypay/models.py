@@ -42,7 +42,7 @@ from relaypay.event_delivery.models import (
 )
 from relaypay.fees.models import FeeScheduleVersion
 from relaypay.identity.models import APIKey, ApiRateLimitState, Organisation, SessionRecord, User
-from relaypay.ledger.models import Journal, LedgerAccount, Posting
+from relaypay.ledger.models import Journal, LedgerAccount, LedgerAccountBalance, Posting
 from relaypay.merchant_balances.models import (
     BalanceTransaction,
     MerchantAccount,
@@ -132,6 +132,7 @@ __all__ = [
     "InboundWebhookEvent",
     "Journal",
     "LedgerAccount",
+    "LedgerAccountBalance",
     "MerchantAccount",
     "MerchantEvent",
     "MismatchEvidenceVersion",

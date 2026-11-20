@@ -19,7 +19,7 @@ from dataclasses import replace
 from sqlalchemy import ColumnElement, Row, select, text, true
 from sqlalchemy.orm import InstrumentedAttribute, Session, sessionmaker
 
-from relaypay.ledger.models import Journal, LedgerAccount, Posting
+from relaypay.ledger.models import Journal, LedgerAccount, LedgerAccountBalance, Posting
 from relaypay.merchant_balances.models import (
     BalanceTransaction,
     MerchantAccount,
@@ -41,6 +41,7 @@ from relaypay.proof.snapshot_types import (
     CaptureSnap,
     IdempotencyRecordSnap,
     JournalSnap,
+    LedgerAccountBalanceSnap,
     LedgerAccountSnap,
     MerchantBalanceSnap,
     OperationHistorySnap,
@@ -149,6 +150,21 @@ def _read_relaypay(session: Session, scope: tuple[uuid.UUID, ...] | None) -> Sys
             )
             .where(org(LedgerAccount.organisation_id))
             .order_by(LedgerAccount.id)
+        )
+    )
+    stored_balances = tuple(
+        LedgerAccountBalanceSnap(
+            str(row.account_id), row.credit_total, row.debit_total, row.posting_count
+        )
+        for row in session.execute(
+            select(
+                LedgerAccountBalance.account_id,
+                LedgerAccountBalance.credit_total,
+                LedgerAccountBalance.debit_total,
+                LedgerAccountBalance.posting_count,
+            )
+            .where(org(LedgerAccountBalance.organisation_id))
+            .order_by(LedgerAccountBalance.account_id)
         )
     )
     journals = tuple(
@@ -498,6 +514,7 @@ def _read_relaypay(session: Session, scope: tuple[uuid.UUID, ...] | None) -> Sys
         operation_history=history,
         idempotency_records=idempotency,
         balance_transactions=balance_transactions,
+        ledger_account_balances=stored_balances,
     )
 
 

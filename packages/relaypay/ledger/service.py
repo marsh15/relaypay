@@ -2,14 +2,14 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from relaypay.errors import RelayPayError
 from relaypay.identity.environments import resolve_environment_id
 from relaypay.ids import new_public_id, new_uuid
-from relaypay.ledger.models import Journal, LedgerAccount, Posting
+from relaypay.ledger.models import Journal, LedgerAccount, LedgerAccountBalance, Posting
 from relaypay.merchant_balances.models import BalanceTransaction, MerchantAccount, SettlementItem
 from relaypay.payments.models import Capture, PaymentIntent, Refund
 
@@ -51,6 +51,74 @@ def account(
             details={"account_code": code},
         )
     return item
+
+
+def recompute_balance(session: Session, account_id: uuid.UUID) -> int:
+    """Credits minus debits on one account, summed from its postings (the source of truth).
+
+    Linear in the account's postings. Money paths read ``credit_balance`` instead; this is the
+    fallback for platform accounts and the reference the stored totals are verified against.
+    """
+    value = session.scalar(
+        select(
+            func.coalesce(
+                func.sum(case((Posting.side == "CREDIT", Posting.amount), else_=-Posting.amount)),
+                0,
+            )
+        ).where(Posting.account_id == account_id)
+    )
+    return int(value or 0)
+
+
+def credit_balance(session: Session, account_id: uuid.UUID) -> int:
+    """Credits minus debits on one account: the stored running total, one primary-key read.
+
+    Merchant-owned accounts always have a ``ledger_account_balances`` row (ADR-014), kept equal
+    to ``recompute_balance`` by the posting trigger in the posting's own transaction. Platform
+    accounts have none and are summed.
+    """
+    row = session.execute(
+        select(LedgerAccountBalance.credit_total, LedgerAccountBalance.debit_total).where(
+            LedgerAccountBalance.account_id == account_id
+        )
+    ).one_or_none()
+    if row is None:
+        return recompute_balance(session, account_id)
+    return int(row.credit_total) - int(row.debit_total)
+
+
+@dataclass(frozen=True, slots=True)
+class BalanceDrift:
+    """One account whose stored totals disagree with its postings (None: no stored row)."""
+
+    account_id: uuid.UUID
+    stored_credit_total: int | None
+    stored_debit_total: int | None
+    stored_posting_count: int | None
+    ledger_credit_total: int
+    ledger_debit_total: int
+    ledger_posting_count: int
+
+
+def balance_drift(session: Session) -> list[BalanceDrift]:
+    """Every account where ``ledger_account_balances`` disagrees with the postings.
+
+    Empty means every merchant-owned account has exactly one row equal to the sum of its
+    postings, and no platform account has one. Scans every posting; for verification only.
+    """
+    rows = session.execute(text("SELECT * FROM relaypay_ledger_balance_drift()"))
+    return [
+        BalanceDrift(
+            account_id=row.drifted_account_id,
+            stored_credit_total=row.stored_credit_total,
+            stored_debit_total=row.stored_debit_total,
+            stored_posting_count=row.stored_posting_count,
+            ledger_credit_total=row.ledger_credit_total,
+            ledger_debit_total=row.ledger_debit_total,
+            ledger_posting_count=row.ledger_posting_count,
+        )
+        for row in rows
+    ]
 
 
 PLATFORM_FEE_REVENUE = "PLATFORM_FEE_REVENUE"
@@ -275,20 +343,13 @@ def _refund_sources(
         "AVAILABLE_PAYABLE_LIABILITY",
         merchant_account_id=merchant_account_id,
     )
-    available = session.scalar(
-        select(
-            func.coalesce(
-                func.sum(case((Posting.side == "CREDIT", Posting.amount), else_=-Posting.amount)),
-                0,
-            )
-        ).where(Posting.account_id == available_account.id)
-    )
+    available = credit_balance(session, available_account.id)
     # Funds reserved for in-flight payouts are not the refund's to take: draw only on the
     # unreserved (payout-eligible) part of AVAILABLE and book the rest to the receivable.
     # Local import: merchant_balances.service imports this module at load time.
     from relaypay.merchant_balances.service import reserved_payout_amount
 
-    unreserved = max(int(available or 0) - reserved_payout_amount(session, merchant_account_id), 0)
+    unreserved = max(available - reserved_payout_amount(session, merchant_account_id), 0)
     pending_use = min(refund.amount, pending)
     available_use = min(refund.amount - pending_use, unreserved)
     return pending_use, available_use, refund.amount - pending_use - available_use

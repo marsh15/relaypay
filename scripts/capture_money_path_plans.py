@@ -13,6 +13,12 @@ afterwards unless ``--keep`` is given. Use a disposable development database.
 The tenant is deliberately lopsided: two ledger accounts carry 98% of the postings, so the
 balance ``SUM`` is the worst case a hot merchant produces; a second pair of accounts holding 2%
 is the typical merchant.
+
+Since migration 0035 a merchant balance is read from ``ledger_account_balances`` (ADR-014). The
+bulk load bypasses the trigger that maintains it, so the fixture rebuilds the seeded accounts'
+rows from their postings and checks ``relaypay_ledger_balance_drift()`` is empty for them before
+measuring, and resets them after the cleanup. The ledger ``SUM`` is still recorded
+(``balance_recompute_*``): it is the verification path and what platform accounts use.
 """
 
 from __future__ import annotations
@@ -148,6 +154,7 @@ def _seed(world: dict[str, str], postings: int) -> dict[str, int]:
             """,
             params,
         )
+        _rebuild_stored_balances(connection, world)
         for table in (
             "payment_intents",
             "provider_operations",
@@ -156,9 +163,16 @@ def _seed(world: dict[str, str], postings: int) -> dict[str, int]:
             "captures",
             "refunds",
             "idempotency_records",
+            "ledger_account_balances",
         ):
             connection.execute(f"ANALYZE {table}")
         connection.commit()
+        drifted = connection.execute(
+            "SELECT count(*) FROM relaypay_ledger_balance_drift() d "
+            "JOIN ledger_accounts a ON a.id = d.drifted_account_id WHERE a.organisation_id = %s",
+            (world["org"],),
+        ).fetchone()
+        assert drifted == (0,), f"stored balances disagree with the seeded ledger: {drifted}"
     return {
         "postings": journals * 2,
         "journals": journals,
@@ -168,6 +182,29 @@ def _seed(world: dict[str, str], postings: int) -> dict[str, int]:
         "idempotencyRecords": payments,
         "processingOperations": processing,
     }
+
+
+def _rebuild_stored_balances(connection: psycopg.Connection[Any], world: dict[str, str]) -> None:
+    """Recompute the tenant's stored balances from its postings (the bulk load skipped the
+    trigger). Runs with ``session_replication_role = replica``, so the table's guard is off."""
+    connection.execute(
+        """
+        UPDATE ledger_account_balances b
+           SET credit_total = l.credit_total, debit_total = l.debit_total,
+               posting_count = l.posting_count
+          FROM (
+            SELECT a.id,
+                   COALESCE(sum(p.amount) FILTER (WHERE p.side = 'CREDIT'), 0) AS credit_total,
+                   COALESCE(sum(p.amount) FILTER (WHERE p.side = 'DEBIT'), 0) AS debit_total,
+                   count(p.id) AS posting_count
+              FROM ledger_accounts a LEFT JOIN postings p ON p.account_id = a.id
+             WHERE a.organisation_id = %s AND a.merchant_account_id IS NOT NULL
+             GROUP BY a.id
+          ) l
+         WHERE b.account_id = l.id
+        """,
+        (world["org"],),
+    )
 
 
 def _walk(plan: dict[str, Any], visit: Any) -> None:
@@ -207,15 +244,32 @@ def _queries(world: dict[str, str]) -> list[tuple[str, str, str, dict[str, Any]]
     org, env = world["org"], world["env"]
     return [
         (
-            "balance_sum",
-            "merchant_balances/service.py::_account_balance (derive_balances, 3 per call)",
+            "balance_read",
+            "ledger/service.py::credit_balance via merchant_balances/service.py::_account_balance "
+            "(derive_balances, 3 per call): the stored running total of an account holding 98% "
+            "of the postings",
+            "SELECT credit_total, debit_total FROM ledger_account_balances "
+            "WHERE account_id = %(account)s::uuid",
+            {"account": world["credit_account"]},
+        ),
+        (
+            "balance_read_selective_account",
+            "the same read for an account holding 2% of the postings (a typical merchant)",
+            "SELECT credit_total, debit_total FROM ledger_account_balances "
+            "WHERE account_id = %(account)s::uuid",
+            {"account": world["small_credit"]},
+        ),
+        (
+            "balance_recompute_sum",
+            "ledger/service.py::recompute_balance: the ledger SUM the stored total is verified "
+            "against (the read before 0035), for the 98% account",
             "SELECT coalesce(sum(CASE side WHEN 'CREDIT' THEN amount ELSE -amount END), 0) "
             "FROM postings WHERE account_id = %(account)s::uuid",
             {"account": world["credit_account"]},
         ),
         (
-            "balance_sum_selective_account",
-            "the same query for an account holding 2% of the postings (a typical merchant)",
+            "balance_recompute_sum_selective_account",
+            "the same SUM for the 2% account",
             "SELECT coalesce(sum(CASE side WHEN 'CREDIT' THEN amount ELSE -amount END), 0) "
             "FROM postings WHERE account_id = %(account)s::uuid",
             {"account": world["small_credit"]},
@@ -310,7 +364,14 @@ def _capture(world: dict[str, str]) -> dict[str, Any]:
 
 def _vacuum() -> None:
     with psycopg.connect(SUPERUSER_URL, autocommit=True) as connection:
-        for table in ("postings", "journals", "payment_intents", "captures", "refunds"):
+        for table in (
+            "postings",
+            "journals",
+            "payment_intents",
+            "captures",
+            "refunds",
+            "ledger_account_balances",
+        ):
             connection.execute(f"VACUUM (ANALYZE) {table}")
 
 
@@ -330,6 +391,7 @@ def _cleanup(world: dict[str, str]) -> None:
                 f"DELETE FROM {table} WHERE organisation_id = %s",  # noqa: S608 - fixed allowlist
                 (world["org"],),
             )
+        _rebuild_stored_balances(connection, world)
         connection.commit()
     with psycopg.connect(SUPERUSER_URL, autocommit=True) as connection:
         # Return the fixture's space; otherwise later runs scan megabytes of nothing.

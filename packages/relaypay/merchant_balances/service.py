@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,8 +14,8 @@ from relaypay.identity.models import Environment
 from relaypay.identity.security import Principal
 from relaypay.identity.service import append_audit, require_organisation_admin
 from relaypay.ids import new_public_id, new_uuid
-from relaypay.ledger.models import Journal, LedgerAccount, Posting
-from relaypay.ledger.service import account, add_balance_transaction, post_journal
+from relaypay.ledger.models import Journal, LedgerAccount
+from relaypay.ledger.service import account, add_balance_transaction, credit_balance, post_journal
 from relaypay.merchant_balances.models import (
     BalanceTransaction,
     MerchantAccount,
@@ -202,20 +202,8 @@ def _scoped_merchant(
 
 
 def _account_balance(session: Session, ledger_account: LedgerAccount) -> int:
-    value = session.scalar(
-        select(
-            func.coalesce(
-                func.sum(
-                    case(
-                        (Posting.side == "CREDIT", Posting.amount),
-                        else_=-Posting.amount,
-                    )
-                ),
-                0,
-            )
-        ).where(Posting.account_id == ledger_account.id)
-    )
-    credit_normal = int(value or 0)
+    # The stored running total (ADR-014); ``recompute_balance`` is the ledger sum it equals.
+    credit_normal = credit_balance(session, ledger_account.id)
     # LIABILITY and INCOME are credit-normal; ASSET is debit-normal.
     return (
         credit_normal if ledger_account.account_type in {"LIABILITY", "INCOME"} else -credit_normal

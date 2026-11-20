@@ -13,3 +13,7 @@ posted history. Balances are derived from postings rather than stored counters.
 Application defects cannot commit unbalanced or mutable financial history. Authorization creates
 no journal. Corrections require new compensating domain entries, and reporting must aggregate the
 append-only posting stream.
+
+Amended by [ADR-014](014-trigger-maintained-account-balances.md): merchant balances are now read
+from running totals that a posting trigger keeps in the posting's own transaction. The postings
+remain the source of truth; the totals are a cache, checked against them by a money invariant.

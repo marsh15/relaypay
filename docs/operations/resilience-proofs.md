@@ -1,7 +1,7 @@
 # Resilience proofs
 
 Each resilience property below is mapped to an executable test in the canonical suite, and the
-suite runs in the CI release gate. The 15 money invariants are evaluated by
+suite runs in the CI release gate. The 16 money invariants are evaluated by
 `packages/relaypay/proof/invariants.py` on every chaos seed and by `tests/unit/test_invariants_spec.py`.
 The checker was written by Claude at the maintainer's request; see
 [PROVENANCE.md](../../PROVENANCE.md). Its first run on real chaos data found a double-finalization bug
