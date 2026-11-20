@@ -298,6 +298,25 @@ def _cleanup(world: dict[str, Any]) -> None:
                 (world["organisation_id"],),
             )
         connection.commit()
+    _compact(
+        "mismatch_workflow_history",
+        "mismatch_evidence_versions",
+        "reconciliation_mismatches",
+        "reconciliation_matches",
+        "reconciliation_runs",
+        "statement_items",
+        "statement_imports",
+        "authorizations",
+        "provider_operations",
+        "payment_intents",
+    )
+
+
+def _compact(*tables: str) -> None:
+    """Return the space the fixture's rows took; otherwise later runs scan megabytes of nothing."""
+    with psycopg.connect(SUPERUSER_URL, autocommit=True) as connection:
+        for table in tables:
+            connection.execute(f"VACUUM FULL ANALYZE {table}")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -66,12 +66,15 @@ from relaypay.provider_operations.service import (
     dispatch_operation,
 )
 from relaypay.provider_operations.service_types import ProviderObservation
+from relaypay.psp.applier import run_psp_event_batch
+from relaypay.psp.inbox import accept_psp_event
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from scripts.chaos.ops import Op, OpKind, generate_schedule, schedule_stats
 from tests.support.db import relaypay_database_url
-from tests.support.fake_provider import FakeProvider, Outcome
+from tests.support.fake_provider import ACCOUNT_ID, FakeProvider, Outcome
+from tests.support.psp import WEBHOOK_SECRET, signed_event
 from tests.support.snapshots import fake_provider_effects
 from tests.support.world import PayoutBody, World, balances, build_world, make_beneficiary, settle
 
@@ -201,6 +204,7 @@ class SeedResult:
     unacked_retried: int = 0
     review_remaining: int = 0
     payouts: dict[str, int] = field(default_factory=dict)
+    webhooks: dict[str, int] = field(default_factory=dict)
     findings: dict[str, int] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     invariants: str | dict[str, Any] = "SKIPPED"
@@ -252,6 +256,7 @@ class SeedContext:
         self.crashes: Counter[str] = Counter()
         self.rejections: Counter[str] = Counter()
         self.payout_counts: Counter[str] = Counter()
+        self.webhook_counts: Counter[str] = Counter()
         self.findings: Counter[str] = Counter()
         self.duplicate_pool: ThreadPoolExecutor | None = None
 
@@ -621,6 +626,79 @@ def _op_resolve_pending(ctx: SeedContext, op: Op) -> str:
     return f"resolved={resolved}"
 
 
+def _effect_payload(effect: Any) -> dict[str, Any]:
+    return {
+        "accountId": ACCOUNT_ID,
+        "amount": effect.amount,
+        "currency": "INR",
+        "declineCode": effect.decline_code,
+        "effectId": effect.effect_id,
+        "operationKind": effect.operation_kind,
+        "outcome": effect.outcome,
+        "reference": effect.reference,
+        "stableKey": effect.stable_key,
+    }
+
+
+def _op_webhook_storm(ctx: SeedContext, op: Op) -> str:
+    """Deliver signed PSP webhooks for known provider effects: each 3x, shuffled, plus a stale one.
+
+    A webhook is evidence, never a second money path (ADR-012): whatever order it arrives in, and
+    however often, the operation must reach the state polling alone would reach, and the
+    invariants checked at the end of the seed must still hold. Every duplicate must be recognised
+    as a replay, so the inbox holds one event per distinct provider event id.
+    """
+    keys = sorted(ctx.provider.effects)
+    if not keys:
+        return "none-known"
+    start = (op.pick or 0) % len(keys)
+    chosen = (keys[start:] + keys[:start])[: op.batch or 1]
+    rng = random.Random(f"{ctx.seed}:{op.index}:storm")  # noqa: S311 - simulation
+    deliveries: list[tuple[dict[str, str], bytes]] = []
+    for key in chosen:
+        payload = _effect_payload(ctx.provider.effects[key])
+        headers, body = signed_event(payload, event_id=f"evt_{ctx.seed}_{op.index}_{key}")
+        deliveries.extend([(headers, body)] * 3)
+        if payload["outcome"] == "SUCCEEDED":
+            # An older, still-pending view of the same effect arriving late.
+            stale_headers, stale_body = signed_event(
+                payload | {"outcome": "PENDING", "declineCode": None},
+                event_id=f"evt_{ctx.seed}_{op.index}_{key}_stale",
+            )
+            deliveries.extend([(stale_headers, stale_body)] * 3)
+    rng.shuffle(deliveries)
+    stored: set[str] = set()
+    for headers, body in deliveries:
+        try:
+            event, replayed = accept_psp_event(
+                ctx.factory,
+                provider="SIMULATOR",
+                headers=headers,
+                body=body,
+                webhook_secret=WEBHOOK_SECRET,
+                replay_seconds=300,
+            )
+        except RelayPayError as error:  # an effect RelayPay never recorded, e.g. a lost create
+            ctx.rejections[error.code] += 1
+            continue
+        event_id = headers["X-Provider-Event-Id"]
+        if replayed:
+            ctx.webhook_counts["replays"] += 1
+        elif event_id in stored:
+            ctx.fail(
+                f"op {op.index} WEBHOOK_STORM: duplicate delivery of {event_id} was stored twice"
+            )
+        else:
+            stored.add(event_id)
+            ctx.webhook_counts["stored"] += 1
+        del event
+    applied = run_psp_event_batch(
+        ctx.factory, provider_account_id=ACCOUNT_ID, organisation_id=ctx.world.organisation_id
+    )
+    ctx.webhook_counts["applied_batches"] += 1
+    return f"events={len(stored)} deliveries={len(deliveries)} applied={applied}"
+
+
 def _op_payout(ctx: SeedContext, op: Op) -> str:
     eligible = balances(ctx.factory, ctx.world).payout_eligible
     if eligible <= 0:
@@ -730,6 +808,8 @@ def _dispatch_op(ctx: SeedContext, op: Op) -> str:
         return f"settled={settle(ctx.factory, ctx.world)}"
     if kind == OpKind.PAYOUT:
         return _op_payout(ctx, op)
+    if kind == OpKind.WEBHOOK_STORM:
+        return _op_webhook_storm(ctx, op)
     if kind == OpKind.REPLAY:
         replayed = ctx.specs.get(op.ref if op.ref is not None else -1)
         if replayed is None:
@@ -866,7 +946,7 @@ def run_seed(
     result = SeedResult(seed=seed, n_ops=len(ops))
     result.schedule = [op.to_dict() for op in ops]
     result.ops_by_kind = dict(schedule_stats(ops)["by_kind"])
-    provider = FakeProvider()
+    provider = FakeProvider(upi_collect_pending=True)
     try:
         with seed_factory(f"chaos-seed-{seed}") as factory:
             world = build_world(factory, label=f"chaos-{seed}")
@@ -905,6 +985,7 @@ def _finish(ctx: SeedContext, *, keep_snapshot: bool = False) -> None:
     result.crashes = dict(sorted(ctx.crashes.items()))
     result.rejections = dict(sorted(ctx.rejections.items()))
     result.payouts = dict(sorted(ctx.payout_counts.items()))
+    result.webhooks = dict(sorted(ctx.webhook_counts.items()))
     result.findings = {key: value for key, value in sorted(ctx.findings.items()) if value}
     applied = Counter(outcome for key, outcome in ctx.scripted.items() if key in provider.effects)
     result.faults = dict(sorted(applied.items()))

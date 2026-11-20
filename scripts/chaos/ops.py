@@ -42,6 +42,7 @@ class OpKind(StrEnum):
     RESOLVE_PENDING = "RESOLVE_PENDING"  # the provider settles PENDING effects
     SETTLE = "SETTLE"
     PAYOUT = "PAYOUT"  # only against payout-eligible balance (plus the odd over-ask)
+    WEBHOOK_STORM = "WEBHOOK_STORM"  # signed PSP webhooks, each sent 3x in random order
 
 
 KIND_WEIGHTS: Final[tuple[tuple[OpKind, int], ...]] = (
@@ -55,6 +56,7 @@ KIND_WEIGHTS: Final[tuple[tuple[OpKind, int], ...]] = (
     (OpKind.RESOLVE_PENDING, 10),
     (OpKind.SETTLE, 2),
     (OpKind.PAYOUT, 3),
+    (OpKind.WEBHOOK_STORM, 6),
 )
 # Commands that carry a payment target, a provider fault and a crash point.
 COMMAND_KINDS: Final = frozenset({OpKind.AUTHORIZE, OpKind.CAPTURE, OpKind.REFUND})
@@ -84,8 +86,8 @@ class Op:
     threads: int | None = None  # CONCURRENT_DUPLICATE: 2-4
     outcome: str | None = None  # provider (or bank, for PAYOUT) fault for the first send
     crash: str | None = None  # crash point armed for this operation
-    pick: int | None = None  # RECOVER_TICK / RESOLVE_PENDING: selector
-    batch: int | None = None  # RECOVER_TICK / RESOLVE_PENDING: how many items
+    pick: int | None = None  # RECOVER_TICK / RESOLVE_PENDING / WEBHOOK_STORM: selector
+    batch: int | None = None  # RECOVER_TICK / RESOLVE_PENDING / WEBHOOK_STORM: how many items
     resolve_to: str | None = None  # RESOLVE_PENDING: SUCCEED | DECLINE
     expire_leases: bool = False  # RECOVER_TICK: leases of a dead poller have lapsed
     pct: int | None = None  # PAYOUT: percent of the payout-eligible balance
@@ -233,6 +235,13 @@ def generate_schedule(seed: int, n_ops: int) -> list[Op]:
             )
         elif kind == OpKind.SETTLE:
             op = Op(index=index, kind=kind.value)
+        elif kind == OpKind.WEBHOOK_STORM:
+            op = Op(
+                index=index,
+                kind=kind.value,
+                batch=rng.randint(1, 4),
+                pick=rng.randrange(1 << 16),
+            )
         else:  # PAYOUT
             over = rng.random() < OVER_PAYOUT_RATE
             outcome = (

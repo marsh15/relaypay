@@ -1,6 +1,6 @@
 # Root-cause analyses
 
-Each record covers one defect the v2.0 proof harness found: the symptom, how it was found, the root
+Each record covers one defect the v2.0 proof harness or scale measurements found: the symptom, how it was found, the root
 cause, the fix commit, the regression test, and the lesson. The sources are `git show <sha>` and the
 release notes. Records are written once, after the fix lands, and are not edited afterwards.
 
@@ -8,3 +8,5 @@ release notes. Records are written once, after the fix lands, and are not edited
 - [RCA 002: A payout stayed SENT forever after the bank had paid (F2)](002-sent-payout-stuck-after-bank-paid.md)
 - [RCA 003: An operation committed but never dispatched was never recovered (F3)](003-undispatched-operation-never-recovered.md)
 - [RCA 004: A never-sent operation was parked in review forever (F4)](004-signed-not-found-parks-never-sent-operations.md)
+- [RCA 005: An index that shared a foreign key's prefix made every existence check scan a tenant](005-index-sharing-a-foreign-key-prefix.md)
+- [RCA 006: Freshly imported statement rows had no statistics](006-statistics-on-freshly-imported-rows.md)

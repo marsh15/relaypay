@@ -2,6 +2,13 @@
 
 ## Scope
 
+- A merchant balance is summed from the ledger on every read (three sums per `derive_balances`). It
+  stays an index-only scan for a typical account, but for an account that holds nearly every posting
+  it is a sequential scan: 320 ms at one million postings, growing linearly
+  ([evidence](evidence/v2.0.0-m19-plans.md)). A stored running total is not implemented.
+- UPI collect exists only as a simulator flow (the `UPI_COLLECT` fault in the provider simulator
+  settles three seconds after the request). The customer's approval is simulated, and `nextAction`
+  carries a placeholder VPA.
 - Synthetic INR data only; no card, bank, UPI, KYC, PII, real settlement, real fee schedule, dispute,
   or chargeback processing. The schema and finalizer carry synthetic per-merchant fee schedules and
   the platform fee and GST fields (D7). The fee calculation,
