@@ -66,7 +66,11 @@ def _drop_schema(base_url: str, schema: str) -> None:
         engine.dispose()
 
 
-def _table_digests(connection: Connection) -> dict[str, str]:
+def _table_digests(
+    connection: Connection, *, strip: dict[str, tuple[str, ...]] | None = None
+) -> dict[str, str]:
+    """Per-table row digests; ``strip`` drops columns that later migrations added to a table."""
+    strip = strip or {}
     table_names = sorted(
         table for table in inspect(connection).get_table_names() if table != "alembic_version"
     )
@@ -74,9 +78,10 @@ def _table_digests(connection: Connection) -> dict[str, str]:
     preparer = connection.dialect.identifier_preparer
     for table in table_names:
         quoted = preparer.quote(table)
+        projection = "to_jsonb(t)" + "".join(f" - '{column}'" for column in strip.get(table, ()))
         rows = connection.execute(
             text(
-                f"SELECT to_jsonb(t)::text FROM {quoted} t ORDER BY to_jsonb(t)::text"  # noqa: S608 - reflected table identifier is quoted
+                f"SELECT ({projection})::text FROM {quoted} t ORDER BY ({projection})::text"  # noqa: S608 - reflected table identifier is quoted
             )
         ).scalars()
         digests[table] = hashlib.sha256("\n".join(rows).encode()).hexdigest()
@@ -155,10 +160,11 @@ def main() -> None:
             provider_before = _table_digests(connection)
         command.upgrade(provider_config, "head")
         with provider_engine.connect() as connection:
-            assert all(
-                _table_digests(connection)[table] == digest
-                for table, digest in provider_before.items()
+            # provider_effects gained UPI-collect columns in provider migration 0006.
+            after_provider = _table_digests(
+                connection, strip={"provider_effects": ("next_action", "resolve_at")}
             )
+            assert all(after_provider[table] == digest for table, digest in provider_before.items())
             _verify_empty(connection, NEW_PROVIDER_TABLES)
         provider_engine.dispose()
     finally:

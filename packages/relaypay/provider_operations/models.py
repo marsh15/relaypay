@@ -87,6 +87,8 @@ class ProviderOperation(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     attempt_count: Mapped[int] = mapped_column(nullable=False, default=0)
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_lookup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set once the provider says the operation waits for the customer; see migration 0034.
+    pending_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lookup_lease_token: Mapped[uuid.UUID | None] = mapped_column()
     lookup_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     apply_failure_count: Mapped[int] = mapped_column(nullable=False, default=0)

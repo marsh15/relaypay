@@ -13,6 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from relaypay.database import Base
@@ -192,6 +193,10 @@ class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
             "(status = 'FAILED' AND authorized_at IS NULL AND failure_code IS NOT NULL) OR "
             "(status IN ('PROCESSING', 'REQUIRES_REVIEW') AND authorized_at IS NULL)"
         ),
+        CheckConstraint(
+            "next_action IS NULL OR status IN ('PROCESSING', 'REQUIRES_REVIEW')",
+            name="authorizations_next_action_check",
+        ),
         CheckConstraint("hold_seconds > 0", name="authorizations_hold_seconds_check"),
         CheckConstraint(
             "(status = 'SUCCEEDED') = (expires_at IS NOT NULL)", name="authorizations_expiry_check"
@@ -213,6 +218,8 @@ class Authorization(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):
     authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     hold_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=604_800)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What the customer is being asked to do (UPI collect); cleared when the authorization settles.
+    next_action: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True))
 
 
 class Capture(UUIDPrimaryKeyMixin, UpdatedAtMixin, Base):

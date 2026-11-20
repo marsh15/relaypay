@@ -12,3 +12,4 @@
 - [ADR-010: Integrated platform analytics stay in PostgreSQL with low-cardinality gauges only](010-integrated-platform-analytics.md)
 - [ADR-011: A signed "not found" past a grace period is proof of absence](011-signed-not-found-is-proof-of-absence.md)
 - [ADR-012: Webhooks are evidence, not a money path](012-webhooks-are-evidence-not-a-money-path.md)
+- [ADR-013: Per-key rate limiting is GCRA in PostgreSQL and fails open](013-per-key-gcra-in-postgres.md)

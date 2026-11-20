@@ -326,7 +326,7 @@ cannot complete that computation yet. The default no-schedule path has zero fees
 
 | Method and path | Body | Notes |
 | --- | --- | --- |
-| `GET /api/v2/payment_intents/{id}` | | Persisted `status` and `statusVersion`, `authorization` (`holdSeconds`, `expiresAt`), `capture` (`amount`, `feeAmount`, `gstAmount`, `netAmount`), `void`, and the v1 refund fields |
+| `GET /api/v2/payment_intents/{id}` | | Persisted `status` and `statusVersion`, `authorization` (`holdSeconds`, `expiresAt`, and `nextAction` while the customer has something to do), `capture` (`amount`, `feeAmount`, `gstAmount`, `netAmount`), `void`, and the v1 refund fields |
 | `POST /api/v2/payment_intents/{id}/authorize` | `{"hold_seconds"?: 60..2592000}` | Hold defaults to `AUTH_HOLD_SECONDS` (7 days); an uncaptured payment expires afterwards |
 | `POST /api/v2/payment_intents/{id}/capture` | `{"amount"?: paise}` | One capture per payment, up to the authorized amount; the remainder is released. `409 VOID_IN_PROGRESS`, `409 AUTHORIZATION_EXPIRED`, `409 PAYMENT_NOT_CAPTURABLE`, `409 CAPTURE_ALREADY_EXISTS`, `422 CAPTURE_AMOUNT_EXCEEDS_AUTHORIZED` |
 | `POST /api/v2/payment_intents/{id}/void` | `{}` | Releases an authorised, uncaptured hold; the payment becomes `cancelled`. `409 VOID_REQUIRES_SUCCEEDED_AUTHORIZATION`, `409 PAYMENT_NOT_VOIDABLE` |
@@ -334,3 +334,9 @@ cannot complete that computation yet. The default no-schedule path has zero fees
 Payment `status` is one of `created`, `requires_action`, `authorised`, `captured`,
 `partially_refunded`, `refunded`, `failed`, `expired` or `cancelled`. Transitions are enforced in
 code and by a database trigger.
+
+`requires_action` means the provider answered that the authorization waits for the customer (a UPI
+collect). `authorization.nextAction` says what to do: `{type: "UPI_COLLECT", vpa, expiresAt}`. RelayPay
+keeps polling, the status becomes `authorised` or `failed` when the customer answers, and
+`nextAction` disappears. If nobody answers within `PROVIDER_PENDING_DEADLINE_SECONDS` the operation
+goes to review (`PENDING_DEADLINE_EXCEEDED`) and the payment stays `requires_action`.

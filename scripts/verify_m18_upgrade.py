@@ -73,6 +73,18 @@ def main() -> None:
             with engine.connect() as connection:
                 assert _digests(connection) == before, "downgrade must restore 0032 exactly"
             command.upgrade(config, "head")
+            # 0034 (requires-action authorizations) adds columns only; no existing row changes.
+            with engine.connect() as connection:
+                at_head = _digests(
+                    connection,
+                    strip={
+                        **NEW_COLUMNS,
+                        "provider_operations": ("pending_deadline_at",),
+                        "authorizations": ("next_action",),
+                    },
+                )
+                changed = sorted(t for t in before if at_head.get(t) != before[t])
+                assert not changed, f"0034 must not change any existing row: {changed}"
         finally:
             engine.dispose()
     finally:

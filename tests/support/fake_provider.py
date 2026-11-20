@@ -68,10 +68,14 @@ class FakeProvider:
         account_id: str = ACCOUNT_ID,
         signing_secret: str = SIGNING_SECRET,
         default: Outcome = Outcome.SUCCEED,
+        upi_collect_pending: bool = False,
     ) -> None:
         self.account_id = account_id
         self.signing_secret = signing_secret
         self.default = default
+        # When set, a PENDING authorization is a UPI collect: its signed body carries a
+        # ``nextAction`` until it is resolved, as the provider simulator's UPI_COLLECT fault does.
+        self.upi_collect_pending = upi_collect_pending
         self._lock = threading.RLock()
         self._scripts: dict[str, Outcome] = {}
         self._effects: dict[str, ProviderEffectRecord] = {}
@@ -194,19 +198,28 @@ class FakeProvider:
 
     def _effect_reply(self, effect: ProviderEffectRecord) -> ProviderObservation:
         request = json.loads(effect.request_bytes)
-        body = canonical_json_bytes(
-            {
-                "accountId": request["accountId"],
-                "amount": effect.amount,
-                "currency": request["currency"],
-                "declineCode": effect.decline_code,
-                "effectId": effect.effect_id,
-                "operationKind": effect.operation_kind,
-                "outcome": effect.outcome,
-                "reference": effect.reference,
-                "stableKey": effect.stable_key,
+        document: dict[str, object] = {
+            "accountId": request["accountId"],
+            "amount": effect.amount,
+            "currency": request["currency"],
+            "declineCode": effect.decline_code,
+            "effectId": effect.effect_id,
+            "operationKind": effect.operation_kind,
+            "outcome": effect.outcome,
+            "reference": effect.reference,
+            "stableKey": effect.stable_key,
+        }
+        if (
+            self.upi_collect_pending
+            and effect.outcome == "PENDING"
+            and effect.operation_kind == "AUTHORIZE"
+        ):
+            document["nextAction"] = {
+                "expiresAt": "2099-01-01T00:00:00+00:00",
+                "type": "UPI_COLLECT",
+                "vpa": "customer@sim",
             }
-        )
+        body = canonical_json_bytes(document)
         return self._reply(body)
 
     def _reply(self, body: bytes, *, status_code: int = 200) -> ProviderObservation:

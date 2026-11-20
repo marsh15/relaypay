@@ -1083,6 +1083,12 @@ def read_payment_v2(
                     "expiresAt": None
                     if authorization.expires_at is None
                     else authorization.expires_at.isoformat(),
+                    # Present only while the customer has something to do (UPI collect).
+                    **(
+                        {"nextAction": authorization.next_action}
+                        if authorization.next_action is not None
+                        else {}
+                    ),
                 },
                 "capture": None
                 if capture is None

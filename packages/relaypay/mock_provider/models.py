@@ -13,6 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from relaypay.ids import new_uuid
@@ -48,6 +49,9 @@ class ProviderEffect(ProviderBase):
             "(outcome IN ('SUCCEEDED', 'DECLINED') AND completed_at IS NOT NULL "
             "AND response_bytes IS NOT NULL)"
         ),
+        CheckConstraint(
+            "next_action IS NULL OR (operation_kind = 'AUTHORIZE' AND outcome = 'PENDING')"
+        ),
         Index("ix_provider_effects_stable_key", "provider_account_id", "stable_key"),
     )
 
@@ -68,6 +72,9 @@ class ProviderEffect(ProviderBase):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # UPI collect: what the customer is being asked to do, and when the simulator settles it.
+    next_action: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True))
+    resolve_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProviderFaultDirective(ProviderBase):
@@ -77,7 +84,7 @@ class ProviderFaultDirective(ProviderBase):
         CheckConstraint("remaining_uses >= 0"),
         CheckConstraint(
             "fault_type IN ('LOSE_RESPONSE', 'DECLINE', 'MALFORMED', 'UNSIGNED', "
-            "'MISMATCHED', 'PENDING', 'SLOW_RESPONSE')"
+            "'MISMATCHED', 'PENDING', 'SLOW_RESPONSE', 'UPI_COLLECT')"
         ),
     )
 

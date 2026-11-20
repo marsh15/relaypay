@@ -160,6 +160,7 @@ def finalize_verified_attempt(
             raise RuntimeError("verified business decline is missing its decline code")
 
         if isinstance(resource, Authorization):
+            resource.next_action = None  # the customer step, if any, is over
             resource.status = terminal_status
             resource.authorized_at = now if succeeded else None  # DB derives expires_at
             resource.failure_code = failure_code
@@ -302,6 +303,33 @@ def finalize_verified_attempt(
         )
     maybe_crash("finalizer.after_commit")
     return _terminal_result(operation, already=False)
+
+
+def mark_requires_action(
+    factory: sessionmaker[Session],
+    *,
+    operation_id: uuid.UUID,
+    next_action: dict[str, object],
+    actor_type: ActorType,
+) -> bool:
+    """Record that a pending authorization waits for the customer; the payment becomes
+    ``requires_action``. Idempotent: repeated lookups that report the same next action change
+    nothing. Takes the same payment-then-operation lock order as the finalizer."""
+    with factory() as session, session.begin():
+        payment, operation, resource, _ = _locked_graph(session, operation_id)
+        if operation.status in {"SUCCEEDED", "FAILED"} or not isinstance(resource, Authorization):
+            return False
+        if resource.next_action != next_action:
+            resource.next_action = next_action
+        if payment.status == PaymentStatus.CREATED.value:
+            transition(
+                session,
+                payment,
+                PaymentStatus.REQUIRES_ACTION,
+                reason="AUTHORIZATION_AWAITING_CUSTOMER",
+                actor=actor_type,
+            )
+        return True
 
 
 def mark_operation_for_review(

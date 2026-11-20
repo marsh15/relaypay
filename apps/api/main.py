@@ -454,6 +454,7 @@ def create_app(
             transport=transport,
             actor_type="ADMIN_LOOKUP",
             not_found_grace_seconds=resolved.PROVIDER_NOT_FOUND_GRACE_SECONDS,
+            pending_deadline_seconds=resolved.PROVIDER_PENDING_DEADLINE_SECONDS,
         )
         result = read_operation(
             session_factory,

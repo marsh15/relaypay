@@ -112,6 +112,8 @@ def main() -> None:
                         "api_keys": ("rate_limit_rps", "rate_limit_burst"),
                         "statement_imports": ("streamed",),
                         "statement_items": ("fee_amount", "tax_amount"),
+                        "provider_operations": ("pending_deadline_at",),
+                        "authorizations": ("next_action",),
                         "reconciliation_runs": (
                             "progress_ordinal",
                             "matched_count",
@@ -122,7 +124,7 @@ def main() -> None:
                 head.pop("psp_events", None)
                 head.pop("api_rate_limit_state", None)
                 changed = sorted(t for t in head if head[t] != before.get(t))
-                assert not changed, f"0028 to 0033 must not change any existing row: {changed}"
+                assert not changed, f"0028 to 0034 must not change any existing row: {changed}"
         finally:
             engine.dispose()
     finally:

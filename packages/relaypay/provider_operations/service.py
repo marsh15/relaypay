@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import httpx
-from sqlalchemy import func, select, true
+from sqlalchemy import and_, func, select, true
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -17,6 +17,7 @@ from relaypay.provider_operations.finalizer import (
     ActorType,
     finalize_verified_attempt,
     mark_operation_for_review,
+    mark_requires_action,
     record_apply_failure,
 )
 from relaypay.provider_operations.models import ProviderAttempt, ProviderOperation
@@ -72,6 +73,8 @@ class RecordedOutcome:
     attempt_id: uuid.UUID
     action: str
     review_reason: str | None
+    # Set when the provider said the operation waits for the customer (UPI collect).
+    next_action: dict[str, object] | None = None
 
 
 def _resource_facts(session: Session, operation: ProviderOperation) -> tuple[str, int, str]:
@@ -196,6 +199,20 @@ def prepare_first_send(
 
 # Default for ADR-011's not-found grace period; the poller passes the configured value.
 DEFAULT_NOT_FOUND_GRACE_SECONDS = 600
+# How long a pending authorization that waits for the customer may stay pending before a person
+# decides (migration 0034). Fixed here; the poller may pass a configured value.
+DEFAULT_PENDING_DEADLINE_SECONDS = 900
+
+
+def _arm_pending_deadline(
+    operation: ProviderOperation,
+    classified: ClassifiedProviderResult,
+    now: datetime,
+    seconds: int,
+) -> None:
+    """Start the customer-wait clock once, on the first verified next action."""
+    if classified.next_action is not None and operation.pending_deadline_at is None:
+        operation.pending_deadline_at = now + timedelta(seconds=seconds)
 
 
 def _next_lookup(now: datetime, attempt_count: int) -> datetime:
@@ -253,10 +270,12 @@ def _complete_mutation(
         operation.next_lookup_at = (
             now if classified.action == "LOOKUP" else _next_lookup(now, operation.attempt_count)
         )
+        _arm_pending_deadline(operation, classified, now, DEFAULT_PENDING_DEADLINE_SECONDS)
         return RecordedOutcome(
             attempt.id,
             classified.action,
             "INVALID_EVIDENCE" if classified.action == "REVIEW" else None,
+            classified.next_action,
         )
 
 
@@ -269,6 +288,7 @@ def record_lookup_observation(
     classified: ClassifiedProviderResult,
     indeterminate_after: int = 5,
     not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
+    pending_deadline_seconds: int = DEFAULT_PENDING_DEADLINE_SECONDS,
 ) -> RecordedOutcome | None:
     with factory() as session, session.begin():
         operation = session.scalar(
@@ -290,12 +310,18 @@ def record_lookup_observation(
             + 1
         )
         # This lookup plus the earlier ones; webhook evidence must not count toward the
-        # indeterminate-review limit.
+        # indeterminate-review limit. While the customer is being waited for, lookups that
+        # verifiably said "still pending" are the provider answering, not failing to answer.
+        waiting_for_customer = operation.pending_deadline_at is not None
+        counted = ProviderAttempt.attempt_kind == "LOOKUP"
+        if waiting_for_customer:
+            counted = and_(
+                counted, ProviderAttempt.classification.is_distinct_from("VERIFIED_PENDING")
+            )
         lookup_count = 1 + int(
             session.scalar(
                 select(func.count()).where(
-                    ProviderAttempt.provider_operation_id == operation.id,
-                    ProviderAttempt.attempt_kind == "LOOKUP",
+                    ProviderAttempt.provider_operation_id == operation.id, counted
                 )
             )
             or 0
@@ -318,6 +344,7 @@ def record_lookup_observation(
         )
         _record_classification(attempt, observation=observation, classified=classified, now=now)
         session.add(attempt)
+        _arm_pending_deadline(operation, classified, now, pending_deadline_seconds)
         operation.attempt_count += 1
         operation.lookup_lease_token = None
         operation.lookup_lease_expires_at = None
@@ -339,11 +366,25 @@ def record_lookup_observation(
                 attempt.classification = "VERIFIED_NOT_FOUND_WITHIN_GRACE"
                 action = "PROCESSING"
                 operation.next_lookup_at = min(operation.next_lookup_at, deadline)
+        elif (
+            classified.classification == "VERIFIED_PENDING"
+            and operation.pending_deadline_at is not None
+        ):
+            # A verified pending answer to a request that waits for the customer: keep polling
+            # without spending the review budget, until the deadline.
+            if now >= operation.pending_deadline_at:
+                action = "REVIEW"
+                review_reason = "PENDING_DEADLINE_EXCEEDED"
         elif action in {"LOOKUP", "PROCESSING"} and lookup_count >= indeterminate_after:
             action = "REVIEW"
             review_reason = "PROVIDER_INDETERMINATE"
         session.flush([attempt])
-        return RecordedOutcome(attempt.id, action, review_reason)
+        return RecordedOutcome(
+            attempt.id,
+            action,
+            review_reason,
+            classified.next_action if action == "PROCESSING" else None,
+        )
 
 
 def apply_recorded_outcome(
@@ -372,6 +413,13 @@ def apply_recorded_outcome(
                 evidence_attempt_id=outcome.attempt_id,
                 correlation_id=correlation_id,
             )
+    elif outcome.action == "PROCESSING" and outcome.next_action is not None:
+        mark_requires_action(
+            factory,
+            operation_id=operation_id,
+            next_action=outcome.next_action,
+            actor_type=actor_type,
+        )
     elif outcome.action == "REVIEW":
         mark_operation_for_review(
             factory,
@@ -392,6 +440,7 @@ def classify_and_record_lookup(
     provider_signing_secret: str,
     observation: ProviderObservation | None,
     not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
+    pending_deadline_seconds: int = DEFAULT_PENDING_DEADLINE_SECONDS,
 ) -> RecordedOutcome | None:
     expected = _expected_result(
         factory, operation_id=operation_id, provider_account_id=provider_account_id
@@ -413,6 +462,7 @@ def classify_and_record_lookup(
         observation=observation,
         classified=classified,
         not_found_grace_seconds=not_found_grace_seconds,
+        pending_deadline_seconds=pending_deadline_seconds,
     )
 
 

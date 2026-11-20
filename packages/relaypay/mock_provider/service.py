@@ -3,7 +3,7 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +23,10 @@ from relaypay.mock_provider.models import (
 from relaypay.mock_provider.webhooks import enqueue_effect_webhook
 
 UNAVAILABLE_BODY = b'{"error":"PROVIDER_UNAVAILABLE"}'
+# A UPI collect the customer approves this many seconds after it was requested, and the window
+# in which they may do so. Both are the simulator's, not RelayPay's.
+UPI_APPROVAL_SECONDS = 3
+UPI_REQUEST_VALID_SECONDS = 900
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,19 +89,49 @@ def not_found_body(account_public_id: str, stable_key: str) -> bytes:
 
 
 def _effect_body(effect: ProviderEffect, account_public_id: str) -> bytes:
-    return canonical_json_bytes(
-        {
-            "accountId": account_public_id,
-            "amount": effect.amount,
-            "currency": effect.currency,
-            "declineCode": effect.decline_code,
-            "effectId": str(effect.id),
-            "operationKind": effect.operation_kind,
-            "outcome": effect.outcome,
-            "reference": effect.reference,
-            "stableKey": effect.stable_key,
-        }
-    )
+    document: dict[str, object] = {
+        "accountId": account_public_id,
+        "amount": effect.amount,
+        "currency": effect.currency,
+        "declineCode": effect.decline_code,
+        "effectId": str(effect.id),
+        "operationKind": effect.operation_kind,
+        "outcome": effect.outcome,
+        "reference": effect.reference,
+        "stableKey": effect.stable_key,
+    }
+    if effect.next_action is not None:
+        document["nextAction"] = effect.next_action
+    return canonical_json_bytes(document)
+
+
+def _settle_if_due(
+    session: Session,
+    effect: ProviderEffect,
+    account_public_id: str,
+    *,
+    webhooks: bool,
+    now: datetime,
+) -> bytes | None:
+    """Settle a UPI collect whose approval time has passed; returns the new body, if it settled."""
+    if effect.outcome != "PENDING" or effect.resolve_at is None or effect.resolve_at > now:
+        return None
+    effect.outcome = "SUCCEEDED"
+    effect.completed_at = now
+    effect.next_action = None
+    body = _effect_body(effect, account_public_id)
+    effect.response_bytes = body
+    if webhooks:
+        session.flush([effect])
+        enqueue_effect_webhook(
+            session,
+            account_id=effect.provider_account_id,
+            effect_id=effect.id,
+            stable_key=effect.stable_key,
+            effect_body=body,
+            now=now,
+        )
+    return body
 
 
 def apply_effect(
@@ -140,7 +174,12 @@ def apply_effect(
                         message="Stable provider key is bound to different request bytes",
                         http_status=409,
                     )
-                body = existing.response_bytes or _effect_body(existing, account.public_id)
+                settled = _settle_if_due(
+                    session, existing, account.public_id, webhooks=webhooks, now=datetime.now(UTC)
+                )
+                body = (
+                    settled or existing.response_bytes or _effect_body(existing, account.public_id)
+                )
                 return _reply(body, signing_secret)
 
             directive = session.scalar(
@@ -164,7 +203,8 @@ def apply_effect(
                         503, UNAVAILABLE_BODY, {"Content-Type": "application/json"}
                     )
 
-            outcome = "PENDING" if selected_fault == "PENDING" else "SUCCEEDED"
+            upi_collect = selected_fault == "UPI_COLLECT" and command.operation_kind == "AUTHORIZE"
+            outcome = "PENDING" if selected_fault == "PENDING" or upi_collect else "SUCCEEDED"
             if selected_fault == "DECLINE":
                 outcome = "DECLINED"
             elif chaos is not None:
@@ -183,6 +223,16 @@ def apply_effect(
                 decline_code=decline_code,
                 completed_at=None if outcome == "PENDING" else datetime.now(UTC),
             )
+            if upi_collect and outcome == "PENDING":
+                requested_at = datetime.now(UTC)
+                effect.next_action = {
+                    "expiresAt": (
+                        requested_at + timedelta(seconds=UPI_REQUEST_VALID_SECONDS)
+                    ).isoformat(),
+                    "type": "UPI_COLLECT",
+                    "vpa": "customer@sim",
+                }
+                effect.resolve_at = requested_at + timedelta(seconds=UPI_APPROVAL_SECONDS)
             correct_body = _effect_body(effect, account.public_id)
             effect.response_bytes = None if outcome == "PENDING" else correct_body
             session.add(effect)
@@ -245,6 +295,7 @@ def lookup_effect(
     account_public_id: str,
     stable_key: str,
     signing_secret: str,
+    webhooks: bool = False,
 ) -> ProviderReply:
     with factory() as session, session.begin():
         effect = session.scalar(
@@ -270,7 +321,10 @@ def lookup_effect(
             return _reply(
                 not_found_body(account_public_id, stable_key), signing_secret, status_code=404
             )
-        body = effect.response_bytes or _effect_body(effect, account_public_id)
+        settled = _settle_if_due(
+            session, effect, account_public_id, webhooks=webhooks, now=datetime.now(UTC)
+        )
+        body = settled or effect.response_bytes or _effect_body(effect, account_public_id)
         return _reply(body, signing_secret)
 
 

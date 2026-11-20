@@ -55,6 +55,7 @@ class FaultRequest(BaseModel):
         "MISMATCHED",
         "PENDING",
         "SLOW_RESPONSE",
+        "UPI_COLLECT",
     ] = Field(alias="faultType")
 
 
@@ -171,6 +172,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             account_public_id=account_id,
             stable_key=stable_key,
             signing_secret=resolved.PROVIDER_SIGNING_SECRET.get_secret_value(),
+            webhooks=resolved.PROVIDER_WEBHOOK_URL is not None,
         )
         return Response(content=result.body, status_code=result.status_code, headers=result.headers)
 

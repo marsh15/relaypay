@@ -34,6 +34,11 @@ An operation moves to `REQUIRES_REVIEW` with one of these reasons:
 
 - `PROVIDER_INDETERMINATE`: five lookups have produced no verified answer. Webhook evidence does
   not count toward this limit.
+- `PENDING_DEADLINE_EXCEEDED`: the provider said an authorization waits for the customer (UPI
+  collect), and the customer did not answer within `PROVIDER_PENDING_DEADLINE_SECONDS` (15 minutes).
+  Until then its "still pending" lookups cost nothing against the five-lookup limit. The payment
+  stays `requires_action`. Run a lookup: if the customer has since answered, the operation finalizes;
+  if not, decide with the merchant whether to void or retry.
 - `APPLY_FAILURE`: three finalize attempts for a PSP webhook failed.
 - `INVALID_EVIDENCE` or `MISMATCHED_EVIDENCE`: a PSP webhook was invalid or named a different
   identity.

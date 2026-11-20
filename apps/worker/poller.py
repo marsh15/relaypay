@@ -68,6 +68,7 @@ def _recover_provider_operations(factory: sessionmaker[Session], settings: Setti
         provider_signing_secret=settings.PROVIDER_SIGNING_SECRET.get_secret_value(),
         transport=HTTPProviderTransport(base_url=settings.PROVIDER_BASE_URL),
         not_found_grace_seconds=settings.PROVIDER_NOT_FOUND_GRACE_SECONDS,
+        pending_deadline_seconds=settings.PROVIDER_PENDING_DEADLINE_SECONDS,
     )
 
 

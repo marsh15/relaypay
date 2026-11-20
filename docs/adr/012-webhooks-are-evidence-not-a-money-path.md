@@ -1,6 +1,7 @@
 # ADR-012: Webhooks are evidence, not a money path
 
-Status: accepted (v2.0, M17; the ordering decision it depends on is pending)
+Status: accepted (v2.0, M17). The ordering decision it depends on is implemented; see PROVENANCE.md
+for who wrote it.
 
 ## Context
 
@@ -31,10 +32,8 @@ principle, and it may name an operation that RelayPay has never seen.
 4. **Ordering is decided per operation, from its current state.** Whether an event applies, is
    ignored as a duplicate or stale report, or goes to review is a function of the operation's
    status and the event outcome (`packages/relaypay/psp/ordering.py::decide`). The specification is in
-   its docstring. The decision is hand-written by the maintainer, so the applier's dependency is
-   an interface and a `NotImplementedError` today. Until `decide` exists, every event that matches an
-   operation is recorded `DEFERRED` with `ORDERING_DECISION_UNAVAILABLE`, and the operation does
-   not change.
+   its docstring. If the decision is ever unavailable (it raises `NotImplementedError`), the event is
+   recorded `DEFERRED` with `ORDERING_DECISION_UNAVAILABLE` and the operation does not change.
 
 5. **Evidence that contradicts the operation's identity goes to review.** An event whose effect
    does not match the operation's account, stable key, kind, reference, amount, or currency is
@@ -45,12 +44,17 @@ principle, and it may name an operation that RelayPay has never seen.
 - A webhook cannot reach the ledger except through the shared finalizer, with the evidence attempt
   and its digest recorded. Recovery accounting changed to count only `LOOKUP` attempts toward
   the five-lookup review budget; mutation and webhook attempts do not consume that budget.
-- Until the ordering decision lands, PSP events do not change operation state. Operations resolve by
-  polling, as they did before M17. Webhook acceptance is a durable record, not a fast path.
+- Webhooks make resolution faster; they never make it correct. Operations still resolve by polling,
+  so a dropped, duplicated or late webhook cannot change an outcome. The chaos harness sends each
+  event three times in random order with stale copies mixed in (`WEBHOOK_STORM`) and checks the
+  fifteen money invariants at the end of every seed.
 - Events that stay `DEFERRED` are not re-leased by the applier, which claims only `PENDING` and
-  lapsed `PROCESSING` rows. Applying them after `decide` lands needs a deliberate step that does
-  not exist yet.
-- Only the simulator provider is accepted at the inbox today. The Razorpay and Cashfree adapters
-  are parsers and verifiers, and they are not routed into the inbox, so they cannot change state yet.
+  lapsed `PROCESSING` rows. A deferred event changes nothing, and polling resolves its operation.
+- Only the simulator provider is accepted at the inbox. The Razorpay and Cashfree adapters are
+  parsers and verifiers and are **deliberately not routed into the inbox**. Routing them would
+  make a gateway payload that nobody has checked against a real test-mode account decide money
+  state, and the stable-key correlation a real gateway needs (RelayPay's key sent as a note on the
+  gateway request) is not built. Do that only after the fixtures are confirmed against real
+  payloads.
 - A PSP webhook is authenticated with `PROVIDER_WEBHOOK_SECRET`, which is separate from the signing
   key for API responses, so a leaked webhook secret does not forge API responses.

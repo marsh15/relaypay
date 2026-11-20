@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     # F4 (ADR-011): a signed provider/bank "not found" this long after the recorded send is proof
     # the effect never happened, so the operation fails instead of waiting for review.
     PROVIDER_NOT_FOUND_GRACE_SECONDS: int = Field(default=600, ge=0)
+    # How long a pending authorization that waits for the customer (UPI collect) may stay pending
+    # before it goes to review as PENDING_DEADLINE_EXCEEDED.
+    PROVIDER_PENDING_DEADLINE_SECONDS: int = Field(default=900, ge=1)
     # How long a succeeded authorization holds funds before it expires uncaptured (M16).
     AUTH_HOLD_SECONDS: int = Field(default=604_800, ge=60)
     RECEIVER_BASE_URL: str = "http://localhost:8002"

@@ -17,6 +17,16 @@ ProviderAction = Literal[
 ]
 
 
+class NextAction(BaseModel):
+    """What the customer is being asked to do before a pending authorization can settle."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    type: Literal["UPI_COLLECT"]
+    vpa: str
+    expiresAt: str
+
+
 class ProviderResult(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -29,9 +39,14 @@ class ProviderResult(BaseModel):
     outcome: Literal["PENDING", "SUCCEEDED", "DECLINED"]
     declineCode: str | None
     effectId: str
+    nextAction: NextAction | None = None
 
     @model_validator(mode="after")
     def outcome_is_consistent(self) -> "ProviderResult":
+        if self.nextAction is not None and (
+            self.outcome != "PENDING" or self.operationKind != "AUTHORIZE"
+        ):
+            raise ValueError("only a pending authorization can carry a next action")
         if self.outcome == "DECLINED" and not self.declineCode:
             raise ValueError("declined result requires a business decline code")
         if self.outcome != "DECLINED" and self.declineCode is not None:
@@ -67,6 +82,8 @@ class ClassifiedProviderResult:
     safe_error_code: str | None = None
     decline_code: str | None = None
     effect_id: str | None = None
+    # Set only for a verified PENDING authorization that waits for the customer.
+    next_action: dict[str, object] | None = None
 
 
 def _signature_valid(observation: ProviderObservation, signing_secret: str) -> bool:
@@ -216,4 +233,5 @@ def classify_provider_observation(
         classification="VERIFIED_PENDING",
         signature_valid=True,
         effect_id=result.effectId,
+        next_action=result.nextAction.model_dump() if result.nextAction else None,
     )

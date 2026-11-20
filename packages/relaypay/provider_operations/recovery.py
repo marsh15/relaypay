@@ -12,6 +12,7 @@ from relaypay.provider_operations.finalizer import ActorType
 from relaypay.provider_operations.models import ProviderOperation
 from relaypay.provider_operations.service import (
     DEFAULT_NOT_FOUND_GRACE_SECONDS,
+    DEFAULT_PENDING_DEADLINE_SECONDS,
     ProviderTransport,
     apply_recorded_outcome,
     classify_and_record_lookup,
@@ -250,6 +251,7 @@ def recover_claim(
     transport: ProviderTransport,
     actor_type: ActorType = "RECOVERY_WORKER",
     not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
+    pending_deadline_seconds: int = DEFAULT_PENDING_DEADLINE_SECONDS,
 ) -> None:
     try:
         observation = transport.lookup(
@@ -266,6 +268,7 @@ def recover_claim(
         provider_signing_secret=provider_signing_secret,
         observation=observation,
         not_found_grace_seconds=not_found_grace_seconds,
+        pending_deadline_seconds=pending_deadline_seconds,
     )
     apply_recorded_outcome(
         factory,
@@ -284,6 +287,7 @@ def run_recovery_batch(
     transport: ProviderTransport,
     batch_size: int = 20,
     not_found_grace_seconds: int = DEFAULT_NOT_FOUND_GRACE_SECONDS,
+    pending_deadline_seconds: int = DEFAULT_PENDING_DEADLINE_SECONDS,
     organisation_id: uuid.UUID | None = None,
 ) -> int:
     dispatched = dispatch_unsent_operations(
@@ -303,6 +307,7 @@ def run_recovery_batch(
             provider_signing_secret=provider_signing_secret,
             transport=transport,
             not_found_grace_seconds=not_found_grace_seconds,
+            pending_deadline_seconds=pending_deadline_seconds,
         )
     if claims:
         operations_metrics().recoveries.labels("provider_lookup").inc(len(claims))
