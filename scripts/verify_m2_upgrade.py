@@ -160,9 +160,15 @@ def main() -> None:
             provider_before = _table_digests(connection)
         command.upgrade(provider_config, "head")
         with provider_engine.connect() as connection:
-            # provider_effects gained UPI-collect columns in provider migration 0006.
+            # Later provider migrations added columns: UPI collect (0006), fee terms and
+            # statement fee/tax (0007). No existing value may change.
             after_provider = _table_digests(
-                connection, strip={"provider_effects": ("next_action", "resolve_at")}
+                connection,
+                strip={
+                    "provider_effects": ("next_action", "resolve_at"),
+                    "provider_accounts": ("fee_mdr_bps", "fee_fixed_paise", "fee_gst_bps"),
+                    "provider_statement_items": ("fee_amount", "tax_amount"),
+                },
             )
             assert all(after_provider[table] == digest for table, digest in provider_before.items())
             _verify_empty(connection, NEW_PROVIDER_TABLES)

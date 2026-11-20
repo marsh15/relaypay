@@ -22,6 +22,14 @@ from relaypay.mock_provider.database import ProviderBase
 
 class ProviderAccount(ProviderBase):
     __tablename__ = "provider_accounts"
+    __table_args__ = (
+        CheckConstraint(
+            "(fee_mdr_bps IS NULL AND fee_fixed_paise IS NULL AND fee_gst_bps IS NULL) OR "
+            "(fee_mdr_bps BETWEEN 0 AND 10000 AND fee_fixed_paise >= 0 "
+            "AND fee_gst_bps BETWEEN 0 AND 10000)",
+            name="provider_accounts_fee_terms_check",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
     public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -30,6 +38,10 @@ class ProviderAccount(ProviderBase):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # Fee terms the statement export applies to successful captures; all NULL means no fee columns.
+    fee_mdr_bps: Mapped[int | None] = mapped_column(Integer)
+    fee_fixed_paise: Mapped[int | None] = mapped_column(Integer)
+    fee_gst_bps: Mapped[int | None] = mapped_column(Integer)
 
 
 class ProviderEffect(ProviderBase):
@@ -136,6 +148,10 @@ class ProviderStatementItem(ProviderBase):
         CheckConstraint("amount > 0"),
         CheckConstraint("currency = 'INR'"),
         CheckConstraint("provider_status IN ('PENDING', 'SUCCEEDED', 'DECLINED')"),
+        CheckConstraint(
+            "(fee_amount IS NULL OR fee_amount >= 0) AND (tax_amount IS NULL OR tax_amount >= 0)",
+            name="provider_statement_items_fee_check",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
@@ -153,6 +169,8 @@ class ProviderStatementItem(ProviderBase):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    fee_amount: Mapped[int | None] = mapped_column(BigInteger)
+    tax_amount: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class ProviderChaosProfile(ProviderBase):

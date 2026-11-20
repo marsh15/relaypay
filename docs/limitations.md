@@ -32,8 +32,10 @@
 - Reconciliation accepts statements from the synthetic payment provider only; there are no
   connector-specific statement formats. The multipart import is bounded (1 MiB, 10,000 items). The
   streamed CSV import has no memory bound beyond the 512 MiB and 10 million item caps and was
-  measured at one million rows only (see the M18 evidence). The provider simulator's export has no
-  fee or tax columns, so `FEE_MISMATCH` and `TAX_MISMATCH` need a statement that carries them. The
+  measured at one million rows only (see the M18 evidence). The provider simulator's export carries
+  `feeAmount` and `taxAmount` only after `POST /control/fee-terms` sets terms for its account (off by
+  default; refunds and voids carry none), so without that the daily import cannot produce
+  `FEE_MISMATCH` or `TAX_MISMATCH`. The
   optional daily import (`AUTO_STATEMENT_IMPORT_ENABLED`, off by default) imports the provider's
   one shared account statement into every active environment, so with several tenants each sees
   the others' items as `MISSING_INTERNAL_TRANSACTION`. Mismatch resolution records operator notes and may

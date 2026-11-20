@@ -10,6 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from relaypay.errors import RelayPayError
+from relaypay.fees.calculator import compute_capture_fee
+from relaypay.fees.types import FeeScheduleTerms
 from relaypay.idempotency import canonical_json_bytes
 from relaypay.ids import new_uuid
 from relaypay.mock_provider.chaos import EffectChaos, account_profile, effect_chaos
@@ -289,6 +291,69 @@ def apply_effect(
     return _reply(correct_body, signing_secret)
 
 
+def _fee_terms(account: ProviderAccount) -> FeeScheduleTerms | None:
+    if account.fee_mdr_bps is None:
+        return None
+    assert account.fee_fixed_paise is not None and account.fee_gst_bps is not None
+    return FeeScheduleTerms(
+        mdr_bps=account.fee_mdr_bps,
+        fixed_paise=account.fee_fixed_paise,
+        gst_bps=account.fee_gst_bps,
+        min_fee_paise=None,
+        max_fee_paise=None,
+        refund_fee_policy="RETAIN",
+    )
+
+
+def _statement_item(effect: ProviderEffect, terms: FeeScheduleTerms | None) -> dict[str, object]:
+    item: dict[str, object] = {
+        "amount": effect.amount,
+        "currency": effect.currency,
+        "occurredAt": (effect.completed_at or effect.created_at).isoformat(),
+        "operationKind": effect.operation_kind,
+        "providerItemId": str(effect.id),
+        "stableKey": effect.stable_key,
+        "status": effect.outcome,
+    }
+    if terms is not None:
+        # A fee is charged on a successful capture only; every other row has no fee to claim.
+        charged = effect.operation_kind == "CAPTURE" and effect.outcome == "SUCCEEDED"
+        breakdown = compute_capture_fee(effect.amount, terms) if charged else None
+        item["feeAmount"] = breakdown.fee if breakdown else None
+        item["taxAmount"] = breakdown.gst if breakdown else None
+    return item
+
+
+def configure_fee_terms(
+    factory: sessionmaker[Session],
+    *,
+    account_public_id: str,
+    mdr_bps: int | None,
+    fixed_paise: int | None,
+    gst_bps: int | None,
+) -> None:
+    """Set (or clear, with all three ``None``) the fee terms later statement exports apply."""
+    if (mdr_bps is None) != (fixed_paise is None) or (mdr_bps is None) != (gst_bps is None):
+        raise RelayPayError(
+            code="INVALID_FEE_TERMS",
+            message="Provide all of mdrBps, fixedPaise and gstBps, or none to clear",
+            http_status=422,
+        )
+    with factory() as session, session.begin():
+        account = session.scalar(
+            select(ProviderAccount).where(ProviderAccount.public_id == account_public_id)
+        )
+        if account is None:
+            raise RelayPayError(
+                code="PROVIDER_ACCOUNT_NOT_FOUND",
+                message="Provider account was not found",
+                http_status=404,
+            )
+        account.fee_mdr_bps = mdr_bps
+        account.fee_fixed_paise = fixed_paise
+        account.fee_gst_bps = gst_bps
+
+
 def lookup_effect(
     factory: sessionmaker[Session],
     *,
@@ -419,18 +484,8 @@ def export_statement(
                 .order_by(ProviderEffect.created_at, ProviderEffect.id)
             )
         )
-        item_values = [
-            {
-                "amount": effect.amount,
-                "currency": effect.currency,
-                "occurredAt": (effect.completed_at or effect.created_at).isoformat(),
-                "operationKind": effect.operation_kind,
-                "providerItemId": str(effect.id),
-                "stableKey": effect.stable_key,
-                "status": effect.outcome,
-            }
-            for effect in effects
-        ]
+        terms = _fee_terms(account)
+        item_values = [_statement_item(effect, terms) for effect in effects]
         body = json.dumps({"items": item_values}, separators=(",", ":"), sort_keys=True).encode()
         digest = hashlib.sha256(body).digest()
         export = ProviderStatementExport(
@@ -457,6 +512,8 @@ def export_statement(
                     currency=value["currency"],
                     provider_status=value["status"],
                     occurred_at=effect.completed_at or effect.created_at,
+                    fee_amount=value.get("feeAmount"),
+                    tax_amount=value.get("taxAmount"),
                 )
                 for ordinal, (effect, value) in enumerate(zip(effects, item_values, strict=True), 1)
             ]

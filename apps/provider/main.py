@@ -19,6 +19,7 @@ from relaypay.mock_provider.service import (
     EffectCommand,
     apply_effect,
     configure_fault,
+    configure_fee_terms,
     export_statement,
     lookup_effect,
 )
@@ -85,6 +86,17 @@ class ChaosRequest(BaseModel):
         if not self.enabled:
             return None
         return ChaosSettings(**self.model_dump(exclude={"account_id", "enabled"}, by_alias=False))
+
+
+class FeeTermsRequest(BaseModel):
+    """Fee terms for statement exports; omit all three to clear them."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    account_id: str = Field(alias="accountId", min_length=1, max_length=64)
+    mdr_bps: int | None = Field(default=None, alias="mdrBps", ge=0, le=10_000)
+    fixed_paise: int | None = Field(default=None, alias="fixedPaise", ge=0)
+    gst_bps: int | None = Field(default=None, alias="gstBps", ge=0, le=10_000)
 
 
 class StatementExportRequest(BaseModel):
@@ -229,6 +241,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             )
         return {"stableKey": stable_key, "effectCount": count or 0}
+
+    @app.post("/control/fee-terms", status_code=204)
+    def fee_terms(
+        payload: FeeTermsRequest,
+        control_secret: Annotated[str | None, Header(alias="X-Provider-Control")] = None,
+    ) -> None:
+        expected = resolved.PROVIDER_CONTROL_SECRET.get_secret_value()
+        if control_secret is None or not hmac.compare_digest(control_secret, expected):
+            raise RelayPayError(
+                code="UNAUTHENTICATED", message="Authentication required", http_status=401
+            )
+        configure_fee_terms(
+            factory,
+            account_public_id=payload.account_id,
+            mdr_bps=payload.mdr_bps,
+            fixed_paise=payload.fixed_paise,
+            gst_bps=payload.gst_bps,
+        )
 
     @app.post("/control/statements")
     def statement_export(

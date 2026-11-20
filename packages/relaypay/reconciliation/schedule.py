@@ -62,11 +62,14 @@ def json_statement_to_csv(raw: bytes) -> bytes:
         raise RelayPayError(
             code="INVALID_STATEMENT", message="Provider statement has no items", http_status=422
         )
+    # Fee and tax columns are present only when the provider's export carries them.
+    with_fees = any("feeAmount" in item or "taxAmount" in item for item in items)
+    columns = (*_HEADER, "feeAmount", "taxAmount") if with_fees else _HEADER
     out = io.StringIO(newline="")
     writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(_HEADER)
+    writer.writerow(columns)
     for item in items:
-        writer.writerow([item[column] for column in _HEADER])
+        writer.writerow(["" if item.get(column) is None else item[column] for column in columns])
     return out.getvalue().encode()
 
 
