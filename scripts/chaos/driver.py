@@ -866,6 +866,10 @@ def quiesce(ctx: SeedContext) -> None:
 
     for pass_number in range(1, QUIESCE_MAX_PASSES + 1):
         ctx.result.quiesce_passes = pass_number
+        # A UPI collect first sent by the sweep above is pending on the customer, and RelayPay
+        # rightly waits for them (PROVIDER_PENDING_DEADLINE_SECONDS). The customer answers now.
+        for key in sorted(k for k, e in provider.effects.items() if e.outcome == "PENDING"):
+            provider.resolve(key, Outcome.SUCCEED if rng.random() < 0.75 else Outcome.DECLINE)
         _expire_leases(ctx)
         processing = _processing_operations(ctx)
         if not processing:
@@ -998,6 +1002,20 @@ def _finish(ctx: SeedContext, *, keep_snapshot: bool = False) -> None:
             f"{result.quiesce_passes} passes ({unsent} never sent: "
             f"{[name for name, sent in left if not sent][:5]})"
         )
+        with ctx.factory() as session, session.begin():
+            for operation in session.scalars(
+                select(ProviderOperation).where(
+                    ProviderOperation.organisation_id == ctx.world.organisation_id,
+                    ProviderOperation.status == "PROCESSING",
+                )
+            ):
+                effect = provider.effects.get(operation.stable_provider_key)
+                ctx.fail(
+                    f"stuck {operation.public_id} {operation.kind} attempts="
+                    f"{operation.attempt_count} next_lookup={operation.next_lookup_at} "
+                    f"pending_deadline={operation.pending_deadline_at} provider="
+                    f"{effect.outcome if effect else 'none'}"
+                )
     if ctx.unacked:
         ctx.fail(f"{len(ctx.unacked)} commands never got an answer after client retry")
     try:
